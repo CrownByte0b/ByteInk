@@ -1,15 +1,12 @@
 // Kotlin/JVM conventions shared by every byteink project.
 
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import org.gradle.api.tasks.testing.logging.TestLogEvent
+import com.vivenotes.byteink.build.bytecodeTarget
+import com.vivenotes.byteink.build.configureTests
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
 }
-
-val bytecodeTarget = extensions.getByType<VersionCatalogsExtension>().named("libs")
-    .findVersion("jvmTarget").get().requiredVersion
 
 kotlin {
     compilerOptions {
@@ -26,13 +23,4 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
-tasks.withType<Test>().configureEach {
-    useJUnit()
-    // Ink (and later Skiko) load native libraries; JDK 24+ warns about that, and a future release
-    // will block it.
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
-    testLogging {
-        events(TestLogEvent.FAILED)
-        exceptionFormat = TestExceptionFormat.FULL
-    }
-}
+configureTests()

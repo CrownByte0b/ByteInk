@@ -45,9 +45,46 @@ candidates in `pins.properties`. Those have three distinct behaviours of `Stroke
 | `96e50239e1c8` | computes outlines for subtracted meshes |
 
 `ee5d4005f036` and `f6e53da6f452` match `96e50239e1c8`: one adds only `testonly` code, the other
-removes an `#include`. `96e50239e1c8` is pinned because the Android app's erase replay relies on
-subtracted meshes having outlines. Before any byteink binary ships, the pin is confirmed by running
-the same operations through a build of each candidate and through Google's binary.
+removes an `#include`.
+
+The differential oracle (`:conformance:oracle`, see its build file) chose among the three. It runs
+about 13,000 engine operations through a build of each candidate and through Google's binary:
+
+| Build | Values differing from Google's binary | Of which erase outlines |
+|---|---:|---:|
+| `d38cbb3d5e8a` | 935 | 258 |
+| `480b45ff2390` | 935 (same as `d38cbb3d5e8a`) | 258 |
+| `96e50239e1c8` | 677 | 0 |
+
+Google's binary computes outlines for subtracted meshes, so the pin is `96e50239e1c8`. The Android
+app's erase replay relies on that behaviour too.
+
+The 677 values that no candidate reproduces are not about the commit.
+
+- **Google does not build its binary from this source.** Its `.comment` section reads
+  `google3 clang version 9999.0.0` and `LLD google3-trunk`: Google's internal build and compiler,
+  with AVX instructions. Builds of the public source cannot be bit-identical to it.
+- **462 of the values are input encodings.** Google's internal source writes a field the public
+  source reserves: field 10 of `CodedStrokeInputBatch`, the stroke's base animation phase. It is
+  always 0.0 for ViveNotes, and every other byte is identical. Each side decodes the other's blobs
+  to the same inputs; the public proto says `reserved 10;` since `a7f3d71` (2026-06-03).
+- **The rest are rounding differences.** In finished strokes, 10 quantization parameters differ by
+  1 ULP, and the positions they decode to match exactly. Live, in-progress buffers differ in 0.44%
+  of their floats, by at most 5.4e-5 dp. A build of the same commit with `-mavx` (Google's
+  instruction set) gives results bit-identical to the plain x86-64 build. So the rounding comes
+  from Google's internal compiler and libraries, not from the instruction set, and a public build
+  cannot remove it.
+
+`./gradlew :conformance:oracle:oracleCompare` enforces this:
+
+- Floats pass within 1e-4 + 1e-5 · max(|a|, |b|).
+- Input encodings must be identical once field 10 is removed.
+- Packed buffers are compared through what they decode to.
+- Everything else must be identical.
+
+For the pin this passes with 0 mismatches, both on the synthetic cases and on real notebooks
+(`-PoracleFixtures=<directory of .vive files>`, including their stored partial erases). It fails
+for `d38cbb3d5e8a`, with 258 mismatches.
 
 ## Tasks
 

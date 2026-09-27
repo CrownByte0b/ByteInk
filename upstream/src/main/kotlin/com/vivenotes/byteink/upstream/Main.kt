@@ -14,6 +14,10 @@ private val USAGE = """
       exports --binary FILE
           Prints the Java_* functions an ELF shared library exports.
 
+      check-linux-library --binary FILE --exports FILE --max-glibc VERSION
+          Fails unless a Linux libink.so exports exactly the Java_* functions listed in FILE, loads
+          nothing but glibc libraries, and needs no glibc symbol newer than VERSION.
+
       source-symbols --repo DIR [--rev REV]
           Prints the JNI functions google/ink's JNI_METHOD macros define at REV (default HEAD).
 
@@ -83,11 +87,12 @@ internal fun run(arguments: Arguments): Int = when (arguments.command) {
     "surface" -> surfaceCommand(arguments)
     "scan" -> scanCommand(arguments)
     "exports" -> {
-        ElfExports.functions(File(arguments.required("--binary")).readBytes())
+        ElfFile(File(arguments.required("--binary")).readBytes()).exportedFunctions
             .filter { it.startsWith("Java_") }
             .forEach(::println)
         0
     }
+    "check-linux-library" -> checkLinuxLibraryCommand(arguments)
     "source-symbols" -> {
         HistoryScan(Git(File(arguments.required("--repo"))))
             .symbolsAt(arguments.optional("--rev") ?: "HEAD")

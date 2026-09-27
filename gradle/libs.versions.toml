@@ -9,10 +9,19 @@ composeMultiplatform = "1.12.1"
 # toolchain) is in upstream/pins.properties; see upstream/README.md before changing this.
 androidx-ink = "1.1.0-alpha06"
 asm = "9.10.1"
+sqlite-jdbc = "3.53.4.0"
+# AndroidX Ink's own test suites (conformance/) run with the libraries AndroidX pinned for them at the
+# pinned release.
+guava = "32.0.1-android"
+junit = "4.13.2"
+kotlinx-coroutines = "1.9.0"
+okio = "3.17.0"
+truth = "1.0.1"
 
 [libraries]
 androidx-ink-brush = { module = "androidx.ink:ink-brush", version.ref = "androidx-ink" }
 androidx-ink-geometry = { module = "androidx.ink:ink-geometry", version.ref = "androidx-ink" }
+androidx-ink-nativeloader = { module = "androidx.ink:ink-nativeloader", version.ref = "androidx-ink" }
 androidx-ink-storage = { module = "androidx.ink:ink-storage", version.ref = "androidx-ink" }
 androidx-ink-strokes = { module = "androidx.ink:ink-strokes", version.ref = "androidx-ink" }
 # The JVM artifacts themselves, whose class files and native binaries :upstream inspects.
@@ -25,6 +34,12 @@ asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+junit = { module = "junit:junit", version.ref = "junit" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+truth = { module = "com.google.truth:truth", version.ref = "truth" }
 # Build logic.
 compose-compiler-gradlePlugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
 compose-gradlePlugin = { module = "org.jetbrains.compose:compose-gradle-plugin", version.ref = "composeMultiplatform" }

@@ -53,7 +53,7 @@ internal class Surface(
                     ?: throw IllegalArgumentException("${loader.name} has no $LINUX_BINARY")
                 zip.getInputStream(entry).use { it.readBytes() }
             }
-            val exports = ElfExports.functions(binary).filterTo(sortedSetOf()) { it.startsWith("Java_") }
+            val exports = ElfFile(binary).exportedFunctions.filterTo(sortedSetOf()) { it.startsWith("Java_") }
             val digest = MessageDigest.getInstance("SHA-256").digest(binary)
             return Surface(
                 version = version,
