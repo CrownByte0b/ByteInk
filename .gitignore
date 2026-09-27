@@ -1,0 +1,10 @@
+androidx-ink/
+memory/
+
+# Gradle, Kotlin and IDE state
+.gradle/
+.kotlin/
+build/
+.idea/
+*.iml
+local.properties

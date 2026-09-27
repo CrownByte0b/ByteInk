@@ -1,0 +1,31 @@
+[versions]
+# JVM bytecode and JDK API level. The ViveNotes desktop app compiles to Java 25 because its native
+# Wayland runtime is JBR 25, and this library matches it. Builds run on the daemon's JDK 27.
+jvmTarget = "25"
+kotlin = "2.4.20"
+composeMultiplatform = "1.12.1"
+# AndroidX Ink as Google publishes it. Pinned to the Android app's version and never ahead of it:
+# stored ink has to mean the same on both. The rest of the pin (source and native commits, build
+# toolchain) is in upstream/pins.properties; see upstream/README.md before changing this.
+androidx-ink = "1.1.0-alpha06"
+asm = "9.10.1"
+
+[libraries]
+androidx-ink-brush = { module = "androidx.ink:ink-brush", version.ref = "androidx-ink" }
+androidx-ink-geometry = { module = "androidx.ink:ink-geometry", version.ref = "androidx-ink" }
+androidx-ink-storage = { module = "androidx.ink:ink-storage", version.ref = "androidx-ink" }
+androidx-ink-strokes = { module = "androidx.ink:ink-strokes", version.ref = "androidx-ink" }
+# The JVM artifacts themselves, whose class files and native binaries :upstream inspects.
+androidx-ink-brush-jvm = { module = "androidx.ink:ink-brush-jvm", version.ref = "androidx-ink" }
+androidx-ink-geometry-jvm = { module = "androidx.ink:ink-geometry-jvm", version.ref = "androidx-ink" }
+androidx-ink-nativeloader-jvm = { module = "androidx.ink:ink-nativeloader-jvm", version.ref = "androidx-ink" }
+androidx-ink-storage-jvm = { module = "androidx.ink:ink-storage-jvm", version.ref = "androidx-ink" }
+androidx-ink-strokes-jvm = { module = "androidx.ink:ink-strokes-jvm", version.ref = "androidx-ink" }
+asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+# Build logic.
+compose-compiler-gradlePlugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
+compose-gradlePlugin = { module = "org.jetbrains.compose:compose-gradle-plugin", version.ref = "composeMultiplatform" }
+kotlin-gradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
