@@ -8,6 +8,11 @@ import com.vivenotes.byteink.build.registerNativesDirectory
 
 plugins {
     id("byteink.kotlin-jvm")
+    application
+}
+
+application {
+    mainClass = "com.vivenotes.byteink.oracle.OracleKt"
 }
 
 dependencies {

@@ -12,9 +12,13 @@ private const val USAGE = """Usage:
       whose names start with PREFIX and writes their buffers in full.
   oracle compare --reference FILE --candidate FILE --report FILE [--allow-differences]
       Compares two dumps value by value and writes a markdown report; fails on any mismatch beyond
-      the float tolerance unless allowed, and always when both dumps come from the same library."""
+      the float tolerance unless allowed, and always when both dumps come from the same library.
+      Dumps from different platforms may also differ in antialiasing derivatives."""
 
-fun main(args: Array<String>) {
+fun main(args: Array<String>) = oracle(args)
+
+/** The oracle's command line; [Preload] calls it too. */
+fun oracle(args: Array<String>) {
     val options = mutableMapOf<String, String>()
     val flags = mutableSetOf<String>()
     var index = 1
@@ -33,7 +37,13 @@ fun main(args: Array<String>) {
             dump.syntheticCases()
             options["--fixtures"]?.let { dump.fixtureCases(File(it)) }
             val out = File(required("--out"))
-            dump.write(out, linkedMapOf("label" to required("--label"), "library" to loadedLibrarySha256(), "values" to "${dump.size}"))
+            val header = linkedMapOf(
+                "label" to required("--label"),
+                "library" to loadedLibrarySha256(),
+                "platform" to platform(),
+                "values" to "${dump.size}",
+            )
+            dump.write(out, header)
             println("${dump.size} values from ${loadedLibrarySha256()} in $out")
         }
         "compare" -> {
@@ -59,6 +69,7 @@ private fun usage(problem: String): Nothing {
  */
 private fun loadedLibrarySha256(): String {
     StockBrushes.marker(StockBrushes.MarkerVersion.V1) // loads the library, if nothing has yet
+    System.getProperty(Preload.LIBRARY_PROPERTY)?.let { return sha256(File(it)) }
     val maps = File("/proc/self/maps")
     if (!maps.isFile) return "unknown"
     val library = maps.readLines()
@@ -66,5 +77,20 @@ private fun loadedLibrarySha256(): String {
         .filter { "libink" in it.name }
         .distinct()
         .single()
-    return MessageDigest.getInstance("SHA-256").digest(library.readBytes()).joinToString("") { "%02x".format(it) }
+    return sha256(library)
 }
+
+/**
+ * Where the dump ran, as `<os>-<arch>`: the engine calls the platform's C math library (glibc on
+ * Linux; the Universal C Runtime and compiler-rt on Windows), so dumps from different platforms
+ * differ in last bits.
+ */
+private fun platform(): String {
+    val os = System.getProperty("os.name").lowercase()
+    val family = listOf("linux", "windows", "mac").firstOrNull { os.startsWith(it) } ?: os.replace(' ', '_')
+    val arch = System.getProperty("os.arch").let { if (it == "amd64") "x86_64" else it }
+    return "$family-$arch"
+}
+
+private fun sha256(file: File): String =
+    MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) }

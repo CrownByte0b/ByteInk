@@ -1,5 +1,9 @@
 // Pins, the JNI surface they imply, and the tooling that proves both. See README.md here.
 
+import com.vivenotes.byteink.build.MAX_GLIBC
+import com.vivenotes.byteink.build.byteinkLinuxLibrary
+import com.vivenotes.byteink.build.byteinkWindowsLibrary
+
 plugins {
     id("byteink.kotlin-jvm")
     application
@@ -82,6 +86,30 @@ val verifyJniSurface = tasks.register<JavaExec>("verifyJniSurface") {
 tasks.check {
     dependsOn(verifyJniSurface)
 }
+
+// byteink's own native builds against the pinned surface and what shipping needs. They check what
+// native/build-*.sh produced (or -PbyteinkLinuxLibrary / -PbyteinkWindowsLibrary), so check does
+// not run them.
+fun registerLibraryCheck(name: String, library: Provider<RegularFile>, command: List<String>) =
+    tasks.register<JavaExec>(name) {
+        group = "upstream"
+        classpath = sourceSets.main.get().runtimeClasspath
+        mainClass = application.mainClass
+        inputs.file(library).withPropertyName("library")
+        inputs.file(exportsFile).withPropertyName("exports")
+        val marker = layout.buildDirectory.file("$name/ok")
+        outputs.file(marker)
+        val exports = exportsFile
+        argumentProviders.add(CommandLineArgumentProvider {
+            listOf(command.first(), "--binary", library.get().asFile.path, "--exports", exports.asFile.path) + command.drop(1)
+        })
+        doLast { marker.get().asFile.writeText("ok\n") }
+    }
+
+registerLibraryCheck("checkLinuxLibrary", byteinkLinuxLibrary(), listOf("check-linux-library", "--max-glibc", MAX_GLIBC))
+    .configure { description = "Checks byteink's libink.so: the pinned JNI surface, glibc alone, nothing newer than $MAX_GLIBC." }
+registerLibraryCheck("checkWindowsLibrary", byteinkWindowsLibrary(), listOf("check-windows-library"))
+    .configure { description = "Checks byteink's ink.dll: x86-64, the pinned JNI surface, only libraries Windows provides." }
 
 tasks.register<JavaExec>("scanGoogleInk") {
     group = "upstream"

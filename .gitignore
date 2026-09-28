@@ -5,6 +5,8 @@ memory/
 .gradle/
 .kotlin/
 build/
+# ...but not the build-logic sources in package com.vivenotes.byteink.build.
+!build-logic/src/main/kotlin/com/vivenotes/byteink/build/
 .idea/
 *.iml
 local.properties

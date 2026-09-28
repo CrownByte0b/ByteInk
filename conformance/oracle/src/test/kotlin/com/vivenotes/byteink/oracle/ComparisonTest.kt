@@ -80,6 +80,61 @@ class ComparisonTest {
     }
 
     @Test
+    fun anOutlineStartingElsewhereOnItsLoopIsEquivalentButNotOneRunBackwards() {
+        val square = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        val rotated = floatArrayOf(0f, 1f, 0f, 0f, 1f, 0f, 1f, 1f)
+        val reversed = floatArrayOf(0f, 0f, 0f, 1f, 1f, 1f, 1f, 0f)
+        val segment = floatArrayOf(5f, 5f, 6f, 5f)
+        val comparison = Comparison(
+            dump(
+                "library" to "a",
+                "rotated\tdry.g0.outline-sizes" to "4 2",
+                "rotated\tdry.g0.outline-positions" to Floats.of(*square, *segment).toString(),
+                "reversed\tdry.g0.outline-sizes" to "4",
+                "reversed\tdry.g0.outline-positions" to Floats.of(*square).toString(),
+            ),
+            dump(
+                "library" to "b",
+                "rotated\tdry.g0.outline-sizes" to "4 2",
+                "rotated\tdry.g0.outline-positions" to Floats.of(*rotated, *segment).toString(),
+                "reversed\tdry.g0.outline-sizes" to "4",
+                "reversed\tdry.g0.outline-positions" to Floats.of(*reversed).toString(),
+            ),
+        )
+
+        val verdicts = comparison.outcomes.associate { it.key to it.verdict }
+        assertEquals(Comparison.Verdict.EQUIVALENT, verdicts["rotated\tdry.g0.outline-positions"])
+        assertEquals(Comparison.Verdict.MISMATCH, verdicts["reversed\tdry.g0.outline-positions"])
+    }
+
+    @Test
+    fun acrossPlatformsOnlyDerivativesMayGoBeyondTolerance() {
+        fun comparison(candidatePlatform: String) = Comparison(
+            dump(
+                "library" to "a",
+                "platform" to "linux-x86_64",
+                "case\tlive.step0.c0.p0.derivatives" to Floats.of(-0.95f).toString(),
+                "case\tdry.g0.m0.derivative-unpacking" to Floats.of(-0.95f, 0.0007f).toString(),
+                "case\tlive.step0.c0.p0.vertex-buffer" to Floats.of(1f).toString(),
+            ),
+            dump(
+                "library" to "b",
+                "platform" to candidatePlatform,
+                "case\tlive.step0.c0.p0.derivatives" to Floats.of(-0.17f).toString(),
+                "case\tdry.g0.m0.derivative-unpacking" to Floats.of(-0.17f, 0.0005f).toString(),
+                "case\tlive.step0.c0.p0.vertex-buffer" to Floats.of(1.1f).toString(),
+            ),
+        )
+
+        val across = comparison("windows-x86_64")
+        assertTrue(across.crossPlatform)
+        assertEquals(listOf("case\tlive.step0.c0.p0.vertex-buffer"), across.mismatches.map { it.key })
+        val same = comparison("linux-x86_64")
+        assertFalse(same.crossPlatform)
+        assertEquals(3, same.mismatches.size)
+    }
+
+    @Test
     fun toleranceAdmitsRoundingAndNothingVisible() {
         assertTrue(Tolerance.accepts(1f, 1f + 5e-5f))
         assertTrue(Tolerance.accepts(1000f, 1000.01f)) // relative: 1e-4 + 1e-5 · 1000

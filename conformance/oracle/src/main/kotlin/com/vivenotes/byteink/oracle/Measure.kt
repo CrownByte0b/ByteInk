@@ -19,11 +19,30 @@ import androidx.ink.strokes.StrokeInputBatch
 import androidx.ink.strokes.getRawTriangleIndexBuffer
 import androidx.ink.strokes.getRawVertexBuffer
 import java.io.ByteArrayOutputStream
+import java.nio.ByteOrder
 import java.util.zip.GZIPInputStream
 
 /**
+ * Ink's stroke vertex format (`StrokeVertex::FullMeshFormat`): position, opacity shift, HSL shift,
+ * side derivative, side label, forward derivative, forward label, surface UV, animation offset.
+ * The two derivatives only steer the mesh renderer's antialiasing. Ink averages them through atan2,
+ * sin and cos, so they depend on the C math library more than anything else does (see
+ * [Comparison]), and are recorded apart.
+ */
+private object StrokeVertexFormat {
+    /** Each attribute's component count, as a mesh's unpacking lists them. */
+    val components = listOf(2, 1, 3, 2, 1, 2, 1, 2, 1)
+    val derivativeAttributes = setOf(3, 5)
+
+    /** Floats per unpacked vertex, and the columns holding the side and forward derivatives. */
+    val floats = components.sum()
+    val derivativeFloats = setOf(6, 7, 9, 10)
+}
+
+/**
  * Records everything the engine derives from [shape]: bounds, each render group's outlines and
- * meshes (raw vertex and index buffers, attribute unpacking), and coverage of a grid of probes.
+ * meshes (raw vertex and index buffers, attribute unpacking, with a stroke mesh's derivatives
+ * apart), and coverage of a grid of probes.
  */
 fun Dump.shape(case: String, key: String, shape: PartitionedMesh) {
     val bounds = shape.computeBoundingBox()
@@ -33,18 +52,18 @@ fun Dump.shape(case: String, key: String, shape: PartitionedMesh) {
     val position = MutableVec()
     for (group in 0 until groups) {
         val outlines = shape.getOutlineCount(group)
-        val sizes = digest()
+        val sizes = mutableListOf<Int>()
         val positions = Floats()
         for (outline in 0 until outlines) {
             val vertices = shape.getOutlineVertexCount(group, outline)
-            sizes.add(vertices)
+            sizes += vertices
             for (vertex in 0 until vertices) {
                 shape.populateOutlinePosition(group, outline, vertex, position)
                 positions.add(position.x).add(position.y)
             }
         }
         this[case, "$key.g$group.outlines"] = outlines
-        this[case, "$key.g$group.outline-sizes"] = sizes
+        this[case, "$key.g$group.outline-sizes"] = outlineSizes(sizes)
         this[case, "$key.g$group.outline-positions"] = positions
         val meshes = shape.renderGroupMeshes(group)
         this[case, "$key.g$group.meshes"] = meshes.size
@@ -63,9 +82,15 @@ fun Dump.shape(case: String, key: String, shape: PartitionedMesh) {
             }
             val unpacking = mesh.vertexAttributeUnpackingParams
             this[case, "$at.unpacking-components"] = unpacking.joinToString(" ") { "${it.components.size}" }
-            this[case, "$at.unpacking"] = Floats().apply {
-                unpacking.forEach { attribute -> attribute.components.forEach { add(it.offset).add(it.scale) } }
+            val stroke = unpacking.map { it.components.size } == StrokeVertexFormat.components
+            fun isDerivative(attribute: Int) = stroke && attribute in StrokeVertexFormat.derivativeAttributes
+            fun unpackingOf(derivatives: Boolean) = Floats().apply {
+                unpacking.forEachIndexed { index, attribute ->
+                    if (isDerivative(index) == derivatives) attribute.components.forEach { add(it.offset).add(it.scale) }
+                }
             }
+            this[case, "$at.unpacking"] = unpackingOf(derivatives = false)
+            if (stroke) this[case, "$at.derivative-unpacking"] = unpackingOf(derivatives = true)
         }
     }
     if (bounds != null) coverage(case, key, shape, bounds.xMin, bounds.yMin, bounds.xMax, bounds.yMax)
@@ -89,9 +114,14 @@ private fun Dump.coverage(case: String, key: String, shape: PartitionedMesh, x0:
     this[case, "$key.coverage.triangle"] = Floats.of(shape.computeCoverage(middle))
 }
 
-/** The family's own serialized form, as ink-storage writes it. */
+/**
+ * The family's own serialized form, as ink-storage writes it: gzip (done by the JVM's zlib, whose
+ * output differs between JDK builds) over a protobuf (done natively), which is also recorded alone.
+ */
 fun Dump.family(case: String, family: BrushFamily) {
-    this[case, "family.encoded"] = digest().add(ByteArrayOutputStream().also { family.encode(it) }.toByteArray())
+    val encoded = ByteArrayOutputStream().also { family.encode(it) }.toByteArray()
+    this[case, "family.encoded"] = digest().add(encoded)
+    this[case, "family.proto"] = digest().add(GZIPInputStream(encoded.inputStream()).use { it.readBytes() })
 }
 
 /**
@@ -151,24 +181,39 @@ private fun Dump.inProgressShape(case: String, key: String, stroke: InProgressSt
         this[case, "$key.c$coat.partitions"] = partitions
         for (partition in 0 until partitions) {
             val at = "$key.c$coat.p$partition"
-            this[case, "$at.vertices"] = stroke.getVertexCount(coat, partition)
+            val vertices = stroke.getVertexCount(coat, partition)
+            this[case, "$at.vertices"] = vertices
             // Unpacked while in progress: every attribute of every vertex is a float.
-            this[case, "$at.vertex-buffer"] = Floats().add(stroke.getRawVertexBuffer(coat, partition))
+            val buffer = stroke.getRawVertexBuffer(coat, partition).duplicate().order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+            check(buffer.remaining() == vertices * StrokeVertexFormat.floats) {
+                "$case $at: ${buffer.remaining()} floats for $vertices vertices is not Ink's stroke vertex format"
+            }
+            val attributes = Floats()
+            val derivatives = Floats()
+            for (index in 0 until buffer.remaining()) {
+                val column = index % StrokeVertexFormat.floats
+                (if (column in StrokeVertexFormat.derivativeFloats) derivatives else attributes).add(buffer.get(index))
+            }
+            this[case, "$at.vertex-buffer"] = attributes
+            this[case, "$at.derivatives"] = derivatives
             this[case, "$at.index-buffer"] = digest().add(stroke.getRawTriangleIndexBuffer(coat, partition))
         }
         val outlines = stroke.getOutlineCount(coat)
-        val sizes = digest()
+        val sizes = mutableListOf<Int>()
         val positions = Floats()
         for (outline in 0 until outlines) {
             val vertices = stroke.getOutlineVertexCount(coat, outline)
-            sizes.add(vertices)
+            sizes += vertices
             for (vertex in 0 until vertices) {
                 stroke.populateOutlinePosition(coat, outline, vertex, position)
                 positions.add(position.x).add(position.y)
             }
         }
         this[case, "$key.c$coat.outlines"] = outlines
-        this[case, "$key.c$coat.outline-sizes"] = sizes
+        this[case, "$key.c$coat.outline-sizes"] = outlineSizes(sizes)
         this[case, "$key.c$coat.outline-positions"] = positions
     }
 }
+
+/** Each outline's vertex count, which tells a comparison where one outline's positions end. */
+private fun outlineSizes(sizes: List<Int>): String = if (sizes.isEmpty()) "none" else sizes.joinToString(" ")

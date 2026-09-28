@@ -12,6 +12,7 @@ upstream code that is, and holds the tooling that proves it.
 | AndroidX source of that release | `frameworks/support` `61ee8cd421d0` | `pins.properties` |
 | `google/ink` source for the natives | `96e50239e1c8`, one of five candidates | `pins.properties` |
 | Native toolchain at that commit | Bazel 8.7.0, LLVM 19.1.0 | `pins.properties` |
+| What byteink adds to that build | a Linux sysroot, a Windows cross-toolchain | `native/patches/` |
 | JNI surface of the release | natives the jars declare; functions Google's binary exports | `jni/` |
 
 Dependency verification covers only the `androidx.ink` group; every other dependency is trusted by
@@ -78,13 +79,106 @@ The 677 values that no candidate reproduces are not about the commit.
 `./gradlew :conformance:oracle:oracleCompare` enforces this:
 
 - Floats pass within 1e-4 + 1e-5 · max(|a|, |b|).
-- Input encodings must be identical once field 10 is removed.
+- Input encodings must be identical once field 10 is removed. Brush families must be identical
+  protos; their gzip bytes depend on the JVM's zlib and are only informational.
 - Packed buffers are compared through what they decode to.
+- An outline that starts at another vertex of the same loop is equivalent: same vertices, same
+  order.
+- Each dump records its platform. Across platforms, antialiasing derivatives beyond tolerance are
+  informational (see [Windows](#windows)).
 - Everything else must be identical.
 
-For the pin this passes with 0 mismatches, both on the synthetic cases and on real notebooks
-(`-PoracleFixtures=<directory of .vive files>`, including their stored partial erases). It fails
-for `d38cbb3d5e8a`, with 258 mismatches.
+For the pin this passes with 0 mismatches, both on the synthetic cases (16,278 values) and on real
+notebooks (`-PoracleFixtures=<directory of .vive files>`, 59,653 values including their stored
+partial erases). It fails for `d38cbb3d5e8a`, with 258 mismatches.
+
+## Building the natives
+
+`native/` builds the JNI library at `google.ink.commit` with upstream's own Bazel build and
+toolchain, plus a patch series in `native/patches/`. The patches are applied in order and kept
+small enough to offer upstream.
+
+| Patch | What it does |
+|---|---|
+| `0001-link-linux-against-bullseye-sysroot.patch` | Links against Chromium's Debian bullseye sysroot instead of the host's glibc |
+| `0002-cross-compile-windows-with-zig.patch` | Adds `hermetic_cc_toolchain` 4.2.0 (zig 0.14.0) for Windows, a Windows branch in `ink/jni`'s link options, and zlib 1.3.1.bcr.8, whose build stops passing MSVC flags to other compilers |
+
+The scripts:
+
+- `native/build-linux.sh` writes `native/build/out/<commit>/linux-x86_64/`: `libink.so`
+  (stripped), `libink.so.debug`, and `build.properties` with the commit, Bazel version, patch
+  hashes and library hash.
+- `native/build-windows.sh` cross-compiles on Linux and writes `ink.dll` and `build.properties` to
+  `native/build/out/<commit>/windows-x86_64/`. Patch 0002 leaves the Linux library bit-identical.
+- `native/test-linux.sh` runs `google/ink`'s C++ tests (`//ink/...` except the Skia and Dawn
+  renderer, which byteink does not build) at the pin: 114 of 114 pass. The tests use a checkout of
+  their own without patch 0001, since fuzztest's riegeli needs a newer glibc than the sysroot has.
+
+Bazel comes from bazelisk, pinned by version and sha256 in `pins.properties`. The Bazel repository
+and disk caches live in `~/.cache/byteink/bazel` (or under `$BYTEINK_CACHE`). `BYTEINK_BAZEL_FLAGS`
+and `BYTEINK_OUT` are for experiments, such as the `-mavx` build above, and `build.properties`
+records any experiment flags.
+
+Two Gradle tasks check what the scripts built, or the files named by `-PbyteinkLinuxLibrary` and
+`-PbyteinkWindowsLibrary`:
+
+- `./gradlew :upstream:checkLinuxLibrary`
+  - It must export exactly the pinned `Java_*` surface.
+  - It may need only glibc's own libraries, with no libstdc++.
+  - No symbol may be newer than `GLIBC_2.28` (manylinux_2_28). The pin's build needs
+    `GLIBC_2.18`; Google's needs `GLIBC_2.26`.
+- `./gradlew :upstream:checkWindowsLibrary`
+  - It must be an x86-64 DLL exporting exactly the pinned surface, plus LLVM's unwinder API.
+  - It may import only libraries Windows 10 and later provide.
+
+## Windows
+
+Google publishes no Windows binary, so byteink builds `ink.dll` itself. It cross-compiles on Linux
+with zig's clang, which is LLVM 19 like the Linux build. The target is MinGW-w64 on the Universal
+C Runtime (UCRT), with libc++ and libunwind linked in statically.
+
+This toolchain was chosen over clang-cl with Microsoft's SDK for three reasons:
+
+- **Same C++ library on both OSes.** Both builds use libc++, so containers, sorting and hashing
+  behave the same. clang-cl would use Microsoft's STL.
+- **Built on Linux.** The build is hermetic and needs no Windows machine or Visual Studio, and no
+  Microsoft SDK licence to accept.
+- **No shared C++ ABI.** The JVM calls only `extern "C"` JNI functions, so the DLL's internal C++
+  ABI concerns nobody else.
+
+What the DLL needs and offers:
+
+- **Imports:** only libraries Windows provides: `KERNEL32`, `ADVAPI32`, `dbghelp` (abseil's
+  symbolizer), and the UCRT's `api-ms-win-crt-*`.
+- **Exports:** the 341 JNI functions plus libunwind's API (`_Unwind_*`, `unw_*`). libunwind marks
+  its API `dllexport`, and zig rejects the linker flag that would drop it. Windows resolves imports
+  per DLL, so these exports clash with nothing.
+
+### How Windows results differ
+
+Both builds use the same compiler with the same baseline x86-64 instructions (no AVX, no FMA), so
+their arithmetic is the same. Their C math libraries are not:
+
+- **Linux** calls glibc's `libm`.
+- **The DLL** calls the UCRT's `atan2f`, `acosf`, `atanf`, `pow` and `hypot`, and zig's
+  compiler-rt (ported from musl) for `sinf`, `cosf`, `tanf`, `expf` and similar functions.
+
+These disagree in last bits. The oracle measured the effect on a Windows JVM, against Google's
+binary on Linux: 59,653 values, 0 mismatches.
+
+| What | How Windows compares with Google's binary |
+|---|---|
+| Geometry of finished strokes, erases and lassos (bounds, mesh positions, triangles, coverage) | identical |
+| Live-stroke positions and outlines | within 1.1e-4 dp |
+| Brush families | identical protos, different gzip bytes |
+| Outlines | the same loop, but in 2 of 2,530 notebook strokes an end vertex moves to the other side, so the outline starts one vertex later |
+| Antialiasing derivatives | 3 values beyond tolerance (see below) |
+
+The antialiasing derivatives are per-vertex attributes that only a mesh renderer reads; byteink
+draws outlines. Ink averages them through atan2, sin and cos. Where a vertex's triangles point in
+nearly opposite directions, last-bit differences swing that average. In the same 2 strokes this
+moves the derivatives' ranges by up to 0.785, and in one live step a derivative differs by
+1.4e-4.
 
 ## Tasks
 
@@ -96,10 +190,15 @@ for `d38cbb3d5e8a`, with 258 mismatches.
   `-PgoogleInkDir=<clone>`) and writes `upstream/build/reports/google-ink-jni-scan.md`. It fails
   unless `google.ink.commit` and every candidate match the pinned release exactly.
   `-PscanReferences=<label>=<file>,…` adds reference lists, such as another release's exports.
+- `./gradlew :upstream:checkLinuxLibrary` and `:upstream:checkWindowsLibrary` check byteink's
+  native builds (see [Building the natives](#building-the-natives)); `check` does not run them.
 - `./gradlew :upstream:installDist` builds the tool as
-  `upstream/build/install/upstream/bin/upstream`. Its commands are `surface`, `exports` (print a
-  binary's `Java_*` exports), `source-symbols` (print a `google/ink` revision's JNI functions) and
-  `scan`.
+  `upstream/build/install/upstream/bin/upstream`. Its commands are:
+  - `surface`
+  - `exports`: prints a binary's `Java_*` exports.
+  - `source-symbols`: prints a `google/ink` revision's JNI functions.
+  - `scan`
+  - `check-linux-library` and `check-windows-library`: what the two tasks run.
 
 ## Moving to another release
 
@@ -112,8 +211,9 @@ for `d38cbb3d5e8a`, with 258 mismatches.
 5. Run `./gradlew :upstream:scanGoogleInk`. From the commits that match exactly and predate the
    release, set `google.ink.candidates` and `google.ink.commit`, then confirm the choice against
    Google's binary.
-6. Re-copy the forked `ink-nativeloader` sources from the new AndroidX commit, re-apply its one
-   patch, and rebase any native build patches.
+6. Re-copy the forked `ink-nativeloader` sources from the new AndroidX commit and re-apply its one
+   patch. Rebase `native/patches/` onto the new `google/ink` commit, rebuild both natives, and run
+   the two library checks, `native/test-linux.sh` and the oracle.
 7. Adapt the ViveNotes brush catalog to API renames without changing what stored ink means (the
    release notes list them; 1.1.0-alpha08 renamed `DampingNode`'s properties, for example). Then run
    every suite.
