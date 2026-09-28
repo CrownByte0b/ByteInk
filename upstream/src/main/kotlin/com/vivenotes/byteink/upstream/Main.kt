@@ -23,6 +23,11 @@ private val USAGE = """
           FILE and otherwise only LLVM's unwinder API, and imports only libraries Windows 10 and
           later provide.
 
+      compare-abi --reference JAR --candidate JAR --package NAME
+          Fails unless the candidate's classes in package NAME (and below) offer exactly the classes,
+          supertypes and public or protected members the reference's do, so that class files
+          compiled against one link against the other.
+
       source-symbols --repo DIR [--rev REV]
           Prints the JNI functions google/ink's JNI_METHOD macros define at REV (default HEAD).
 
@@ -99,6 +104,7 @@ internal fun run(arguments: Arguments): Int = when (arguments.command) {
     }
     "check-linux-library" -> checkLinuxLibraryCommand(arguments)
     "check-windows-library" -> checkWindowsLibraryCommand(arguments)
+    "compare-abi" -> compareAbiCommand(arguments)
     "source-symbols" -> {
         HistoryScan(Git(File(arguments.required("--repo"))))
             .symbolsAt(arguments.optional("--rev") ?: "HEAD")

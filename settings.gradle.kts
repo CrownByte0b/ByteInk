@@ -46,4 +46,5 @@ include(":byteink-testing")
 // Unpublished verification and sample code.
 include(":conformance")
 include(":conformance:oracle")
+include(":consumer-tests")
 include(":samples:viewer")

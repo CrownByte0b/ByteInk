@@ -1,10 +1,12 @@
 // Unpublished. The differential oracle: one fixed set of engine operations, run on Google's
 // libink.so (oracleGoogle) and on byteink's (oracleByteink), dumped value by value and compared
-// (oracleCompare). -PbyteinkLinuxLibrary picks the byteink build; -PoracleFixtures=<dir> adds the
-// .vive notebooks in that directory.
+// (oracleCompare). Both go through byteink's loader: oracleByteink loads the library it bundles
+// (-PbyteinkLinuxLibrary picks another build to bundle), oracleGoogle names Google's with the
+// loader's override property. -PoracleFixtures=<dir> adds the .vive notebooks in that directory.
 
+import com.vivenotes.byteink.build.InkLibraryOverride
 import com.vivenotes.byteink.build.byteinkLinuxLibrary
-import com.vivenotes.byteink.build.registerNativesDirectory
+import com.vivenotes.byteink.build.googleLinuxLibrary
 
 plugins {
     id("byteink.kotlin-jvm")
@@ -18,22 +20,22 @@ application {
 dependencies {
     implementation(project(":byteink-core"))
     // The oracle reads internal mesh buffers, behind the loader's opt-in annotation.
-    implementation(libs.androidx.ink.nativeloader)
+    implementation(project(":ink-nativeloader"))
     implementation(libs.sqlite.jdbc)
 }
 
-val byteinkLibrary = byteinkLinuxLibrary()
-val byteinkNatives = registerNativesDirectory("byteinkNatives", byteinkLibrary)
 val fixtures = providers.gradleProperty("oracleFixtures")
 // -PoracleDetail=<case prefix> keeps only those cases and writes their buffers in full.
 val detail = providers.gradleProperty("oracleDetail")
 val dumps = layout.buildDirectory.dir("oracle")
 
-fun registerDump(name: String, label: Provider<String>, natives: FileCollection) = tasks.register<JavaExec>(name) {
+fun registerDump(name: String, label: Provider<String>) = tasks.register<JavaExec>(name) {
     group = "oracle"
-    classpath = natives + sourceSets.main.get().runtimeClasspath
+    classpath = sourceSets.main.get().runtimeClasspath
     mainClass = "com.vivenotes.byteink.oracle.OracleKt"
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // Extract into the build directory rather than the user's cache.
+    systemProperty("byteink.ink.cache", layout.buildDirectory.dir("ink-cache/$name").get().asFile.path)
     val out = dumps.map { it.file("$name.tsv") }
     outputs.file(out)
     val fixtureDirectory = fixtures
@@ -47,17 +49,21 @@ fun registerDump(name: String, label: Provider<String>, natives: FileCollection)
     })
 }
 
-val google = registerDump("oracleGoogle", provider { "Google's libink.so" }, files())
-    .also { it.configure { description = "Dumps the oracle's results on Google's libink.so." } }
+val google = registerDump("oracleGoogle", provider { "Google's libink.so" }).also {
+    it.configure {
+        description = "Dumps the oracle's results on Google's libink.so."
+        jvmArgumentProviders.add(InkLibraryOverride(googleLinuxLibrary()))
+    }
+}
 
 // The byteink build's own record of which commit it is, when native/build-linux.sh made it.
-val byteinkLabel = byteinkLibrary.map { library ->
+val byteinkLabel = byteinkLinuxLibrary().map { library ->
     val info = library.asFile.resolveSibling("build.properties")
     if (info.isFile) "byteink " + info.readLines().first { it.startsWith("google.ink.commit=") }.substringAfter('=').take(12)
     else "byteink ${library.asFile}"
 }
-val byteink = registerDump("oracleByteink", byteinkLabel, files(byteinkNatives))
-    .also { it.configure { description = "Dumps the oracle's results on byteink's libink.so." } }
+val byteink = registerDump("oracleByteink", byteinkLabel)
+    .also { it.configure { description = "Dumps the oracle's results on the libink.so byteink's loader bundles." } }
 
 tasks.register<JavaExec>("oracleCompare") {
     group = "oracle"

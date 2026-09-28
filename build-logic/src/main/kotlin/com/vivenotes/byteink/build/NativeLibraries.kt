@@ -1,17 +1,34 @@
 package com.vivenotes.byteink.build
 
 import java.util.Properties
+import java.util.zip.ZipFile
+import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
 import org.gradle.api.Project
+import org.gradle.api.artifacts.VersionCatalogsExtension
+import org.gradle.api.attributes.Category
+import org.gradle.api.attributes.LibraryElements
+import org.gradle.api.attributes.Usage
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.FileCollection
 import org.gradle.api.file.RegularFile
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
-import org.gradle.api.tasks.Sync
-import org.gradle.api.tasks.TaskProvider
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+import org.gradle.kotlin.dsl.getByType
+import org.gradle.kotlin.dsl.named
 import org.gradle.kotlin.dsl.register
 
-/** Where upstream's JVM loader looks for the Linux library among classpath resources. */
+/** The Linux library's place under native/build/out/<commit>/, and in Google's loader jar. */
 const val LINUX_LIBRARY = "linux-x86_64/libink.so"
 
-/** Where native/build-windows.sh puts the Windows library, beside the Linux one. */
+/** The Windows library's place under native/build/out/<commit>/. */
 const val WINDOWS_LIBRARY = "windows-x86_64/ink.dll"
 
 /**
@@ -43,13 +60,59 @@ private fun Project.byteinkLibrary(property: String, path: String): Provider<Reg
         .orElse(upstreamPins().map { root.file("native/build/out/${it.getProperty("google.ink.commit")}/$path") })
 }
 
-/**
- * Lays [library] out as the classpath resource upstream's loader looks for. Put first on a
- * classpath, the directory makes that loader pick [library] over the one in Google's jar.
- */
-fun Project.registerNativesDirectory(name: String, library: Provider<RegularFile>): TaskProvider<Sync> =
-    tasks.register<Sync>(name) {
-        description = "Lays byteink's libink.so out as a classpath resource, where the upstream loader looks."
-        from(library) { into(LINUX_LIBRARY.substringBefore('/')) }
-        into(layout.buildDirectory.dir(name))
+/** Google's own `ink-nativeloader-jvm` jar for the pinned release, which carries its `libink.so`. */
+fun Project.googleNativeLoaderJar(): FileCollection {
+    val name = "googleNativeLoader"
+    if (name !in configurations.names) {
+        val scope = configurations.dependencyScope(name)
+        configurations.resolvable("${name}Jar") {
+            extendsFrom(scope.get())
+            isTransitive = false
+            attributes {
+                attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+                attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+                attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements.JAR))
+            }
+        }
+        val catalog = extensions.getByType<VersionCatalogsExtension>().named("libs")
+        dependencies.addProvider(name, catalog.findLibrary("androidx-ink-nativeloader-jvm").get())
     }
+    return files(configurations.named("${name}Jar"))
+}
+
+/**
+ * Google's own `linux-x86_64/libink.so` for the pinned release, taken out of its
+ * `ink-nativeloader-jvm` jar: the reference that byteink's library is compared with.
+ */
+fun Project.googleLinuxLibrary(): Provider<RegularFile> {
+    val jar = googleNativeLoaderJar()
+    return tasks.register<ExtractJarEntry>("googleLinuxLibrary") {
+        description = "Extracts Google's linux-x86_64 libink.so from its ink-nativeloader-jvm jar."
+        this.jar.from(jar)
+        entry = LINUX_LIBRARY
+        file = layout.buildDirectory.file("google/$LINUX_LIBRARY")
+    }.flatMap { it.file }
+}
+
+/** Copies one entry out of a jar. */
+abstract class ExtractJarEntry : DefaultTask() {
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val jar: ConfigurableFileCollection
+
+    @get:Input
+    abstract val entry: Property<String>
+
+    @get:OutputFile
+    abstract val file: RegularFileProperty
+
+    @TaskAction
+    fun extract() {
+        ZipFile(jar.singleFile).use { zip ->
+            val found = zip.getEntry(entry.get()) ?: throw GradleException("${jar.singleFile} has no ${entry.get()}")
+            zip.getInputStream(found).use { input -> file.get().asFile.outputStream().use { input.copyTo(it) } }
+        }
+    }
+}
+

@@ -14,10 +14,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * The pinned AndroidX Ink JVM artifacts, and the native library they carry, run in this build.
- *
- * Until byteink ships its own loader and natives, these are Google's artifacts unchanged, so this
- * passes only where Google ships a binary: Linux x86_64 here. Windows joins with byteink's own build.
+ * The pinned AndroidX Ink JVM artifacts run in this build, unchanged, on the native library
+ * byteink's loader bundles for this platform.
  */
 class UpstreamInkSmokeTest {
 

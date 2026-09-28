@@ -1,14 +1,14 @@
 // Unpublished. AndroidX Ink's own JVM test suites for the pinned release, compiled against Google's
-// unchanged jars and run twice: against Google's libink.so (jvmTest) and against the one
-// native/build-linux.sh built (jvmTestByteinkBinary). Their assertion library, AndroidX's
-// unpublished kruth, is compiled from the same commit.
+// unchanged jars and byteink's fork of their loader, and run twice: on the library that loader
+// bundles (jvmTest), and on Google's own libink.so through the loader's override property
+// (jvmTestGoogleBinary). Their assertion library, AndroidX's unpublished kruth, is compiled from the
+// same commit.
 
 import com.vivenotes.byteink.build.ExpectedLibraryFile
-import com.vivenotes.byteink.build.ExpectedLibraryResource
 import com.vivenotes.byteink.build.GitSparseCheckout
-import com.vivenotes.byteink.build.LINUX_LIBRARY
+import com.vivenotes.byteink.build.InkLibraryOverride
 import com.vivenotes.byteink.build.byteinkLinuxLibrary
-import com.vivenotes.byteink.build.registerNativesDirectory
+import com.vivenotes.byteink.build.googleLinuxLibrary
 import com.vivenotes.byteink.build.upstreamPins
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -59,9 +59,8 @@ kotlin {
             }
             dependencies {
                 implementation(project(":byteink-core"))
-                // The suites use the loader's internal test helpers, which the other modules only
-                // depend on at run time.
-                implementation(libs.androidx.ink.nativeloader)
+                // The suites use the loader's internal test helpers: byteink's fork of it.
+                implementation(project(":ink-nativeloader"))
                 implementation(libs.junit)
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.okio)
@@ -78,19 +77,22 @@ tasks.named<KotlinCompile>("compileTestKotlinJvm") {
 }
 
 val jvmTest = tasks.named<Test>("jvmTest") {
-    description = "Runs AndroidX Ink's JVM suites against Google's own libink.so."
-    jvmArgumentProviders.add(ExpectedLibraryResource(classpath, LINUX_LIBRARY))
+    description = "Runs AndroidX Ink's JVM suites on the library byteink's loader bundles."
+    jvmArgumentProviders.add(ExpectedLibraryFile(byteinkLinuxLibrary()))
 }
 
-val byteinkLibrary = byteinkLinuxLibrary()
-val byteinkNatives = registerNativesDirectory("byteinkNatives", byteinkLibrary)
+val googleLibrary = googleLinuxLibrary()
 
-tasks.register<Test>("jvmTestByteinkBinary") {
+val jvmTestGoogleBinary = tasks.register<Test>("jvmTestGoogleBinary") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
-    description = "Runs AndroidX Ink's JVM suites against byteink's libink.so (native/build-linux.sh)."
-    val upstream = jvmTest.get()
-    testClassesDirs = upstream.testClassesDirs
-    // First on the classpath, so the upstream loader finds byteink's library before Google's.
-    classpath = files(byteinkNatives) + upstream.classpath
-    jvmArgumentProviders.add(ExpectedLibraryFile(byteinkLibrary))
+    description = "Runs AndroidX Ink's JVM suites on Google's own libink.so, through byteink's loader."
+    val suites = jvmTest.get()
+    testClassesDirs = suites.testClassesDirs
+    classpath = suites.classpath
+    jvmArgumentProviders.add(InkLibraryOverride(googleLibrary))
+    jvmArgumentProviders.add(ExpectedLibraryFile(googleLibrary))
+}
+
+tasks.named("check") {
+    dependsOn(jvmTestGoogleBinary)
 }

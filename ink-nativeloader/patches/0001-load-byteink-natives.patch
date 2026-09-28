@@ -1,0 +1,68 @@
+--- a/jvmMain/kotlin/androidx/ink/nativeloader/NativeLoader.jvm.kt
++++ b/jvmMain/kotlin/androidx/ink/nativeloader/NativeLoader.jvm.kt
+@@ -12,14 +12,14 @@
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
++ *
++ * Modified for byteink: loads byteink's own native library (see PATCHES.md).
+  */
+ 
+ package androidx.ink.nativeloader
+ 
+ import androidx.annotation.RestrictTo
+-import java.nio.file.Files
+-import java.nio.file.StandardCopyOption
+-import java.util.Locale
++import com.vivenotes.byteink.nativeloader.InkNativeLibrary
+ 
+ /**
+  * Native code loader for Android and JVM.
+@@ -30,44 +30,9 @@
+ @InkInternalOnlyApi
+ @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+ actual public object NativeLoader {
+-    private var loaded = false
+-
+-    private val osName: String
+-        get() = System.getProperty("os.name")?.lowercase(Locale.US) ?: error("Cannot read osName")
+-
+-    private val osArch: String
+-        get() = System.getProperty("os.arch")?.lowercase(Locale.US) ?: error("Cannot read osArch")
+-
+-    private val platform: String
+-        get() =
+-            when {
+-                osName.contains("linux") && osArch == "amd64" -> "linux-x86_64"
+-                osName.contains("mac") && osArch == "aarch64" -> "macos-arm64"
+-                else -> error("Unsupported platform: $osName, $osArch")
+-            }
+-
+     actual public fun load() {
+-        // Fast bail-out before grabbing a lock if we don't need to.
+-        if (loaded) return
+-
+-        synchronized(this) {
+-            // Double-check in the synchronized block in case something got there after first check.
+-            if (loaded) return
+-            // On the JVM we need to find the correct libink library file in the JAR resources, copy
+-            // it
+-            // out to a tempfile, and load it directly.
+-            //
+-            // See NativeLibraryLoader under sqlite/sqlite-bundled for a similar system.
+-            val tempFile = Files.createTempFile("libink.so", null).apply { toFile().deleteOnExit() }
+-            val resourcePath = "$platform/libink.so"
+-            checkNotNull(NativeLoader::class.java.classLoader!!.getResourceAsStream(resourcePath)) {
+-                    "Could not find resource $resourcePath"
+-                }
+-                .use { resourceStream ->
+-                    Files.copy(resourceStream, tempFile, StandardCopyOption.REPLACE_EXISTING)
+-                }
+-            System.load(tempFile.toFile().canonicalPath)
+-            loaded = true
+-        }
++        // byteink: the library bundled for Linux or Windows x86_64, from a per-user cache, or the one
++        // -Dbyteink.ink.library names. InkNativeLibrary loads it once.
++        InkNativeLibrary.load()
+     }
+ }

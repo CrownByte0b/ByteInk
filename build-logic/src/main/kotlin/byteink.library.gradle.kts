@@ -2,6 +2,7 @@
 
 plugins {
     id("byteink.kotlin-jvm")
+    id("byteink.publishing")
     `java-library`
 }
 

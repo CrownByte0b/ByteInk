@@ -8,6 +8,12 @@ composeMultiplatform = "1.12.1"
 # stored ink has to mean the same on both. The rest of the pin (source and native commits, build
 # toolchain) is in upstream/pins.properties; see upstream/README.md before changing this.
 androidx-ink = "1.1.0-alpha06"
+# What Google's ink-nativeloader-jvm declares at run time, kept by byteink's fork of it.
+androidx-annotation = "1.8.0"
+# byteink's own modules, and its fork of ink-nativeloader, which is versioned after the release it
+# forks: <androidx-ink>-byteink.<N>.
+byteink-modules = "0.1.0-SNAPSHOT"
+byteink-nativeloader = "1.1.0-alpha06-byteink.1"
 asm = "9.10.1"
 sqlite-jdbc = "3.53.4.0"
 # AndroidX Ink's own test suites (conformance/) run with the libraries AndroidX pinned for them at the
@@ -19,6 +25,7 @@ okio = "3.17.0"
 truth = "1.0.1"
 
 [libraries]
+androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidx-annotation" }
 androidx-ink-brush = { module = "androidx.ink:ink-brush", version.ref = "androidx-ink" }
 androidx-ink-geometry = { module = "androidx.ink:ink-geometry", version.ref = "androidx-ink" }
 androidx-ink-nativeloader = { module = "androidx.ink:ink-nativeloader", version.ref = "androidx-ink" }

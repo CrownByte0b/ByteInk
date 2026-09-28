@@ -1,23 +1,19 @@
 package com.vivenotes.byteink.build
 
-import java.io.File
-import java.io.InputStream
-import java.security.MessageDigest
-import java.util.zip.ZipFile
-import org.gradle.api.file.FileCollection
 import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.Provider
-import org.gradle.api.tasks.Classpath
-import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.process.CommandLineArgumentProvider
 
-/** The system property through which a test JVM learns which native library it should be running. */
-const val EXPECTED_LIBRARY_PROPERTY = "byteink.expectedLibinkSha256"
+/** The system property through which a test JVM learns which Ink library it should be running. */
+const val EXPECTED_LIBRARY_PROPERTY = "byteink.test.expectedInkLibrarySha256"
 
-/** Expects exactly [library], which must exist. */
+/** byteink's loader property: load this library instead of the one the loader jar bundles. */
+const val INK_LIBRARY_PROPERTY = "byteink.ink.library"
+
+/** Tells a test JVM to expect exactly [library], which must exist. */
 class ExpectedLibraryFile(
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -25,47 +21,16 @@ class ExpectedLibraryFile(
 ) : CommandLineArgumentProvider {
     override fun asArguments(): Iterable<String> {
         val file = library.get().asFile
-        check(file.isFile) { "$file does not exist; build it with native/build-linux.sh" }
-        return listOf("-D$EXPECTED_LIBRARY_PROPERTY=${file.inputStream().use(::sha256)}")
+        check(file.isFile) { "$file does not exist" }
+        return listOf("-D$EXPECTED_LIBRARY_PROPERTY=${sha256(file.inputStream())}")
     }
 }
 
-/** Expects the first [resource] on [classpath], the one a class loader over it would find. */
-class ExpectedLibraryResource(
-    @get:Classpath
-    val classpath: FileCollection,
-    @get:Input
-    val resource: String,
+/** Has byteink's loader load [library] rather than the one its jar bundles. */
+class InkLibraryOverride(
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    val library: Provider<RegularFile>,
 ) : CommandLineArgumentProvider {
-    override fun asArguments(): Iterable<String> {
-        val digest = classpath.files.firstNotNullOfOrNull { entry -> entry.resource()?.let { sha256(it) } }
-            ?: error("No $resource on the classpath")
-        return listOf("-D$EXPECTED_LIBRARY_PROPERTY=$digest")
-    }
-
-    private fun File.resource(): InputStream? = when {
-        isDirectory -> resolve(resource).takeIf { it.isFile }?.inputStream()
-        isFile && name.endsWith(".jar") -> ZipFile(this).let { zip ->
-            val entry = zip.getEntry(resource)
-            if (entry == null) {
-                zip.close()
-                null
-            } else {
-                // Read fully so the jar can be closed straight away.
-                zip.use { it.getInputStream(entry).readBytes() }.inputStream()
-            }
-        }
-        else -> null
-    }
-}
-
-private fun sha256(input: InputStream): String = input.use { stream ->
-    val digest = MessageDigest.getInstance("SHA-256")
-    val buffer = ByteArray(1 shl 16)
-    while (true) {
-        val read = stream.read(buffer)
-        if (read < 0) break
-        digest.update(buffer, 0, read)
-    }
-    digest.digest().joinToString("") { "%02x".format(it) }
+    override fun asArguments(): Iterable<String> = listOf("-D$INK_LIBRARY_PROPERTY=${library.get().asFile.absolutePath}")
 }
