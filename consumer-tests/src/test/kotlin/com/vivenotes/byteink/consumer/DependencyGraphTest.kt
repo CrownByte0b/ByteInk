@@ -44,6 +44,13 @@ class DependencyGraphTest {
     }
 
     @Test
+    fun thePublishedRendererBringsTheCoreAndCompose() {
+        val classpath = resolve("compose")
+        assertEquals(coreClasspath + "byteink-compose-$byteink.jar", inkJars(classpath))
+        assertContains(classpath.joinToString(), "ui-desktop-")
+    }
+
+    @Test
     fun theLoaderAloneIsOneJar() {
         assertEquals(setOf("ink-nativeloader-jvm-$nativeloader.jar"), inkJars(resolve("loader")))
     }
@@ -94,6 +101,7 @@ class DependencyGraphTest {
                         "loader" -> implementation("com.vivenotes.byteink:ink-nativeloader:$nativeloader")
                         "core" -> implementation("com.vivenotes.byteink:byteink-core:$byteink")
                         "vive" -> implementation("com.vivenotes.byteink:byteink-vive:$byteink")
+                        "compose" -> implementation("com.vivenotes.byteink:byteink-compose:$byteink")
                         else -> {
                             implementation("com.vivenotes.byteink:byteink-core:$byteink")
                             implementation("androidx.ink:ink-strokes:$ink")

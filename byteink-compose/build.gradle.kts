@@ -10,4 +10,6 @@ dependencies {
     api(libs.compose.runtime)
     api(libs.compose.ui)
     implementation(libs.compose.foundation)
+    testImplementation(project(":byteink-vive"))
+    testImplementation(compose.desktop.currentOs)
 }

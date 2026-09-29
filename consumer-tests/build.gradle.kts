@@ -15,6 +15,7 @@ tasks.test {
         ":ink-nativeloader:publishAllPublicationsToBuildRepository",
         ":byteink-core:publishAllPublicationsToBuildRepository",
         ":byteink-vive:publishAllPublicationsToBuildRepository",
+        ":byteink-compose:publishAllPublicationsToBuildRepository",
     )
     systemProperty("byteink.test.repository", rootProject.layout.buildDirectory.dir("repo").get().asFile.path)
     systemProperty("byteink.test.version", libs.versions.byteink.modules.get())

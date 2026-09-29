@@ -5,10 +5,15 @@ import com.vivenotes.byteink.vive.StoredInkMove
 import com.vivenotes.byteink.vive.StoredInkStroke
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
-import java.util.zip.ZipFile
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 /**
  * A ViveNotes `.vive` notebook, opened for tests: the zip around the app's SQLite database, read as
@@ -16,13 +21,15 @@ import java.util.zip.ZipFile
  * filtering is what decides what is live. The database is copied to a temporary file, deleted on
  * [close].
  */
-public class ViveNotebook private constructor(private val database: File) : AutoCloseable {
+public class ViveNotebook private constructor(
+    private val database: File,
+    private val source: File,
+    private val connection: Connection,
+) : AutoCloseable {
 
-    private val connection: Connection = DriverManager.getConnection("jdbc:sqlite:${database.path}")
-
-    /** The pages that hold any ink row, sorted. */
+    /** Every page in the notebook, including empty pages, sorted by id. */
     public val pageIds: List<String> = query(
-        "SELECT pageId FROM ink_strokes UNION SELECT pageId FROM ink_erases UNION SELECT pageId FROM ink_moves ORDER BY 1",
+        "SELECT id FROM pages ORDER BY id",
     ) { it.getString(1) }
 
     /** Every ink row of [pageId]. */
@@ -87,6 +94,78 @@ public class ViveNotebook private constructor(private val database: File) : Auto
         },
     )
 
+    /**
+     * Test support for a save/load proof: copies this archive and appends [strokes] to its database.
+     * Existing rows, operations and other archive entries are preserved. Refreshes the manifest's
+     * database descriptor, stroke count and archive checksums. The source is never written, and an
+     * existing destination is refused. This is not the application's export/sync implementation.
+     */
+    public fun writeCopyWithStrokes(destination: File, strokes: List<StoredInkStroke>) {
+        require(destination.canonicalFile != source.canonicalFile) { "The copy must differ from the source" }
+        require(!destination.exists()) { "The destination already exists: $destination" }
+        val copy = Files.createTempFile("vive-copy-", ".sqlite").toFile()
+        var output: File? = null
+        try {
+            Files.copy(database.toPath(), copy.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            val count = DriverManager.getConnection("jdbc:sqlite:${copy.path}").use { db ->
+                db.createStatement().use { it.execute("PRAGMA foreign_keys = ON") }
+                db.autoCommit = false
+                db.prepareStatement("INSERT INTO ink_strokes (id,pageId,seq,brushFamily,brushVersion,sizeDp,colorArgb,colorFollowsTheme,epsilon,stabilization,minX,minY,maxX,maxY,points,enc,createdAt,groupId,deletedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").use { statement ->
+                    strokes.forEach { row ->
+                        val values = listOf(row.id, row.pageId, row.seq, row.brushFamily, row.brushVersion, row.sizeDp,
+                            row.colorArgb, row.colorFollowsTheme?.let { if (it) 1 else 0 }, row.epsilon, row.stabilization,
+                            row.minX, row.minY, row.maxX, row.maxY, row.points, row.enc, row.createdAt, row.groupId, row.deletedAt)
+                        values.forEachIndexed { index, value ->
+                            if (value is ByteArray) statement.setBytes(index + 1, value) else statement.setObject(index + 1, value)
+                        }
+                        statement.addBatch()
+                    }
+                    statement.executeBatch()
+                }
+                db.commit()
+                db.createStatement().use { statement ->
+                    statement.executeQuery("SELECT count(*) FROM ink_strokes").use { rows -> rows.next(); rows.getLong(1) }
+                }
+            }
+            verifiedArchive(source) { zip, manifest ->
+                val hash = copy.inputStream().use { it.sha256() }
+                val updated = JsonObject(manifest + mapOf(
+                    "database" to JsonObject(manifest.getValue("database").jsonObject + mapOf(
+                        "byteCount" to JsonPrimitive(copy.length()), "sha256" to JsonPrimitive(hash),
+                    )),
+                    "counts" to JsonObject(manifest.getValue("counts").jsonObject + ("strokes" to JsonPrimitive(count))),
+                )).toString().encodeToByteArray()
+                destination.absoluteFile.parentFile.mkdirs()
+                val staging = Files.createTempFile(destination.absoluteFile.parentFile.toPath(), ".vive-", ".tmp").toFile()
+                output = staging
+                val checksums = linkedMapOf<String, String>()
+                ZipOutputStream(staging.outputStream().buffered()).use { result ->
+                    zip.entries().asSequence().filterNot { it.isDirectory || it.name == "checksums.sha256" }.forEach { entry ->
+                        result.putNextEntry(ZipEntry(entry.name))
+                        when (entry.name) {
+                            "notebook.sqlite" -> copy.inputStream().use { it.copyTo(result) }
+                            "manifest.json" -> result.write(updated)
+                            else -> zip.getInputStream(entry).use { it.copyTo(result) }
+                        }
+                        result.closeEntry()
+                        checksums[entry.name] = when (entry.name) {
+                            "notebook.sqlite" -> hash
+                            "manifest.json" -> updated.inputStream().use { it.sha256() }
+                            else -> zip.getInputStream(entry).use { it.sha256() }
+                        }
+                    }
+                    result.putNextEntry(ZipEntry("checksums.sha256"))
+                    result.write(checksums.entries.joinToString("\n", postfix = "\n") { (name, sha) -> "$sha  $name" }.encodeToByteArray())
+                    result.closeEntry()
+                }
+                Files.move(staging.toPath(), destination.toPath())
+            }
+        } finally {
+            copy.delete()
+            output?.delete()
+        }
+    }
+
     private val eraseTargets by lazy { targets("ink_erase_targets", "eraseId") }
     private val moveTargets by lazy { targets("ink_move_targets", "moveId") }
 
@@ -106,19 +185,25 @@ public class ViveNotebook private constructor(private val database: File) : Auto
     private fun ResultSet.nullableLong(column: String): Long? = getLong(column).takeUnless { wasNull() }
 
     override fun close() {
-        connection.close()
-        database.delete()
+        try { connection.close() } finally { database.delete() }
     }
 
     public companion object {
-        /** Opens a `.vive` file: a zip holding `notebook.sqlite`. */
+        /** Verifies every archive checksum and the database manifest, then opens the private database copy. */
         public fun open(file: File): ViveNotebook {
             val database = Files.createTempFile("vive-", ".sqlite").toFile()
-            ZipFile(file).use { zip ->
-                val entry = requireNotNull(zip.getEntry("notebook.sqlite")) { "$file holds no notebook.sqlite" }
-                zip.getInputStream(entry).use { input -> database.outputStream().use(input::copyTo) }
+            var connection: Connection? = null
+            try {
+                verifiedArchive(file) { zip, _ ->
+                    zip.getInputStream(zip.getEntry("notebook.sqlite")).use { input -> database.outputStream().use(input::copyTo) }
+                }
+                connection = DriverManager.getConnection("jdbc:sqlite:${database.path}")
+                return ViveNotebook(database, file, connection)
+            } catch (failure: Throwable) {
+                connection?.close()
+                database.delete()
+                throw failure
             }
-            return ViveNotebook(database)
         }
     }
 }

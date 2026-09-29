@@ -21,6 +21,7 @@ sqlite-jdbc = "3.53.4.0"
 guava = "32.0.1-android"
 junit = "4.13.2"
 kotlinx-coroutines = "1.9.0"
+kotlinx-serialization = "1.11.0"
 okio = "3.17.0"
 truth = "1.0.1"
 
@@ -40,9 +41,11 @@ asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "composeMultiplatform" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 truth = { module = "com.google.truth:truth", version.ref = "truth" }

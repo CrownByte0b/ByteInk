@@ -19,6 +19,7 @@ byteink is not published to a remote repository yet. Publish it into `build/repo
 ```bash
 ./gradlew :ink-nativeloader:publishAllPublicationsToBuildRepository \
   :byteink-core:publishAllPublicationsToBuildRepository \
+  :byteink-compose:publishAllPublicationsToBuildRepository \
   :byteink-vive:publishAllPublicationsToBuildRepository \
   :byteink-testing:publishAllPublicationsToBuildRepository
 ```
@@ -27,6 +28,7 @@ byteink is not published to a remote repository yet. Publish it into `build/repo
 |---|---|
 | ViveNotes ink (brings the core) | `com.vivenotes.byteink:byteink-vive:0.1.0-SNAPSHOT` |
 | Core | `com.vivenotes.byteink:byteink-core:0.1.0-SNAPSHOT` |
+| Compose Desktop renderer | `com.vivenotes.byteink:byteink-compose:0.1.0-SNAPSHOT` |
 | Native loader (a dependency of the core) | `com.vivenotes.byteink:ink-nativeloader:1.1.0-alpha06-byteink.1` |
 | Test support: `.vive` notebooks in tests | `com.vivenotes.byteink:byteink-testing:0.1.0-SNAPSHOT` |
 
@@ -70,6 +72,46 @@ native library for Linux x86_64 and Windows x86_64.
   database.
 - **Partial erases:** they replay. Writing new ones is not supported yet.
 
+## Compose Desktop rendering
+
+Keep an `InkPathRenderer` for the canvas and call `drawInk` from its `DrawScope`, or
+`renderer.draw` with a Compose `Canvas`. Both accept finished and in-progress Ink strokes.
+The supplied `AffineTransform` maps stroke coordinates into the canvas's local pixel coordinates;
+the renderer applies it on top of any transform already on the canvas. For a ViveNotes projection,
+combine its offset and scale with the page's pan, zoom and density.
+
+```kotlin
+val renderer = remember { InkPathRenderer() }
+Canvas(Modifier.fillMaxSize()) {
+    drawInk(renderer, stroke, strokeToCanvas)
+}
+```
+
+The renderer fills each coat once, with antialiasing and the paint's colour functions. It supports
+texture-free `ANY` and `DISCARD` paints, including ViveNotes' highlighter. Shapes made by `split`
+have no outlines at the pinned Ink release; their triangles form one winding path, keeping erased
+gaps visible. Finished paths are cached by shape in a bounded cache; live paths update with the
+stroke's mutation version. `clearCache()` releases the cached geometry when changing pages.
+
+Uniform fills omit per-vertex colour/opacity changes and prediction fading. `ACCUMULATE` and
+textured paints are refused; `canDraw` checks whether a brush is supported. Android screenshot
+comparisons are still pending. The implementation follows the pinned AndroidX `CanvasPathRenderer`
+and [Skia's path fill rules](https://skia.org/docs/user/api/skpath_overview/).
+
+The sample viewer verifies archive checksums, replays the notebook's ink, and shows every page with
+pan and zoom. Automatic ink resolves to black on its white paper; deliberate colours retain their
+alpha. The preview shows ink only.
+
+```bash
+./gradlew :samples:viewer:run --args='/path/to/notebook.vive'
+./gradlew :samples:viewer:run --args='--render-all /path/to/notebook.vive /path/to/pngs'
+```
+
+`byteink-testing` also provides `NotebookInkImages.writePng` and
+`ViveNotebook.writeCopyWithStrokes`, which appends rows to a separate test copy and refreshes its
+checksums and database metadata. This helper preserves existing rows and archive entries; the
+application's export and sync integration comes later.
+
 In tests, `byteink-testing` reads a `.vive` notebook's rows: `ViveNotebook.open(file).page(pageId)`.
 
 ## If your build also depends on Google's Ink
@@ -109,8 +151,12 @@ Then `./gradlew build` runs everything:
 Two properties run more than the default:
 
 - **`-PbyteinkNotebooks=<directory>`:** replays every `.vive` notebook in a directory and checks
-  hit testing on its pages. Reports go to `byteink-testing/build/reports/notebooks/`. Notebooks are
-  personal, so none are committed, and without the property the test is skipped.
+  hit testing on its pages, renders every page to PNG, and appends new strokes to temporary copies
+  for a save/load check. Reports go to `byteink-testing/build/reports/notebooks/`, with images under
+  `rendering/`. `BYTEINK_NOTEBOOKS` is an alternative to the property. Notebooks are personal, so
+  none are committed, and these tests skip when no directory is named. Saved-versus-rebuilt bounds
+  are reported as diagnostics; fidelity requires comparison with geometry rebuilt on Android from
+  the same saved inputs.
 - **`-PbyteinkFuzzIterations=<count>` and `-PbyteinkFuzzSeed=<seed>`:** run the fuzzer longer
   (the default is 500 iterations of seed 1), for example
   `./gradlew :byteink-vive:test --tests '*FuzzTest*' -PbyteinkFuzzIterations=100000 -PbyteinkFuzzSeed=2`.
