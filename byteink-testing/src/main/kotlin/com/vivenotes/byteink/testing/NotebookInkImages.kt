@@ -14,19 +14,8 @@ import kotlin.math.ceil
 
 /** Offscreen ink-only page images for notebook proofs and renderer comparisons. */
 public object NotebookInkImages {
-    /**
-     * Writes white paper with all [strokes] in draw order, fitted to their combined bounds with
-     * 16 pixels of padding. [maxDimension] limits both image dimensions; empty pages give 32×32 PNGs.
-     * Automatic ink resolves to black on this paper, using ViveNotes' stored theme flag; deliberate
-     * colours keep their alpha. Coordinates remain page units until the one scale into image pixels. Callers provide Skiko's
-     * native runtime, normally through Compose Desktop's currentOs dependency.
-     */
-    public fun writePng(
-        strokes: List<PageStroke>,
-        file: File,
-        maxDimension: Int = 2048,
-        renderer: InkPathRenderer = InkPathRenderer(),
-    ): RasterPage {
+    /** The exact page-to-image frame, also used by Android reference captures. */
+    public fun frame(strokes: List<PageStroke>, maxDimension: Int = 2048): RasterPageFrame {
         require(maxDimension > 32)
         val bounds = strokes.mapNotNull { it.pageBounds }
         val left = bounds.minOfOrNull { it.left } ?: 0f
@@ -34,8 +23,24 @@ public object NotebookInkImages {
         val right = bounds.maxOfOrNull { it.right } ?: left
         val bottom = bounds.maxOfOrNull { it.bottom } ?: top
         val scale = minOf(1f, (maxDimension - 32) / maxOf(1f, right - left, bottom - top))
-        val width = ceil((right - left) * scale).toInt() + 32
-        val height = ceil((bottom - top) * scale).toInt() + 32
+        return RasterPageFrame(ceil((right - left) * scale).toInt() + 32,
+            ceil((bottom - top) * scale).toInt() + 32, scale, left, top)
+    }
+
+    /**
+     * Writes white paper with all [strokes] in draw order, fitted to their combined bounds with
+     * 16 pixels of padding. [maxDimension] limits both image dimensions; empty pages give 32×32 PNGs.
+     * Automatic ink resolves to black on this paper, using ViveNotes' stored theme flag; deliberate
+     * colours keep their alpha. Coordinates remain page units until the scale into image pixels.
+     * Callers provide Skiko's native runtime, normally through Compose Desktop's currentOs dependency.
+     */
+    public fun writePng(
+        strokes: List<PageStroke>,
+        file: File,
+        maxDimension: Int = 2048,
+        renderer: InkPathRenderer = InkPathRenderer(),
+    ): RasterPage {
+        val (width, height, scale, left, top) = frame(strokes, maxDimension)
         var drawn = 0
         val start = System.nanoTime()
         Surface.makeRasterN32Premul(width, height).use { surface ->
@@ -60,6 +65,9 @@ public object NotebookInkImages {
         return RasterPage(width, height, drawn, (System.nanoTime() - start) / 1e6)
     }
 }
+
+/** Fitted image dimensions and scale; [left] and [top] map to the 16-pixel paper padding. */
+public data class RasterPageFrame(val width: Int, val height: Int, val scale: Float, val left: Float, val top: Float)
 
 /** The image's dimensions, number of rendered projections, and elapsed rendering/PNG encoding time. */
 public data class RasterPage(val width: Int, val height: Int, val drawn: Int, val elapsedMillis: Double)

@@ -1,0 +1,15 @@
+// Adds byteink's test-only reference producer to an isolated checkout of the Android app.
+// Run with -PbyteinkOracleSources=<this directory's src> and --init-script=<this file>.
+gradle.beforeProject { project ->
+    project.pluginManager.withPlugin('com.android.application') {
+        project.androidComponents.finalizeDsl { android ->
+            android.defaultConfig.applicationId = 'com.vivenotes.byteinkoracle'
+            android.defaultConfig.testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
+            android.buildTypes.debug.applicationIdSuffix = ''
+            def sources = new File(project.property('byteinkOracleSources').toString())
+            def shared = new File(sources.parentFile, 'shared')
+            android.sourceSets.androidTest.java.setSrcDirs([sources, shared])
+            android.sourceSets.androidTest.kotlin.setSrcDirs([sources, shared])
+        }
+    }
+}

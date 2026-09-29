@@ -63,8 +63,19 @@ val byteinkLabel = byteinkLinuxLibrary().map { library ->
     if (info.isFile) "byteink " + info.readLines().first { it.startsWith("google.ink.commit=") }.substringAfter('=').take(12)
     else "byteink ${library.asFile}"
 }
-val byteink = registerDump("oracleByteink", byteinkLabel)
-    .also { it.configure { description = "Dumps the oracle's results on the libink.so byteink's loader bundles." } }
+val byteinkMath = byteinkLinuxLibrary().map { library ->
+    val info = library.asFile.resolveSibling("build.properties")
+    if (info.isFile) info.readLines().firstOrNull { it.startsWith("float.angle.math=") }?.substringAfter('=') ?: "platform"
+    else "platform"
+}
+val byteink = registerDump("oracleByteink", byteinkLabel).also {
+    it.configure {
+        description = "Dumps the oracle's results on the libink.so byteink's loader bundles."
+        val math = byteinkMath
+        inputs.property("angleMath", math)
+        argumentProviders.add(CommandLineArgumentProvider { listOf("--angle-math", math.get()) })
+    }
+}
 
 tasks.register<JavaExec>("oracleCompare") {
     group = "oracle"

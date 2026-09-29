@@ -5,7 +5,7 @@ import java.io.File
 import kotlin.system.exitProcess
 
 private const val USAGE = """Usage:
-  oracle dump --out FILE --label LABEL [--fixtures DIR] [--detail PREFIX]
+  oracle dump --out FILE --label LABEL [--fixtures DIR] [--detail PREFIX] [--angle-math PROFILE]
       Runs every case against the Ink library byteink's loader loads (the one its jar bundles, or
       the one -Dbyteink.ink.library names) and writes the results, headed by that library's
       sha256. With --detail, keeps only the cases whose names start with PREFIX and writes their
@@ -42,6 +42,7 @@ fun oracle(args: Array<String>) {
                 "label" to required("--label"),
                 "library" to library.sha256,
                 "platform" to platform(),
+                "angle-math" to (options["--angle-math"] ?: "platform"),
                 "values" to "${dump.size}",
             )
             dump.write(out, header)

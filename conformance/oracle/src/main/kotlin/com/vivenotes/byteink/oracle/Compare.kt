@@ -13,10 +13,10 @@ import kotlin.math.max
  * must match exactly; for inputs, without Google's internal field 10). Everything else must be
  * identical.
  *
- * Dumps from different platforms ran on different C math libraries, whose results differ in last
- * bits. That stays within tolerance except in antialiasing derivatives: Ink averages them through
+ * Dumps from different platforms or angle-math profiles use math implementations that differ in
+ * last bits. That stays within tolerance except in antialiasing derivatives: Ink averages them through
  * atan2, sin and cos, and rounding can swing the average where a vertex's triangles point in nearly
- * opposite directions. Across platforms, derivatives beyond tolerance are informational.
+ * opposite directions. Across math implementations, derivatives beyond tolerance are informational.
  */
 class Comparison(val reference: Dump.Contents, val candidate: Dump.Contents) {
 
@@ -32,6 +32,10 @@ class Comparison(val reference: Dump.Contents, val candidate: Dump.Contents) {
         val there = candidate.header["platform"]
         here != null && there != null && here != there
     }
+
+    /** A scoped Android angle implementation also changes derivative rounding on the same OS. */
+    val differentMath: Boolean = crossPlatform ||
+        (reference.header["angle-math"] ?: "platform") != (candidate.header["angle-math"] ?: "platform")
 
     val outcomes: List<Outcome> = (reference.values.keys + candidate.values.keys).sorted().map(::judge)
 
@@ -60,7 +64,7 @@ class Comparison(val reference: Dump.Contents, val candidate: Dump.Contents) {
         }
         if (!beyond) return Outcome(key, Verdict.WITHIN_TOLERANCE, gap)
         if (name.endsWith(".outline-positions")) rotatedGap(key, x, y)?.let { return Outcome(key, Verdict.EQUIVALENT, it) }
-        if (crossPlatform && (name.endsWith(".derivatives") || name.endsWith(".derivative-unpacking"))) {
+        if (differentMath && (name.endsWith(".derivatives") || name.endsWith(".derivative-unpacking"))) {
             return Outcome(key, Verdict.INFORMATIONAL, gap)
         }
         return Outcome(key, Verdict.MISMATCH, gap)
@@ -122,10 +126,11 @@ class Comparison(val reference: Dump.Contents, val candidate: Dump.Contents) {
         append("| Label | ${reference.header["label"]} | ${candidate.header["label"]} |\n")
         append("| Library sha256 | `${reference.header["library"]}` | `${candidate.header["library"]}` |\n")
         append("| Platform | ${reference.header["platform"] ?: "—"} | ${candidate.header["platform"] ?: "—"} |\n")
+        append("| Angle math | ${reference.header["angle-math"] ?: "platform"} | ${candidate.header["angle-math"] ?: "platform"} |\n")
         append("| Values | ${reference.values.size} | ${candidate.values.size} |\n\n")
         if (sameLibrary) append("**Both dumps come from the same library; this comparison proves nothing.**\n\n")
-        if (crossPlatform) {
-            append("The dumps come from different platforms, whose C math libraries differ in last bits, ")
+        if (differentMath) {
+            append("The dumps use different math implementations, whose rounding differs in last bits, ")
             append("so antialiasing derivatives beyond tolerance are informational.\n\n")
         }
         val counts = outcomes.groupingBy { it.verdict }.eachCount()

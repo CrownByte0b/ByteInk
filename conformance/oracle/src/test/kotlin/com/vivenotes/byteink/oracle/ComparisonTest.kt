@@ -135,6 +135,27 @@ class ComparisonTest {
     }
 
     @Test
+    fun differentAngleMathKeepsGeometryStrictAndReportsDerivativeGaps() {
+        val values = listOf(
+            "case\tlive.step0.c0.p0.derivatives" to Floats.of(0.5f).toString(),
+            "case\tdry.bounds" to Floats.of(1f).toString(),
+        )
+        val a = dump("library" to "a", "platform" to "linux-x86_64", *values.toTypedArray())
+        val b = dump("library" to "b", "platform" to "linux-x86_64", "angle-math" to "android-bionic-test",
+            "case\tlive.step0.c0.p0.derivatives" to Floats.of(0.6f).toString(),
+            "case\tdry.bounds" to Floats.of(1.01f).toString())
+        val comparison = Comparison(a, b)
+        assertFalse(comparison.crossPlatform)
+        assertTrue(comparison.differentMath)
+        assertEquals(listOf("case\tdry.bounds"), comparison.mismatches.map { it.key })
+        assertTrue(comparison.markdown().contains("0.100"))
+        val sameMath = Comparison(a, dump("library" to "b", "platform" to "linux-x86_64",
+            "case\tlive.step0.c0.p0.derivatives" to Floats.of(0.6f).toString(), *values.drop(1).toTypedArray()))
+        assertFalse(sameMath.differentMath)
+        assertEquals(1, sameMath.mismatches.size)
+    }
+
+    @Test
     fun toleranceAdmitsRoundingAndNothingVisible() {
         assertTrue(Tolerance.accepts(1f, 1f + 5e-5f))
         assertTrue(Tolerance.accepts(1000f, 1000.01f)) // relative: 1e-4 + 1e-5 · 1000

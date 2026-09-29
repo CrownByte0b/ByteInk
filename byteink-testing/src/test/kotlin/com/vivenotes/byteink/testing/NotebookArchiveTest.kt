@@ -116,7 +116,7 @@ class NotebookArchiveTest {
 }
 
 /** Synthetic transfer schema and opaque rows: no data derived from personal notebooks. */
-internal fun syntheticNotebook(directory: File): File {
+internal fun syntheticNotebook(directory: File, emptyPages: List<String>? = null): File {
     val database = File(directory, "synthetic.sqlite")
     DriverManager.getConnection("jdbc:sqlite:$database").use { db ->
         db.createStatement().use { sql ->
@@ -135,10 +135,18 @@ internal fun syntheticNotebook(directory: File): File {
             sql.execute("INSERT INTO ink_move_targets VALUES ('move','opaque')")
             sql.execute("CREATE TABLE future_table (payload TEXT)")
             sql.execute("INSERT INTO future_table VALUES ('unknown data')")
+            if (emptyPages != null) {
+                listOf("ink_strokes", "ink_erases", "ink_erase_targets", "ink_moves", "ink_move_targets", "pages").forEach {
+                    sql.execute("DELETE FROM $it")
+                }
+                db.prepareStatement("INSERT INTO pages VALUES (?)").use { insert ->
+                    emptyPages.forEach { insert.setString(1, it); insert.executeUpdate() }
+                }
+            }
         }
     }
     val hash = database.inputStream().use { it.sha256() }
-    val manifest = """{"format":"com.vivenotes.notebook","formatVersion":1,"future":"preserve","database":{"path":"notebook.sqlite","sha256":"$hash","byteCount":${database.length()}},"counts":{"strokes":2}}"""
+    val manifest = """{"format":"com.vivenotes.notebook","formatVersion":1,"future":"preserve","database":{"path":"notebook.sqlite","sha256":"$hash","byteCount":${database.length()}},"counts":{"strokes":${if (emptyPages == null) 2 else 0}}}"""
     val file = File(directory, "synthetic.vive")
     zipWithChecksums(file, mapOf("manifest.json" to manifest.encodeToByteArray(), "notebook.sqlite" to database.readBytes(), "attachments/test" to byteArrayOf(1, 2, 3)))
     database.delete()

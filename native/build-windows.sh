@@ -26,6 +26,7 @@ dll=$(bazel cquery "${flags[@]}" "${windows[@]}" --output=files //ink/jni:libink
 install -m 644 "$src/$dll" "$out/ink.dll"
 {
   echo "google.ink.commit=$commit"
+  echo "float.angle.math=android-bionic-$(pin bionic.math.commit)"
   echo "bazel.version=$bazel_version"
   [[ -z ${BYTEINK_BAZEL_FLAGS:-} ]] || echo "experiment.flags=$BYTEINK_BAZEL_FLAGS"
   for patch in "${patches[@]}"; do
