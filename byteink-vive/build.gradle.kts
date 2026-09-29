@@ -8,3 +8,17 @@ plugins {
 dependencies {
     api(project(":byteink-core"))
 }
+
+tasks.test {
+    // FuzzTest runs FuzzMain in a JVM of its own, on this classpath.
+    val runtime = sourceSets.test.get().runtimeClasspath
+    val iterations = providers.gradleProperty("byteinkFuzzIterations")
+    val seed = providers.gradleProperty("byteinkFuzzSeed")
+    inputs.property("fuzzIterations", iterations.orElse(""))
+    inputs.property("fuzzSeed", seed.orElse(""))
+    jvmArgumentProviders.add(CommandLineArgumentProvider {
+        listOf("-Dbyteink.test.classpath=${runtime.asPath}") +
+            iterations.map { listOf("-Dbyteink.test.fuzzIterations=$it") }.getOrElse(emptyList()) +
+            seed.map { listOf("-Dbyteink.test.fuzzSeed=$it") }.getOrElse(emptyList())
+    })
+}

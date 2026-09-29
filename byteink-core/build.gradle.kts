@@ -1,5 +1,5 @@
 // Desktop foundation over AndroidX Ink. It re-exports the pinned upstream JVM modules unchanged and
-// will add the mesh-geometry adapter, hit-testing helpers and native-loader checks.
+// adds the mesh-geometry adapter, a spatial index for hit testing and the native-loader check.
 
 import com.vivenotes.byteink.build.googleNativeLoaderJar
 

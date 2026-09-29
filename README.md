@@ -14,13 +14,21 @@ git checkout --detach FETCH_HEAD
 
 # Using byteink
 
-byteink is not published to a remote repository yet. Publish it into `build/repo` with
-`./gradlew :ink-nativeloader:publishAllPublicationsToBuildRepository :byteink-core:publishAllPublicationsToBuildRepository`.
+byteink is not published to a remote repository yet. Publish it into `build/repo` with:
+
+```bash
+./gradlew :ink-nativeloader:publishAllPublicationsToBuildRepository \
+  :byteink-core:publishAllPublicationsToBuildRepository \
+  :byteink-vive:publishAllPublicationsToBuildRepository \
+  :byteink-testing:publishAllPublicationsToBuildRepository
+```
 
 | Module | Coordinates |
 |---|---|
+| ViveNotes ink (brings the core) | `com.vivenotes.byteink:byteink-vive:0.1.0-SNAPSHOT` |
 | Core | `com.vivenotes.byteink:byteink-core:0.1.0-SNAPSHOT` |
 | Native loader (a dependency of the core) | `com.vivenotes.byteink:ink-nativeloader:1.1.0-alpha06-byteink.1` |
+| Test support: `.vive` notebooks in tests | `com.vivenotes.byteink:byteink-testing:0.1.0-SNAPSHOT` |
 
 `byteink-core` brings Google's AndroidX Ink JVM modules (`ink-brush`, `ink-geometry`,
 `ink-storage`, `ink-strokes`, 1.1.0-alpha06) unchanged. The one difference is the native loader:
@@ -39,6 +47,30 @@ native library for Linux x86_64 and Windows x86_64.
   for Flatpak or jpackage builds, for example.
 - **`-Dbyteink.ink.cache=<directory>`:** extracts somewhere else.
 - **`InkNativeLibrary.loaded`:** says which file was loaded, and its SHA-256.
+
+## ViveNotes ink
+
+`byteink-vive` reads, replays and writes ink the way the Android app stores it, on the same engine.
+
+- **Loading a page:** pass the page's rows from `ink_strokes`, `ink_erases` and `ink_moves` to
+  `ViveInkPage.load`, as `StoredInkStroke`, `StoredInkErase` and `StoredInkMove` with their target
+  ids.
+  - It returns the page's strokes in draw order. Each is a `PageStroke`: the stroke, where it sits
+    on the page, and which row it came from.
+  - Every partial erase, object erase, move and resize has been replayed as Android replays it.
+  - Rows it cannot read are listed in `unreadable`; it does not throw.
+- **Hit testing:** `InkPageIndex(strokes)` finds what an eraser mask touches (`targetsFor`,
+  `touching`), what a lasso selects (`selectWithLasso`), and the ink at a point or along a segment.
+  It answers exactly as scanning every stroke would.
+- **Writing:** `ViveInkCodec` makes new rows:
+  - Strokes: `encodeStroke`, `encodeHighlighter`, `encodeCopy`, with brushes from `ViveBrushes`.
+  - Object erases: `encodeErase`, with targets from `targetsFor`.
+  - Moves: `encodeMove` and `encodeResize`.
+- **What it never does:** rewrite a stored row. Ids, `seq` and timestamps come from the caller's
+  database.
+- **Partial erases:** they replay. Writing new ones is not supported yet.
+
+In tests, `byteink-testing` reads a `.vive` notebook's rows: `ViveNotebook.open(file).page(pageId)`.
 
 ## If your build also depends on Google's Ink
 
@@ -63,11 +95,24 @@ The loader jar bundles both native libraries, so a build needs them first:
 
 - Build them with `native/build-linux.sh` and `native/build-windows.sh`. These run on Linux with
   Bazel, which the scripts fetch; see `upstream/README.md`.
-- Or name existing builds with `-PbyteinkLinuxLibrary=<file> -PbyteinkWindowsLibrary=<file>`, as CI
-  does.
+- Or use builds from elsewhere, such as CI's `libink-linux-x86_64` and `ink-windows-x86_64`
+  artifacts: unpack them into `native/build/out/`, as CI's JVM job does, or name the files with
+  `-PbyteinkLinuxLibrary=<file> -PbyteinkWindowsLibrary=<file>`.
 
 Then `./gradlew build` runs everything:
 
 - the loader's tests, on JDK 27 and on JDK 25;
 - AndroidX's own Ink suites, on byteink's library and on Google's;
+- the ViveNotes ink tests, including the Android app's own tests ported to the desktop;
 - the consumer tests, and the checks that the fork is upstream's code plus `patches/`.
+
+Two properties run more than the default:
+
+- **`-PbyteinkNotebooks=<directory>`:** replays every `.vive` notebook in a directory and checks
+  hit testing on its pages. Reports go to `byteink-testing/build/reports/notebooks/`. Notebooks are
+  personal, so none are committed, and without the property the test is skipped.
+- **`-PbyteinkFuzzIterations=<count>` and `-PbyteinkFuzzSeed=<seed>`:** run the fuzzer longer
+  (the default is 500 iterations of seed 1), for example
+  `./gradlew :byteink-vive:test --tests '*FuzzTest*' -PbyteinkFuzzIterations=100000 -PbyteinkFuzzSeed=2`.
+  It runs random ink through every operation in a JVM of its own, because a failing native check
+  aborts the whole process. A failure names the seed and iteration that reproduce it.

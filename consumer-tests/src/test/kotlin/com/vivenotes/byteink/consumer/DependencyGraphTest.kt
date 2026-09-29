@@ -39,6 +39,11 @@ class DependencyGraphTest {
     }
 
     @Test
+    fun byteinkViveBringsTheCoreWithIt() {
+        assertEquals(coreClasspath + "byteink-vive-$byteink.jar", inkJars(resolve("vive")))
+    }
+
+    @Test
     fun theLoaderAloneIsOneJar() {
         assertEquals(setOf("ink-nativeloader-jvm-$nativeloader.jar"), inkJars(resolve("loader")))
     }
@@ -88,6 +93,7 @@ class DependencyGraphTest {
                     when (scenario) {
                         "loader" -> implementation("com.vivenotes.byteink:ink-nativeloader:$nativeloader")
                         "core" -> implementation("com.vivenotes.byteink:byteink-core:$byteink")
+                        "vive" -> implementation("com.vivenotes.byteink:byteink-vive:$byteink")
                         else -> {
                             implementation("com.vivenotes.byteink:byteink-core:$byteink")
                             implementation("androidx.ink:ink-strokes:$ink")

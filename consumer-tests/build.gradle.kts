@@ -11,7 +11,11 @@ dependencies {
 
 tasks.test {
     // What is tested is the published metadata, so publish first.
-    dependsOn(":ink-nativeloader:publishAllPublicationsToBuildRepository", ":byteink-core:publishAllPublicationsToBuildRepository")
+    dependsOn(
+        ":ink-nativeloader:publishAllPublicationsToBuildRepository",
+        ":byteink-core:publishAllPublicationsToBuildRepository",
+        ":byteink-vive:publishAllPublicationsToBuildRepository",
+    )
     systemProperty("byteink.test.repository", rootProject.layout.buildDirectory.dir("repo").get().asFile.path)
     systemProperty("byteink.test.version", libs.versions.byteink.modules.get())
     systemProperty("byteink.test.nativeloaderVersion", libs.versions.byteink.nativeloader.get())

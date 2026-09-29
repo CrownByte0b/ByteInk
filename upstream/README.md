@@ -218,5 +218,10 @@ moves the derivatives' ranges by up to 0.785, and in one live step a derivative 
    no longer applies). Rebase `native/patches/` onto the new `google/ink` commit, rebuild both
    natives, and run the two library checks, `native/test-linux.sh` and the oracle.
 7. Adapt the ViveNotes brush catalog to API renames without changing what stored ink means (the
-   release notes list them; 1.1.0-alpha08 renamed `DampingNode`'s properties, for example). Then run
-   every suite.
+   release notes list them; 1.1.0-alpha08 renamed `DampingNode`'s properties, for example).
+8. Port what the Android app changed for the new release in the files `byteink-vive` follows
+   (`ink/InkCodec.kt`, `ink/PageStroke.kt`, `ink/CanvasSelection.kt`, `ink/PageBounds.kt` and
+   `data/InkPageLoader.kt`), and in their tests.
+9. Run every suite. If `InkMeshesTest` fails, Ink's internal meshes have changed: update
+   `byteink-core`'s `InkMeshes`, the one place that uses them. Then run the fuzzer long
+   (`-PbyteinkFuzzIterations=100000`), since native checks move between releases.
