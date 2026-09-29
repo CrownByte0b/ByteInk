@@ -51,6 +51,24 @@ The build bundles byteink's natives from `native/build-linux.sh` and `native/bui
 `com/vivenotes/byteink/nativeloader/<platform>/`, with `natives.properties` listing their SHA-256.
 The loader checks every extraction against that list. Debug symbols are not bundled.
 
+## Keeping Google's loader out
+
+Google's other Ink modules depend on `androidx.ink:ink-nativeloader`, so a classpath could end up
+with both loaders and two `NativeLoader` classes. Three things prevent that:
+
+- **Excludes:** `byteink-core` depends on Google's modules with their loader excluded, in its
+  published metadata too.
+- **A capability claim:** `byteink-core` claims the capability of Google's loader, so a build that
+  pulls it in some other way fails to resolve. The claim cannot sit on this module itself: its
+  Kotlin Multiplatform publication has a root module and a `-jvm` module, and both would claim it,
+  so the fork would conflict with itself.
+- **A runtime check:** `InkRuntime.load()` in `byteink-core` fails fast if Google's `NativeLoader`
+  still ends up shadowing this one.
+
+The `:consumer-tests` module resolves real consumer builds against the published metadata. It
+checks that the core brings no Google loader, that adding Google's Ink fails to resolve, and that
+the README's substitution snippet fixes it.
+
 ## Checks
 
 Both run as part of `./gradlew :ink-nativeloader:check`:
@@ -60,6 +78,8 @@ Both run as part of `./gradlew :ink-nativeloader:check`:
 - **`verifyUpstreamAbi`:** the compiled `androidx.ink.nativeloader` classes offer exactly the
   classes, supertypes and public or protected members that Google's `ink-nativeloader-jvm` jar
   does, so Google's other jars link against them unchanged.
+
+`check` also runs the loader's own tests, on JDK 27 (Gradle's) and on JDK 25 (`jvmTestJdk25`).
 
 ## Moving to another AndroidX commit
 

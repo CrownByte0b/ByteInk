@@ -89,8 +89,8 @@ fun Project.googleLinuxLibrary(): Provider<RegularFile> {
     return tasks.register<ExtractJarEntry>("googleLinuxLibrary") {
         description = "Extracts Google's linux-x86_64 libink.so from its ink-nativeloader-jvm jar."
         this.jar.from(jar)
-        entry = LINUX_LIBRARY
-        file = layout.buildDirectory.file("google/$LINUX_LIBRARY")
+        entry.set(LINUX_LIBRARY)
+        file.set(layout.buildDirectory.file("google/$LINUX_LIBRARY"))
     }.flatMap { it.file }
 }
 

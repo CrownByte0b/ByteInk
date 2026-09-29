@@ -62,7 +62,9 @@ checkout() {
   done
 }
 
-# Runs the pinned Bazel in the checkout.
+# Runs the pinned Bazel in the checkout. google/ink's rules_android configures whatever Android SDK
+# ANDROID_HOME names, and fails on one without APIs, as on CI runners; byteink builds no Android
+# targets, so Bazel never sees it.
 bazel() {
-  (cd "$src" && USE_BAZEL_VERSION="$bazel_version" "$bazelisk" "$@")
+  (cd "$src" && env -u ANDROID_HOME USE_BAZEL_VERSION="$bazel_version" "$bazelisk" "$@")
 }

@@ -49,10 +49,11 @@ fun registerDump(name: String, label: Provider<String>) = tasks.register<JavaExe
     })
 }
 
+val googleLibrary = googleLinuxLibrary()
 val google = registerDump("oracleGoogle", provider { "Google's libink.so" }).also {
     it.configure {
         description = "Dumps the oracle's results on Google's libink.so."
-        jvmArgumentProviders.add(InkLibraryOverride(googleLinuxLibrary()))
+        jvmArgumentProviders.add(InkLibraryOverride(googleLibrary))
     }
 }
 

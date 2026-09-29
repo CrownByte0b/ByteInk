@@ -8,7 +8,9 @@ import com.vivenotes.byteink.build.ExpectedLibraryFile
 import com.vivenotes.byteink.build.GitSparseCheckout
 import com.vivenotes.byteink.build.InkLibraryOverride
 import com.vivenotes.byteink.build.byteinkLinuxLibrary
+import com.vivenotes.byteink.build.bytecodeTarget
 import com.vivenotes.byteink.build.googleLinuxLibrary
+import com.vivenotes.byteink.build.registerTestsOnJdk
 import com.vivenotes.byteink.build.upstreamPins
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -93,6 +95,12 @@ val jvmTestGoogleBinary = tasks.register<Test>("jvmTestGoogleBinary") {
     jvmArgumentProviders.add(ExpectedLibraryFile(googleLibrary))
 }
 
+// The oldest JDK byteink supports runs the suites too: many of them wait for finalizers to free
+// native memory (NativePointerTestHelpers), which newer JDKs deprecate.
+val jvmTestOnOldestJdk = registerTestsOnJdk("jvmTestJdk$bytecodeTarget", jvmTest, bytecodeTarget.toInt()).also {
+    it.configure { jvmArgumentProviders.add(ExpectedLibraryFile(byteinkLinuxLibrary())) }
+}
+
 tasks.named("check") {
-    dependsOn(jvmTestGoogleBinary)
+    dependsOn(jvmTestGoogleBinary, jvmTestOnOldestJdk)
 }

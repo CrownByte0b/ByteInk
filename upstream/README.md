@@ -13,6 +13,7 @@ upstream code that is, and holds the tooling that proves it.
 | `google/ink` source for the natives | `96e50239e1c8`, one of five candidates | `pins.properties` |
 | Native toolchain at that commit | Bazel 8.7.0, LLVM 19.1.0 | `pins.properties` |
 | What byteink adds to that build | a Linux sysroot, a Windows cross-toolchain | `native/patches/` |
+| The native loader byteink forks | AndroidX's `ink-nativeloader` at the support commit, with one patch | `ink-nativeloader/` (`PATCHES.md`) |
 | JNI surface of the release | natives the jars declare; functions Google's binary exports | `jni/` |
 
 Dependency verification covers only the `androidx.ink` group; every other dependency is trusted by
@@ -199,6 +200,7 @@ moves the derivatives' ranges by up to 0.785, and in one live step a derivative 
   - `source-symbols`: prints a `google/ink` revision's JNI functions.
   - `scan`
   - `check-linux-library` and `check-windows-library`: what the two tasks run.
+  - `compare-abi`: what the loader fork's `verifyUpstreamAbi` runs against Google's jar.
 
 ## Moving to another release
 
@@ -211,9 +213,10 @@ moves the derivatives' ranges by up to 0.785, and in one live step a derivative 
 5. Run `./gradlew :upstream:scanGoogleInk`. From the commits that match exactly and predate the
    release, set `google.ink.candidates` and `google.ink.commit`, then confirm the choice against
    Google's binary.
-6. Re-copy the forked `ink-nativeloader` sources from the new AndroidX commit and re-apply its one
-   patch. Rebase `native/patches/` onto the new `google/ink` commit, rebuild both natives, and run
-   the two library checks, `native/test-linux.sh` and the oracle.
+6. Run `./gradlew :ink-nativeloader:syncForkSources` to take the forked loader's sources from the
+   new AndroidX commit, with its patch re-applied (`ink-nativeloader/PATCHES.md` covers a patch that
+   no longer applies). Rebase `native/patches/` onto the new `google/ink` commit, rebuild both
+   natives, and run the two library checks, `native/test-linux.sh` and the oracle.
 7. Adapt the ViveNotes brush catalog to API renames without changing what stored ink means (the
    release notes list them; 1.1.0-alpha08 renamed `DampingNode`'s properties, for example). Then run
    every suite.

@@ -30,7 +30,7 @@ internal class NativeBundle(private val resources: (String) -> InputStream?) {
         const val BASE = "com/vivenotes/byteink/nativeloader"
         const val MANIFEST = "natives.properties"
 
-        /** The libraries of the jar (or directory) this class came from, and whatever precedes it on its class path. */
+        /** The libraries on this class's class path: this jar's, as no other jar uses byteink's resource path. */
         fun ofClassPath(): NativeBundle {
             val loader = NativeBundle::class.java.classLoader ?: ClassLoader.getSystemClassLoader()
             return NativeBundle(loader::getResourceAsStream)

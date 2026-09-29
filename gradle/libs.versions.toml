@@ -28,7 +28,6 @@ truth = "1.0.1"
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidx-annotation" }
 androidx-ink-brush = { module = "androidx.ink:ink-brush", version.ref = "androidx-ink" }
 androidx-ink-geometry = { module = "androidx.ink:ink-geometry", version.ref = "androidx-ink" }
-androidx-ink-nativeloader = { module = "androidx.ink:ink-nativeloader", version.ref = "androidx-ink" }
 androidx-ink-storage = { module = "androidx.ink:ink-storage", version.ref = "androidx-ink" }
 androidx-ink-strokes = { module = "androidx.ink:ink-strokes", version.ref = "androidx-ink" }
 # The JVM artifacts themselves, whose class files and native binaries :upstream inspects.
