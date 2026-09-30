@@ -4,7 +4,7 @@ Developed at SunPro, a Sun Microsystems, Inc. business.
 Permission to use, copy, modify, and distribute this software is freely granted,
 provided that this notice is preserved.
 
-Android Bionic float atan/atan2 routines, adapted for byteink's private native use.
+Android Bionic float atan/atan2/hypot routines, adapted for byteink's private native use.
 Original conversion to float by Ian Lance Taylor, Cygnus Support.
 Source: android-15.0.0_r1 / 361ba86734fb2821a6adcfdf775db8abd04e0de0,
-libm/upstream-freebsd/lib/msun/src/s_atanf.c and e_atan2f.c.
+libm/upstream-freebsd/lib/msun/src/s_atanf.c, e_atan2f.c and e_hypotf.c.

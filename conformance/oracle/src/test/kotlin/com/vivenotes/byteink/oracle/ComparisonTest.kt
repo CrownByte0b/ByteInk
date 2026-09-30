@@ -6,8 +6,60 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import java.io.File
+import java.util.Properties
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
 
 class ComparisonTest {
+    @get:Rule val temporary = TemporaryFolder()
+
+    @Test
+    fun googlePinProofRejectsProductionArithmeticEvenIfAllValuesMatch() {
+        val headers = arrayOf("platform" to "linux-x86_64", "angle-math" to "platform", "magnitude-math" to "platform", "google-ink-commit" to "pin")
+        val reference = dump("library" to "google", "library-role" to "google-reference", *headers, "case\tcount" to "3")
+        val baseline = dump("library" to "baseline", "library-role" to "validation-baseline", *headers, "case\tcount" to "3")
+        Comparison(reference, baseline).requirePlatformBaseline()
+        assertFailsWith<IllegalArgumentException> {
+            Comparison(reference, Dump.Contents(baseline.header + ("library-role" to "production"), baseline.values)).requirePlatformBaseline()
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Comparison(reference, Dump.Contents(baseline.header + ("magnitude-math" to "android-bionic"), baseline.values)).requirePlatformBaseline()
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Comparison(reference, Dump.Contents(baseline.header + ("google-ink-commit" to "other-pin"), baseline.values)).requirePlatformBaseline()
+        }
+    }
+
+    @Test
+    fun nativeBaselineMetadataCannotSilentlySelectTheShippedBinary() {
+        val file = temporary.newFile("build.properties")
+        val values = mapOf("google.ink.commit" to "pin", "validation.only" to "true", "float.angle.math" to "platform",
+            "float.magnitude.math" to "platform", "libink.so.sha256" to "hash",
+            "omitted.patch.0003-use-android-float-angle-arithmetic.patch" to "a".repeat(64),
+            "omitted.patch.0004-use-android-float-magnitude-arithmetic.patch" to "b".repeat(64))
+        fun write(properties: Map<String, String>) { file.outputStream().use { out -> Properties().apply { putAll(properties) }.store(out, null) } }
+        write(values)
+        assertEquals("validation-baseline", NativeProfile.read(file, "pin", "hash", true)["library-role"])
+        assertFailsWith<IllegalArgumentException> { NativeProfile.read(file, "pin", "different-native", true) }
+        write(values + ("float.magnitude.math" to "android-bionic"))
+        assertFailsWith<IllegalArgumentException> { NativeProfile.read(file, "pin", "hash", true) }
+        write(values + ("patch.0004-use-android-float-magnitude-arithmetic.patch" to "b".repeat(64)))
+        assertFailsWith<IllegalArgumentException> { NativeProfile.read(file, "pin", "hash", true) }
+        assertFailsWith<IllegalArgumentException> { NativeProfile.read(File(file.parentFile, "missing"), "pin", "hash", true) }
+    }
+
+    @Test
+    fun magnitudeProfilesNeverExcuseTopologyOrPositionDifferences() {
+        val reference = dump("library" to "a", "platform" to "linux-x86_64", "magnitude-math" to "platform",
+            "case\ttopology" to "n=3 sha256=a", "case\tdry.bounds" to Floats.of(1f).toString())
+        val candidate = dump("library" to "b", "platform" to "linux-x86_64", "magnitude-math" to "android-bionic",
+            "case\ttopology" to "n=3 sha256=b", "case\tdry.bounds" to Floats.of(1.1f).toString())
+        val comparison = Comparison(reference, candidate)
+        assertEquals(2, comparison.mismatches.size)
+        assertFalse(comparison.passed)
+        assertTrue(comparison.markdown().contains("Magnitude math"))
+    }
 
     @Test
     fun strippingFieldTenLeavesTheOtherFieldsByteForByte() {

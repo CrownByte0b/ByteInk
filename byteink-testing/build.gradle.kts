@@ -1,3 +1,5 @@
+import java.io.File
+
 // Test support shared by byteink and its consumers: fixtures, a .vive reader for tests, geometry
 // dumps and image comparison.
 
@@ -36,6 +38,59 @@ tasks.test {
         notebooks.map { listOf("-Dbyteink.test.notebooks=$it", "-Dbyteink.test.notebookReports=${reports.get().asFile}") }
             .getOrElse(emptyList())
     })
+    val matrixProjectRoot = rootProject.layout.projectDirectory
+    val matrixReference = providers.gradleProperty("byteinkMatrixDirectory")
+        .map(matrixProjectRoot::dir).map { it.asFile.absolutePath }
+        .orElse(rootProject.layout.projectDirectory.dir("conformance/android/fixtures/matrix").asFile.absolutePath)
+    val matrixReports = layout.buildDirectory.dir("reports/android-matrix-tests")
+    inputs.dir(matrixReference).withPropertyName("androidMatrixReference")
+    outputs.dir(matrixReports)
+    jvmArgumentProviders.add(CommandLineArgumentProvider {
+        listOf("-Dbyteink.test.matrix=${matrixReference.get()}",
+            "-Dbyteink.test.matrixReports=${matrixReports.get().asFile.absolutePath}")
+    })
+}
+
+// Committed Android-produced goldens are always runnable without an SDK, device or private notes.
+val matrixProjectRoot = rootProject.layout.projectDirectory
+val matrixReference = providers.gradleProperty("byteinkMatrixDirectory")
+    .map(matrixProjectRoot::dir).map { it.asFile.absolutePath }
+    .orElse(rootProject.layout.projectDirectory.dir("conformance/android/fixtures/matrix").asFile.absolutePath)
+val matrixOutput = providers.gradleProperty("byteinkMatrixOutput")
+    .map(matrixProjectRoot::dir).map { it.asFile.absolutePath }
+    .orElse(layout.buildDirectory.dir("reports/android-matrix").map { it.asFile.absolutePath })
+val matrixNative = providers.gradleProperty("byteinkFidelityNative")
+val prepareAndroidMatrix = tasks.register<JavaExec>("prepareAndroidMatrix") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.AndroidFidelityMatrix")
+    maxHeapSize = "2g"
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    val reference = matrixReference
+    val output = matrixOutput
+    val native = matrixNative
+    inputs.dir(reference).withPropertyName("androidMatrixReference")
+    inputs.files(native.map { listOf(it) }.orElse(emptyList())).withPropertyName("matrixNativeOverride")
+    outputs.dir(output.map { File(it).resolve("desktop") })
+    jvmArgumentProviders.add(CommandLineArgumentProvider {
+        native.map { listOf("-Dbyteink.ink.library=$it") }.getOrElse(emptyList())
+    })
+    argumentProviders.add(CommandLineArgumentProvider { listOf("prepare", reference.get(), output.get()) })
+}
+tasks.register<JavaExec>("compareAndroidMatrix") {
+    dependsOn(prepareAndroidMatrix)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.AndroidFidelityMatrix")
+    maxHeapSize = "2g"
+    val reference = matrixReference
+    val output = matrixOutput
+    inputs.dir(reference).withPropertyName("androidMatrixReference")
+    argumentProviders.add(CommandLineArgumentProvider { listOf("compare", reference.get(), output.get()) })
+}
+tasks.register("androidFidelityMatrix") {
+    group = "verification"
+    description = "Rebuilds every committed Android brush, tool, stabilization and replay case and checks its fidelity."
+    dependsOn("compareAndroidMatrix")
 }
 
 // Optional Android notebook oracle. Test runtime supplies Skiko's platform library.

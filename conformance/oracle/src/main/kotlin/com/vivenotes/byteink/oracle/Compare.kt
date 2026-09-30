@@ -35,7 +35,20 @@ class Comparison(val reference: Dump.Contents, val candidate: Dump.Contents) {
 
     /** A scoped Android angle implementation also changes derivative rounding on the same OS. */
     val differentMath: Boolean = crossPlatform ||
-        (reference.header["angle-math"] ?: "platform") != (candidate.header["angle-math"] ?: "platform")
+        (reference.header["angle-math"] ?: "platform") != (candidate.header["angle-math"] ?: "platform") ||
+        (reference.header["magnitude-math"] ?: "platform") != (candidate.header["magnitude-math"] ?: "platform")
+
+    /** A Google pin proof must compare the unmodified arithmetic baseline, never the shipped Android adaptations. */
+    fun requirePlatformBaseline() {
+        require(candidate.header["library-role"] == "validation-baseline" && reference.header["library-role"] == "google-reference") {
+            "Strict Google validation requires a verified baseline and the pinned Google reference"
+        }
+        require(!crossPlatform && listOf(reference, candidate).all {
+            it.header["angle-math"] == "platform" && it.header["magnitude-math"] == "platform"
+        }) { "Strict Google validation requires the same platform arithmetic" }
+        require(reference.header["google-ink-commit"] != null && reference.header["google-ink-commit"] != "unspecified" &&
+            reference.header["google-ink-commit"] == candidate.header["google-ink-commit"]) { "Google baseline source pins differ" }
+    }
 
     val outcomes: List<Outcome> = (reference.values.keys + candidate.values.keys).sorted().map(::judge)
 
@@ -127,6 +140,9 @@ class Comparison(val reference: Dump.Contents, val candidate: Dump.Contents) {
         append("| Library sha256 | `${reference.header["library"]}` | `${candidate.header["library"]}` |\n")
         append("| Platform | ${reference.header["platform"] ?: "—"} | ${candidate.header["platform"] ?: "—"} |\n")
         append("| Angle math | ${reference.header["angle-math"] ?: "platform"} | ${candidate.header["angle-math"] ?: "platform"} |\n")
+        append("| Magnitude math | ${reference.header["magnitude-math"] ?: "platform"} | ${candidate.header["magnitude-math"] ?: "platform"} |\n")
+        append("| Library role | ${reference.header["library-role"] ?: "unspecified"} | ${candidate.header["library-role"] ?: "unspecified"} |\n")
+        append("| Source pin | ${reference.header["google-ink-commit"] ?: "unspecified"} | ${candidate.header["google-ink-commit"] ?: "unspecified"} |\n")
         append("| Values | ${reference.values.size} | ${candidate.values.size} |\n\n")
         if (sameLibrary) append("**Both dumps come from the same library; this comparison proves nothing.**\n\n")
         if (differentMath) {

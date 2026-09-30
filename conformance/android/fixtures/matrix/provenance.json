@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "generator": "Android",
+  "androidxInk": "1.1.0-alpha06",
+  "appCommit": "af05908e57f69593e32107b97bcdf19250637fa3",
+  "api": 36,
+  "abi": "x86_64",
+  "buildFingerprint": "google\/sdk_gphone64_x86_64\/emu64xa:16\/BE4B.251210.005\/14574095:user\/release-keys",
+  "glesVendor": "Google (Google Inc. (Google))",
+  "glesRenderer": "Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))",
+  "glesVersion": "OpenGL ES 3.1 (OpenGL ES 3.1.0 (ANGLE 2.1.17841 git hash: 5fa2e61da947))",
+  "caseCount": 280,
+  "rawStrokeCount": 840,
+  "sizesDp": [
+    2,
+    8,
+    20
+  ],
+  "colors": "opaque,translucent,theme",
+  "operationCases": 40,
+  "capturedAtEpochMillis": 1790752888529,
+  "coordinatePolicy": "shared deterministic rational samples; original app brush, codec and replay"
+}

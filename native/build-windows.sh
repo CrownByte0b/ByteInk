@@ -32,6 +32,7 @@ install -m 644 "$src/$dll" "$out/ink.dll"
 {
   echo "google.ink.commit=$commit"
   echo "float.angle.math=android-bionic-$(pin bionic.math.commit)"
+  echo "float.magnitude.math=android-bionic-$(pin bionic.math.commit)"
   echo "bazel.version=$bazel_version"
   echo "pe.timestamp=content-hash"
   echo "pe.debug=stripped"

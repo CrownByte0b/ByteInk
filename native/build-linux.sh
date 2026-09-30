@@ -25,6 +25,7 @@ install -m 644 "$bin/ink/jni/libink.so" "$out/libink.so.debug"
 {
   echo "google.ink.commit=$commit"
   echo "float.angle.math=android-bionic-$(pin bionic.math.commit)"
+  echo "float.magnitude.math=android-bionic-$(pin bionic.math.commit)"
   echo "bazel.version=$bazel_version"
   [[ -z ${BYTEINK_BAZEL_FLAGS:-} ]] || echo "experiment.flags=$BYTEINK_BAZEL_FLAGS"
   for patch in "${patches[@]}"; do

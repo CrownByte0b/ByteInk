@@ -6,11 +6,12 @@ import kotlin.system.exitProcess
 
 private const val USAGE = """Usage:
   oracle dump --out FILE --label LABEL [--fixtures DIR] [--detail PREFIX] [--angle-math PROFILE]
+      [--magnitude-math PROFILE] [--native-metadata FILE --expected-native-commit COMMIT] [--baseline]
       Runs every case against the Ink library byteink's loader loads (the one its jar bundles, or
       the one -Dbyteink.ink.library names) and writes the results, headed by that library's
       sha256. With --detail, keeps only the cases whose names start with PREFIX and writes their
       buffers in full.
-  oracle compare --reference FILE --candidate FILE --report FILE [--allow-differences]
+  oracle compare --reference FILE --candidate FILE --report FILE [--allow-differences] [--require-baseline]
       Compares two dumps value by value and writes a markdown report; fails on any mismatch beyond
       the float tolerance unless allowed, and always when both dumps come from the same library.
       Dumps from different platforms may also differ in antialiasing derivatives."""
@@ -25,7 +26,7 @@ fun oracle(args: Array<String>) {
     while (index < args.size) {
         val name = args[index++]
         when {
-            name == "--allow-differences" -> flags += name
+            name in setOf("--allow-differences", "--baseline", "--require-baseline") -> flags += name
             name.startsWith("--") && index < args.size -> options[name] = args[index++]
             else -> usage("Unexpected argument $name")
         }
@@ -33,28 +34,38 @@ fun oracle(args: Array<String>) {
     fun required(name: String): String = options[name] ?: usage("$name is required")
     when (args.firstOrNull()) {
         "dump" -> {
+            val library = InkNativeLibrary.load()
+            val profile = options["--native-metadata"]?.let {
+                NativeProfile.read(File(it), required("--expected-native-commit"), library.sha256, "--baseline" in flags)
+            } ?: run {
+                require("--baseline" !in flags) { "Baseline dumps require verified native build metadata" }
+                emptyMap()
+            }
             val dump = Dump(detail = options["--detail"])
             dump.syntheticCases()
             options["--fixtures"]?.let { dump.fixtureCases(File(it)) }
             val out = File(required("--out"))
-            val library = InkNativeLibrary.load()
             val header = linkedMapOf(
                 "label" to required("--label"),
                 "library" to library.sha256,
                 "platform" to platform(),
                 "angle-math" to (options["--angle-math"] ?: "platform"),
+                "magnitude-math" to (options["--magnitude-math"] ?: "platform"),
+                "google-ink-commit" to (options["--expected-native-commit"] ?: "unspecified"),
+                "library-role" to (options["--library-role"] ?: "unspecified"),
                 "values" to "${dump.size}",
             )
-            dump.write(out, header)
+            dump.write(out, header + profile)
             println("${dump.size} values from $library in $out")
         }
         "compare" -> {
             val comparison = Comparison(Dump.read(File(required("--reference"))), Dump.read(File(required("--candidate"))))
+            if ("--require-baseline" in flags) comparison.requirePlatformBaseline()
             val report = File(required("--report")).apply { parentFile?.mkdirs(); writeText(comparison.markdown()) }
             println(report.readLines().first { it.contains(" values: ") })
             println("Report: $report")
             if (comparison.sameLibrary) exitProcess(1)
-            if (!comparison.passed && "--allow-differences" !in flags) exitProcess(1)
+            if (!comparison.passed && ("--allow-differences" !in flags || "--require-baseline" in flags)) exitProcess(1)
         }
         else -> usage("Unknown command ${args.firstOrNull()}")
     }

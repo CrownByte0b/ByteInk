@@ -41,6 +41,8 @@ jobs:
           restore-keys: bazel-repository-linux-
       - name: Build libink.so
         run: native/build-linux.sh
+      - name: Build unshipped platform-math oracle baseline
+        run: native/build-oracle-baseline.sh linux
       - name: Check it
         run: ./gradlew :upstream:checkLinuxLibrary
       - name: Upload libink.so
@@ -51,6 +53,15 @@ jobs:
           path: |
             native/build/out/*/linux-x86_64/libink.so
             native/build/out/*/linux-x86_64/build.properties
+          if-no-files-found: error
+
+      - name: Upload unshipped oracle baseline
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: oracle-baseline-linux-x64
+          path: |
+            native/build/oracle-linux-x64/libink.so
+            native/build/oracle-linux-x64/build.properties
           if-no-files-found: error
 
   native-windows:
@@ -195,10 +206,14 @@ jobs:
         with:
           name: ink-windows-x86_64
           path: native/build/out
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: oracle-baseline-linux-x64
+          path: native/build/oracle-linux-x64
       - name: Build, full suites, native contracts, engine oracle and replay/raster dump
         run: >-
           ./gradlew build :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary
-          :conformance:oracle:oracleCompare :conformance:oracle:installDist
+          :conformance:oracle:oracleCompare :conformance:oracle:oracleProduction :conformance:oracle:installDist
           :byteink-testing:desktopParityDump --continue
           "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
           -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }}
@@ -231,6 +246,7 @@ jobs:
             conformance/oracle/build/reports/
             byteink-compose/build/reports/performance/
             byteink-testing/build/reports/performance/
+            byteink-testing/build/reports/android-matrix*/
           if-no-files-found: error
 
   jvm-windows:
@@ -298,22 +314,20 @@ jobs:
         run: |
           reference=$(cygpath -w "$PWD/linux-reference/byteink-testing/build/desktop-parity")
           ./gradlew.bat build :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary \
-            :conformance:oracle:oracleByteink :byteink-testing:desktopParityCompare --continue \
+            :conformance:oracle:oracleProduction :byteink-testing:desktopParityCompare --continue \
             "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME" \
             "-PbyteinkParityFixtures=$reference\fixtures" "-PbyteinkParityReference=$reference" \
             -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }} \
             -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64 \
             -Porg.gradle.java.installations.auto-download=false
-      - name: Compare Windows engine with Google and byteink on Linux
+      - name: Compare shipped Windows and Linux engine geometry strictly
         run: |
           java=$(cygpath -u "$BYTEINK_TEST_JAVA_HOME")/bin/java.exe
           ./gradlew.bat :conformance:oracle:installDist
-          for reference in oracleGoogle oracleByteink; do
-            "$java" -cp 'conformance/oracle/build/install/oracle/lib/*' com.vivenotes.byteink.oracle.OracleKt \
-              compare --reference "linux-reference/conformance/oracle/build/oracle/$reference.tsv" \
-              --candidate conformance/oracle/build/oracle/oracleByteink.tsv \
-              --report "conformance/oracle/build/reports/windows-vs-$reference.md"
-          done
+          "$java" -cp 'conformance/oracle/build/install/oracle/lib/*' com.vivenotes.byteink.oracle.OracleKt \
+            compare --reference linux-reference/conformance/oracle/build/oracle/oracleProduction.tsv \
+            --candidate conformance/oracle/build/oracle/oracleProduction.tsv \
+            --report conformance/oracle/build/reports/windows-vs-linux-production.md
       - name: Upload Windows reports and parity results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -327,5 +341,6 @@ jobs:
             byteink-testing/build/desktop-parity/
             byteink-compose/build/reports/performance/
             byteink-testing/build/reports/performance/
+            byteink-testing/build/reports/android-matrix*/
             native/build/windows-tests/results/
           if-no-files-found: error

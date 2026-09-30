@@ -30,8 +30,8 @@ python3 conformance/android/run.py \
 
 Each run defaults to a fresh directory under `conformance/android/build/`. `--results` can name
 an existing prepared directory to repeat the Android capture/comparison. Preparation also adds
-ten generated brush-family pages, each with opaque and translucent pressure loops. The full
-stabilization/tool/size/colour matrix and Windows raster comparisons are separate work.
+ten generated brush-family pages, each with opaque and translucent pressure loops. The public
+synthetic matrix below provides the stabilization/tool/size/colour and operation coverage.
 Fixtures, database copies, images and reports are ignored by Git. Private app storage is
 transferred with run-as. Application IDs are verified before installing; instrumentation
 output is checked because am instrument can exit zero after a failed test.
@@ -92,6 +92,21 @@ renderer deviation, not a claim of mesh-shader parity. The report is under ignor
 `build/results/comparison.md`, with paired/difference PNGs. Instrumentation passed in 35.106 s;
 the complete Gradle build/native oracle also passed.
 
+## Native magnitude correction
+
+The public matrix found 115 geometry failures from a one-ulp Bionic `hypotf` rounding
+difference. Scoped production patch 0004 preserves Android magnitude arithmetic at Ink
+call sites, without a global math override. All 280 full geometry JSONs and accepted
+software images then match exactly. The previous 51-page notebook capture remains a
+passing regression check: all 512,800 geometry values are exact and software channel
+differences remain at most two levels.
+
+Google's Linux binary uses platform math and consequently differs in 209 geometry/topology
+values after this correction. The independent pin/engine oracle uses a separate unshipped
+platform-math validation build, retaining strict comparison rules. Production correctness
+uses Android goldens and strict cross-OS comparisons. See
+[native/ANGLE-MATH.md](../../native/ANGLE-MATH.md) for the source and update procedure.
+
 ## Reference environment
 
 API 35 x86_64 Pixel_Tablet is the current local reference. The installed emulator 37.1.11 and
@@ -99,4 +114,79 @@ isolated 36.6.11 both crashed in SwiftShader's generated shader code: strace rec
 for executable heap mappings. Camera/Vulkan disable and software CPU retries did not fix it.
 Using `-gpu host` boots successfully without changing system permissions, the SDK installation,
 or the user's AVD settings. The captured host GPU is NVIDIA RTX 4080 SUPER, driver 615.71.09.
-A fixed API 36/SwiftShader reference is still needed for the complete cross-platform matrix.
+A fixed API 36/SwiftShader reference is used for the public synthetic matrix below. The
+earlier notebook captures retain their original API 35/host-GPU provenance.
+
+## Public synthetic matrix
+
+The reference generator runs the pinned app's brush catalog, codec, operation replay and
+`NotebookTransferManager` export inside the isolated oracle package. It uses deterministic
+generated coordinates and UUIDs; it reads no user notebooks. The resulting `synthetic.vive`
+and Android geometry/encodings/PNGs are stored in `fixtures/matrix/` with a complete SHA-256
+inventory. All desktop builds verify these public references without requiring an emulator.
+
+The three original `CanvasStrokeRenderer` modes are preserved unchanged. Android's pinned
+path renderer omits split pieces when their mesh has no outlines, while desktop fills their
+real engine triangles. `images/softwareTriangles/` supplies an independent Android software
+Canvas reference that fills all triangles together with consistent winding. The two-level
+software pixel gate uses this reference only for detected zero-outline groups containing
+triangles; original software/forced-path omission metrics remain in the report. Default
+hardware comparison still covers every visible piece. The desktop renderer keeps erased
+pieces visible rather than copying the Android path omission.
+
+The matrix has 240 brush cases (ten families × six stabilization levels × four tools) and
+40 operation cases (ten families × four tools at stabilization level three). Each page
+contains sizes 2, 8 and 20 dp, an opaque colour, a translucent colour and automatic theme
+colour. Operation pages replay Normal and Object erases, a move and a nonuniform resize.
+The fixed viewport is 480×640 pixels at two pixels per page unit.
+
+Generate fresh references using an API 36 x86_64 AVD with SwiftShader and enough free
+data space to install both APKs. The recorded local capture used an isolated 8 GiB AVD under
+ignored `build/avd/`; the original AVD configuration stayed unchanged. The example uses an
+AVD named `Api36`:
+
+```sh
+# Use the selected API 36 x86_64 AVD read-only.
+"$ANDROID_HOME/emulator/emulator" -avd Api36 -read-only -no-window -no-snapshot \
+  -no-audio -gpu swangle
+python3 conformance/android/run.py --matrix --capture-only \
+  --android-project /path/to/viveNotes --device emulator-5554 \
+  --results /absolute/path/to/fresh-results
+```
+
+[Android documents `swangle`](https://developer.android.com/studio/run/emulator-acceleration#accel-graphics)
+as SwiftShader with an ANGLE backend. The installed emulator 37.1.11 boots this
+backend successfully; its legacy direct GLES `-gpu swiftshader` backend exits 139 on this
+host. The runner checks API 36, x86_64 and the SurfaceFlinger SwiftShader identity before
+installing. Capture metadata records the device build, renderer, emulator and source hashes.
+`--matrix` cannot be combined with private notebook capture or stroke diagnostics. Omit
+`--capture-only` to compare the new references immediately after retrieval.
+
+Run the committed references on either desktop OS:
+
+```sh
+./gradlew :byteink-testing:androidFidelityMatrix --offline
+# Select an installed JVM explicitly when verifying multiple runtimes:
+./gradlew build :conformance:oracle:oracleProduction --offline \
+  -PbyteinkTestJavaHome=/path/to/jdk
+# Linux-only independent engine/pin proof:
+native/build-oracle-baseline.sh
+./gradlew :conformance:oracle:oracleCompare --offline
+```
+
+The matrix report is under `byteink-testing/build/reports/android-matrix/`. Optional
+`-PbyteinkMatrixDirectory` and `-PbyteinkMatrixOutput` select reference and report directories.
+Use `gradlew.bat` on Windows. Counts, topology, identities and brush protobuf encodings are exact;
+coordinates and coverage use the unchanged native geometry tolerance. Every software path
+pixel remains subject to the two-channel-level gate. The hardware comparison separately
+constrains the accepted AA and translucent ANY differences and records per-case metrics and
+failure diagnostics. A missing/corrupt reference or geometry mismatch fails the check.
+
+Gzip transport bytes depend on Android/JVM zlib and are recorded separately from the
+byte-identical brush protobuf payload. Re-encoding decoded inputs also drops Google's
+private animation-phase field 10, which the public native source reserves. Every remaining
+protobuf byte must match, and every original stored input blob is preserved byte for byte.
+These measured encoding differences do not permit changes to input values or brush meaning.
+
+Measured per-family results and final verification evidence are summarized in
+[FIDELITY.md](FIDELITY.md).

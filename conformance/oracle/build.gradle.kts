@@ -1,13 +1,14 @@
 // Unpublished. The differential oracle: one fixed set of engine operations, run on Google's
-// libink.so (oracleGoogle) and on byteink's (oracleByteink), dumped value by value and compared
-// (oracleCompare). Both go through byteink's loader: oracleByteink loads the library it bundles
-// (-PbyteinkLinuxLibrary picks another build to bundle), oracleGoogle names Google's with the
-// loader's override property. -PoracleFixtures=<dir> adds the .vive notebooks in that directory.
+// libink.so (oracleGoogle) and a separate platform-math validation build (oracleByteink), then
+// compared strictly (oracleCompare). oracleProduction records the shipped Android-math build.
+// All use byteink's loader; baseline and Google select explicit native overrides.
+// -PoracleFixtures=<dir> adds the .vive notebooks in that directory.
 
 import com.vivenotes.byteink.build.InkLibraryOverride
 import com.vivenotes.byteink.build.byteinkHostLibrary
 import com.vivenotes.byteink.build.isLinuxHost
 import com.vivenotes.byteink.build.googleLinuxLibrary
+import com.vivenotes.byteink.build.upstreamPins
 
 plugins {
     id("byteink.kotlin-jvm")
@@ -58,29 +59,58 @@ val google = if (isLinuxHost) registerDump("oracleGoogle", provider { "Google's 
     }
 } else null
 
-// The byteink build's own record of which commit it is, when native/build-linux.sh made it.
-val byteinkLabel = byteinkHostLibrary().map { library ->
-    val info = library.asFile.resolveSibling("build.properties")
-    if (info.isFile) "byteink " + info.readLines().first { it.startsWith("google.ink.commit=") }.substringAfter('=').take(12)
-    else "byteink ${library.asFile}"
-}
-val byteinkMath = byteinkHostLibrary().map { library ->
-    val info = library.asFile.resolveSibling("build.properties")
-    if (info.isFile) info.readLines().firstOrNull { it.startsWith("float.angle.math=") }?.substringAfter('=') ?: "platform"
-    else "platform"
-}
-val byteink = registerDump("oracleByteink", byteinkLabel).also {
+// The Google pin proof runs a separate, unshipped platform-math build. Production Android
+// arithmetic is mandatory in the Android fidelity matrix and in cross-OS production dumps.
+val nativeCommit = upstreamPins().map { it.getProperty("google.ink.commit") }
+val oracleRoot = rootProject.layout.projectDirectory
+val baselineLibrary = providers.gradleProperty("oracleBaselineLibrary").map(oracleRoot::file)
+    .orElse(oracleRoot.file("native/build/oracle-linux-x64/libink.so"))
+val productionLibrary = byteinkHostLibrary()
+val productionMetadata = productionLibrary.map { it.asFile.resolveSibling("build.properties").absolutePath }
+val baselineMetadata = baselineLibrary.map { it.asFile.resolveSibling("build.properties").absolutePath }
+val production = registerDump("oracleProduction", provider { "byteink shipped Android-arithmetic native" }).also {
     it.configure {
-        description = "Dumps the oracle's results on the libink.so byteink's loader bundles."
-        val math = byteinkMath
-        inputs.property("angleMath", math)
-        argumentProviders.add(CommandLineArgumentProvider { listOf("--angle-math", math.get()) })
+        description = "Dumps the shipped production native for Android fidelity and strict cross-OS comparisons."
+        val metadata = productionMetadata
+        val commit = nativeCommit
+        inputs.file(metadata).withPropertyName("nativeBuildMetadata")
+        argumentProviders.add(CommandLineArgumentProvider {
+            listOf("--native-metadata", metadata.get(), "--expected-native-commit", commit.get())
+        })
     }
+}
+val byteink = if (isLinuxHost) registerDump("oracleByteink", provider { "byteink unshipped platform-arithmetic pin-validation baseline" }).also {
+    it.configure {
+        description = "Dumps the unshipped platform-math baseline; missing or invalid baseline metadata fails."
+        val metadata = baselineMetadata
+        val commit = nativeCommit
+        inputs.file(metadata).withPropertyName("baselineBuildMetadata")
+        jvmArgumentProviders.add(InkLibraryOverride(baselineLibrary))
+        argumentProviders.add(CommandLineArgumentProvider {
+            listOf("--baseline", "--native-metadata", metadata.get(), "--expected-native-commit", commit.get())
+        })
+    }
+} else registerDump("oracleByteink", provider { "byteink shipped Android-arithmetic native (legacy Windows task)" }).also {
+    it.configure {
+        description = "Legacy Windows production dump; use oracleProduction for cross-OS comparisons."
+        val metadata = productionMetadata
+        val commit = nativeCommit
+        inputs.file(metadata).withPropertyName("nativeBuildMetadata")
+        argumentProviders.add(CommandLineArgumentProvider {
+            listOf("--native-metadata", metadata.get(), "--expected-native-commit", commit.get())
+        })
+    }
+}
+google?.configure {
+    val commit = nativeCommit
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf("--expected-native-commit", commit.get(), "--library-role", "google-reference")
+    })
 }
 
 if (google != null) tasks.register<JavaExec>("oracleCompare") {
     group = "oracle"
-    description = "Compares byteink's results with Google's value by value; fails on any difference."
+    description = "Strict Google pin proof against the unshipped platform-math baseline; every geometry/topology check remains enforced."
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = "com.vivenotes.byteink.oracle.OracleKt"
     dependsOn(google, byteink)
@@ -89,13 +119,12 @@ if (google != null) tasks.register<JavaExec>("oracleCompare") {
     inputs.files(reference, candidate)
     val report = layout.buildDirectory.file("reports/oracle.md")
     outputs.file(report)
-    val allow = providers.gradleProperty("oracleAllowDifferences").isPresent
     argumentProviders.add(CommandLineArgumentProvider {
         listOf(
-            "compare",
+            "compare", "--require-baseline",
             "--reference", reference.get().asFile.path,
             "--candidate", candidate.get().asFile.path,
             "--report", report.get().asFile.path,
-        ) + if (allow) listOf("--allow-differences") else emptyList()
+        )
     })
 }

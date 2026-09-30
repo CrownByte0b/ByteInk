@@ -1,0 +1,23 @@
+{
+  "android_app_commit": "af05908e57f69593e32107b97bcdf19250637fa3",
+  "androidx_ink": "1.1.0-alpha06",
+  "environment": {
+    "ro.build.version.sdk": "36",
+    "ro.product.cpu.abi": "x86_64",
+    "ro.build.fingerprint": "google/sdk_gphone64_x86_64/emu64xa:16/BE4B.251210.005/14574095:user/release-keys",
+    "graphics": "GLES: Google (Google Inc. (Google)), Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)), OpenGL ES 3.1 (OpenGL ES 3.1.0 (ANGLE 2.1.17841 git hash: 5fa2e61da947))",
+    "emulator": "Android emulator version 37.1.11.0 (build_id 15917651) (CL:N/A)"
+  },
+  "sources": {
+    "conformance/android/src/com/vivenotes/byteink/AndroidNotebookOracleTest.kt": "151741b86babccbfce4d1fd503f0a98a1a677782e8c6dc7b3509f4c8a5d8edf9",
+    "conformance/android/src/com/vivenotes/byteink/AndroidSyntheticMatrix.kt": "79995da75dca22fd63cc6f6096acc0f3e182a833b91ceb0e79fd5dd2ce143a63",
+    "conformance/android/src/com/vivenotes/byteink/AndroidTriangleReference.kt": "945df00480f12112362619344721d9d99724ba0ad11ad0d5e8f7c37402b3ac41",
+    "conformance/android/shared/com/vivenotes/byteink/oracle/MatrixGeometry.kt": "d45b0f26c5405d4df75ab9b9d7f4bb193be5083572e0edcd727420b580121bef",
+    "conformance/android/shared/com/vivenotes/byteink/oracle/StrokeDiagnostics.kt": "dead6a01e41ed6faaf55a742b7c7497125507ec2f145273c342d5b214b100441",
+    "conformance/android/shared/com/vivenotes/byteink/oracle/SyntheticFidelityMatrix.kt": "5a89da24ed06c2b3ab706a0ae0062ab51140bb8b8b622cfbfcf4c6ac16de4154"
+  },
+  "apk_sha256": {
+    "app-debug.apk": "81e0b93f6ec743a257767813948d8d47939c67d6d00eefde6c2a7639cbfe3e8f",
+    "app-debug-androidTest.apk": "7b766852d9cb8316d1b44edf49759c62b2f2ad8d62c1422541c064a921eddbb4"
+  }
+}
