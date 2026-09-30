@@ -60,7 +60,9 @@ abstract class PatchedSources @Inject constructor(
                 // Stop git from finding the repository around the build directory: the patch's paths
                 // are relative to this directory, not to that repository's root.
                 environment("GIT_CEILING_DIRECTORIES", target.parentFile.path)
-                commandLine("git", "apply", patch.path)
+                // Git for Windows can otherwise rewrite the patched file to CRLF from its
+                // system configuration, breaking the fork's byte-for-byte source contract.
+                commandLine("git", "-c", "core.autocrlf=false", "-c", "core.eol=lf", "apply", patch.path)
             }
         }
     }

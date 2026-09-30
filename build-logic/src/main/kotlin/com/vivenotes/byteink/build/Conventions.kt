@@ -30,7 +30,12 @@ fun Project.configureTests() {
         java.io.File(it, "bin/" + if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java").absolutePath
     }
     tasks.withType<Test>().configureEach {
-        if (testJava.isPresent) executable = testJava.get()
+        if (testJava.isPresent) {
+            executable = testJava.get()
+            // Gradle's launcher metadata can consider two distributions of the same Java version
+            // equivalent. Keep an explicitly selected runtime in the test result/cache identity.
+            inputs.property("byteinkTestJavaExecutable", testJava)
+        }
         useJUnit()
         val cache = layout.buildDirectory.dir("ink-cache/$name")
         systemProperty("byteink.ink.cache", cache.get().asFile.path)
@@ -44,7 +49,10 @@ fun Project.configureTests() {
         }
     }
     tasks.withType<JavaExec>().configureEach {
-        if (testJava.isPresent) setExecutable(testJava.get())
+        if (testJava.isPresent) {
+            setExecutable(testJava.get())
+            inputs.property("byteinkTestJavaExecutable", testJava)
+        }
     }
 }
 
