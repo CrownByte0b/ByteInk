@@ -16,6 +16,11 @@ commit=${1:-$(pin google.ink.commit)}
 install_bazelisk
 checkout "$commit"
 windows=(--platforms=@zig_sdk//platform:windows_amd64 --extra_toolchains=@zig_sdk//toolchain:windows_amd64)
+# lld's default PE timestamp is a hash of the image and PDB; the PDB includes build-host paths.
+# Keep optimized code and its compile-time debug info, but ship no path-dependent PDB reference
+# so its content-derived timestamp is independent of checkout locations and hosts. Zig's driver
+# does not accept lld's --no-insert-timestamp; removing the path-dependent PDB is sufficient.
+windows+=(--linkopt=-Wl,--strip-debug)
 bazel build "${flags[@]}" "${windows[@]}" //ink/jni:libink.so
 
 out=${BYTEINK_OUT:-"$native/build/out/$commit/windows-x86_64"}
@@ -28,6 +33,8 @@ install -m 644 "$src/$dll" "$out/ink.dll"
   echo "google.ink.commit=$commit"
   echo "float.angle.math=android-bionic-$(pin bionic.math.commit)"
   echo "bazel.version=$bazel_version"
+  echo "pe.timestamp=content-hash"
+  echo "pe.debug=stripped"
   [[ -z ${BYTEINK_BAZEL_FLAGS:-} ]] || echo "experiment.flags=$BYTEINK_BAZEL_FLAGS"
   for patch in "${patches[@]}"; do
     echo "patch.$(basename "$patch")=$(sha256sum "$patch" | cut -d' ' -f1)"

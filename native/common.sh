@@ -8,7 +8,7 @@
 native=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(dirname "$native")
 pins="$root/upstream/pins.properties"
-src="$native/build/google-ink"
+src=${BYTEINK_SOURCE:-"$native/build/google-ink"}
 patches=("$native"/patches/*.patch)
 
 pin() {

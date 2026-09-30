@@ -21,12 +21,16 @@ public object InkRuntime {
      */
     @OptIn(InkInternalOnlyApi::class)
     public fun load(): LoadedInkLibrary {
+        // Inspect the class before invoking it: Google's loader throws "Unsupported platform"
+        // immediately on Windows, hiding the dependency conflict we need to report.
+        val source = NativeLoader::class.java.protectionDomain?.codeSource?.location
+        val expected = InkNativeLibrary::class.java.protectionDomain?.codeSource?.location
+        val conflict = "androidx.ink.nativeloader.NativeLoader comes from " +
+            "${source ?: "an unknown location"}, " +
+            "not from byteink's ink-nativeloader: keep androidx.ink:ink-nativeloader off the classpath " +
+            "by substituting byteink's for it (see byteink's README)."
+        check(source == null || expected == null || source == expected) { conflict }
         NativeLoader.load()
-        return InkNativeLibrary.loaded ?: throw IllegalStateException(
-            "androidx.ink.nativeloader.NativeLoader comes from " +
-                "${NativeLoader::class.java.protectionDomain?.codeSource?.location ?: "an unknown location"}, " +
-                "not from byteink's ink-nativeloader: keep androidx.ink:ink-nativeloader off the classpath " +
-                "by substituting byteink's for it (see byteink's README).",
-        )
+        return InkNativeLibrary.loaded ?: throw IllegalStateException(conflict)
     }
 }

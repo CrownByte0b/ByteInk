@@ -40,6 +40,17 @@ internal class PeFile(bytes: ByteArray) {
     /** The COFF machine type: 0x8664 is x86-64. */
     val machine: Int get() = headers.machine
 
+    /** PE debug-directory kinds. CodeView (2) embeds a PDB GUID/path; REPRO (16) is path-free. */
+    val debugKinds: List<Int> by lazy {
+        readable {
+            val (rva, size) = directories.getOrElse(6) { 0 to 0 }
+            if (rva == 0 || size == 0) return@readable emptyList()
+            require(size % 28 == 0) { "Invalid PE debug directory size" }
+            val start = offset(rva)
+            List(size / 28) { pe.getInt(start + it * 28 + 12) }
+        }
+    }
+
     /** Every exported name. */
     val exportedNames: SortedSet<String> by lazy {
         readable {

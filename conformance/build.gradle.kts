@@ -7,7 +7,8 @@
 import com.vivenotes.byteink.build.ExpectedLibraryFile
 import com.vivenotes.byteink.build.GitSparseCheckout
 import com.vivenotes.byteink.build.InkLibraryOverride
-import com.vivenotes.byteink.build.byteinkLinuxLibrary
+import com.vivenotes.byteink.build.byteinkHostLibrary
+import com.vivenotes.byteink.build.isLinuxHost
 import com.vivenotes.byteink.build.bytecodeTarget
 import com.vivenotes.byteink.build.googleLinuxLibrary
 import com.vivenotes.byteink.build.registerTestsOnJdk
@@ -80,12 +81,12 @@ tasks.named<KotlinCompile>("compileTestKotlinJvm") {
 
 val jvmTest = tasks.named<Test>("jvmTest") {
     description = "Runs AndroidX Ink's JVM suites on the library byteink's loader bundles."
-    jvmArgumentProviders.add(ExpectedLibraryFile(byteinkLinuxLibrary()))
+    jvmArgumentProviders.add(ExpectedLibraryFile(byteinkHostLibrary()))
 }
 
 val googleLibrary = googleLinuxLibrary()
 
-val jvmTestGoogleBinary = tasks.register<Test>("jvmTestGoogleBinary") {
+val jvmTestGoogleBinary = if (isLinuxHost) tasks.register<Test>("jvmTestGoogleBinary") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     description = "Runs AndroidX Ink's JVM suites on Google's own libink.so, through byteink's loader."
     val suites = jvmTest.get()
@@ -93,14 +94,15 @@ val jvmTestGoogleBinary = tasks.register<Test>("jvmTestGoogleBinary") {
     classpath = suites.classpath
     jvmArgumentProviders.add(InkLibraryOverride(googleLibrary))
     jvmArgumentProviders.add(ExpectedLibraryFile(googleLibrary))
-}
+} else null
 
 // The oldest JDK byteink supports runs the suites too: many of them wait for finalizers to free
 // native memory (NativePointerTestHelpers), which newer JDKs deprecate.
 val jvmTestOnOldestJdk = registerTestsOnJdk("jvmTestJdk$bytecodeTarget", jvmTest, bytecodeTarget.toInt()).also {
-    it.configure { jvmArgumentProviders.add(ExpectedLibraryFile(byteinkLinuxLibrary())) }
+    it.configure { jvmArgumentProviders.add(ExpectedLibraryFile(byteinkHostLibrary())) }
 }
 
 tasks.named("check") {
-    dependsOn(jvmTestGoogleBinary, jvmTestOnOldestJdk)
+    dependsOn(jvmTestOnOldestJdk)
+    if (jvmTestGoogleBinary != null) dependsOn(jvmTestGoogleBinary)
 }

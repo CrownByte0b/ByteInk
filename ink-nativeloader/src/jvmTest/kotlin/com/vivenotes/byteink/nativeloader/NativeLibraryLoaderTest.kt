@@ -218,6 +218,25 @@ class NativeLibraryLoaderTest {
     }
 
     @Test
+    fun failedWindowsLoadsExplainPathsOutsideTheNativeCodePage() {
+        val file = temporary.newFile("日本語.dll").toPath()
+        val previous = System.getProperty("sun.jnu.encoding")
+        System.setProperty("sun.jnu.encoding", "Cp1252")
+        try {
+            val failure = assertFailsWith<UnsatisfiedLinkError> {
+                loader(platform = Platform.WINDOWS_X86_64, property = file.toString()) {
+                    throw UnsatisfiedLinkError("Can't find dependent libraries")
+                }.load()
+            }
+            assertContains(failure.message.orEmpty(), "native path encoding (Cp1252)")
+            assertContains(failure.message.orEmpty(), "-D${InkNativeLibrary.CACHE_PROPERTY}")
+            assertContains(failure.message.orEmpty(), "such as JBR")
+        } finally {
+            if (previous == null) System.clearProperty("sun.jnu.encoding") else System.setProperty("sun.jnu.encoding", previous)
+        }
+    }
+
+    @Test
     fun concurrentFirstLoadsShareOneVerifiedFile() {
         val root = folder("cache")
         val threads = 16

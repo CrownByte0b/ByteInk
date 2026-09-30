@@ -24,7 +24,7 @@ class LoadedLibraryTest {
         assertEquals(expected, loaded.sha256)
         assertEquals(expected, sha256(loaded.path.toFile()))
         val maps = File("/proc/self/maps")
-        if (maps.isFile) {
+        if (System.getProperty("os.name").startsWith("Linux") && maps.isFile) {
             val mapped = maps.readLines()
                 .mapNotNull { line -> line.indexOf('/').takeIf { it >= 0 }?.let { File(line.substring(it)) } }
                 .filter { it.name == loaded.path.fileName.toString() }

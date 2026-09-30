@@ -39,7 +39,9 @@ abstract class GitSparseCheckout @Inject constructor(private val exec: ExecOpera
         val noHooks = File(temporaryDir, "no-hooks").path
         fun git(vararg arguments: String) {
             exec.exec {
-                commandLine(listOf("git", "-C", target.path, "-c", "core.hooksPath=$noHooks") + arguments)
+                commandLine(listOf("git", "-C", target.path,
+                    "-c", "core.hooksPath=$noHooks", "-c", "core.longpaths=true",
+                    "-c", "core.autocrlf=false", "-c", "core.eol=lf") + arguments)
             }
         }
         git("init", "--quiet")

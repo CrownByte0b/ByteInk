@@ -54,6 +54,16 @@ fun Project.byteinkLinuxLibrary(): Provider<RegularFile> = byteinkLibrary("bytei
  */
 fun Project.byteinkWindowsLibrary(): Provider<RegularFile> = byteinkLibrary("byteinkWindowsLibrary", WINDOWS_LIBRARY)
 
+/** The binary tests and the oracle must exercise on the build host. */
+fun Project.byteinkHostLibrary(): Provider<RegularFile> = when {
+    System.getProperty("os.name").startsWith("Windows", ignoreCase = true) -> byteinkWindowsLibrary()
+    System.getProperty("os.name").startsWith("Linux", ignoreCase = true) -> byteinkLinuxLibrary()
+    else -> error("byteink supports Linux x86_64 and Windows x86_64")
+}
+
+val Project.isLinuxHost: Boolean
+    get() = System.getProperty("os.name").startsWith("Linux", ignoreCase = true)
+
 private fun Project.byteinkLibrary(property: String, path: String): Provider<RegularFile> {
     val root = rootProject.layout.projectDirectory
     return providers.gradleProperty(property).map { root.file(it) }
@@ -115,4 +125,3 @@ abstract class ExtractJarEntry : DefaultTask() {
         }
     }
 }
-

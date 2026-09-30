@@ -64,6 +64,13 @@ kotlin {
 // The oldest JDK byteink supports runs the tests too; Gradle's own JDK runs jvmTest.
 val jvmTestOnOldestJdk = registerTestsOnJdk("jvmTestJdk$bytecodeTarget", tasks.named<Test>("jvmTest"), bytecodeTarget.toInt())
 
+tasks.withType<Test>().configureEach {
+    val probeClasspath = classpath
+    jvmArgumentProviders.add(CommandLineArgumentProvider {
+        listOf("-Dbyteink.test.loaderClasspath=${probeClasspath.asPath}")
+    })
+}
+
 // The fork's upstream sources are the pinned commit's, with patches/ applied. verifyForkSources
 // checks that; syncForkSources rewrites them after the pin or a patch changes.
 val forkedSourceSets = listOf("commonMain", "jvmAndAndroidMain", "jvmMain")
@@ -145,4 +152,3 @@ val verifyUpstreamAbi = tasks.register<JavaExec>("verifyUpstreamAbi") {
 tasks.named("check") {
     dependsOn(verifyForkSources, verifyUpstreamAbi, jvmTestOnOldestJdk)
 }
-

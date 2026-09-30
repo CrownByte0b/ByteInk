@@ -63,6 +63,15 @@ class PeFileTest {
         val dll = TestPe(exports = surface.toList()).bytes()
         assertFailsWith<IllegalArgumentException> { PeFile(dll.copyOf(400)).exportedNames }
     }
+
+    @Test
+    fun pdbReferencesAreRefusedButReproducibleBuildMarkersAreAllowed() {
+        val reproducible = PeFile(TestPe(exports = surface.toList(), debugKinds = listOf(16)).bytes())
+        assertEquals(listOf(16), reproducible.debugKinds)
+        assertEquals(emptyList(), WindowsLibrary.problems(reproducible, surface))
+        val pdb = PeFile(TestPe(exports = surface.toList(), debugKinds = listOf(2, 16)).bytes())
+        assertEquals(listOf("It carries path-dependent debug information: [2, 16]"), WindowsLibrary.problems(pdb, surface))
+    }
 }
 
 /**
@@ -74,6 +83,7 @@ internal class TestPe(
     private val exports: List<String> = emptyList(),
     private val imports: List<String> = emptyList(),
     private val delayImports: List<String> = emptyList(),
+    private val debugKinds: List<Int> = emptyList(),
 ) {
     fun bytes(): ByteArray {
         val sectionRva = 0x1000
@@ -99,6 +109,8 @@ internal class TestPe(
         val delayDirectory = sectionRva + data.position()
         delayNames.forEach { name -> data.putInt(1).putInt(name).put(ByteArray(24)) }
         data.put(ByteArray(32))
+        val debugDirectory = sectionRva + data.position()
+        debugKinds.forEach { kind -> data.put(ByteArray(12)).putInt(kind).put(ByteArray(12)) }
         val used = data.position()
 
         val image = ByteBuffer.allocate(sectionOffset + used).order(ByteOrder.LITTLE_ENDIAN)
@@ -113,6 +125,7 @@ internal class TestPe(
         if (exports.isNotEmpty()) directory(0, exportDirectory, 40)
         if (imports.isNotEmpty()) directory(1, importDirectory, 20 * (imports.size + 1))
         if (delayImports.isNotEmpty()) directory(13, delayDirectory, 32 * (delayImports.size + 1))
+        if (debugKinds.isNotEmpty()) directory(6, debugDirectory, 28 * debugKinds.size)
         val section = optional + 240
         image.put(section, ".rdata".toByteArray())
         image.putInt(section + 8, used).putInt(section + 12, sectionRva).putInt(section + 16, used).putInt(section + 20, sectionOffset)

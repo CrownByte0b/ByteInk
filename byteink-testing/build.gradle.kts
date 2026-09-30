@@ -77,3 +77,28 @@ tasks.register<JavaExec>("diagnoseAndroidOracle") {
     })
     argumentProviders.add(CommandLineArgumentProvider { listOf("diagnose", output.get()) })
 }
+
+val parityProjectRoot = rootProject.layout.projectDirectory
+val parityDirectory = providers.gradleProperty("byteinkParityDirectory").map(parityProjectRoot::dir).map { it.asFile.absolutePath }
+    .orElse(layout.buildDirectory.dir("desktop-parity").map { it.asFile.absolutePath })
+val parityReference = providers.gradleProperty("byteinkParityReference").map(parityProjectRoot::dir).map { it.asFile.absolutePath }
+tasks.register<JavaExec>("desktopParityDump") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.DesktopParity")
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    maxHeapSize = "2g"
+    val output = parityDirectory
+    val fixtures = providers.gradleProperty("byteinkParityFixtures").map(parityProjectRoot::dir).map { it.asFile.absolutePath }
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf("dump", output.get()) + fixtures.map { listOf(it) }.getOrElse(emptyList())
+    })
+}
+tasks.register<JavaExec>("desktopParityCompare") {
+    dependsOn("desktopParityDump")
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.DesktopParity")
+    val reference = parityReference
+    val candidate = parityDirectory
+    argumentProviders.add(CommandLineArgumentProvider { listOf("compare", reference.get(), candidate.get()) })
+}

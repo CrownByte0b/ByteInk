@@ -5,7 +5,8 @@
 // loader's override property. -PoracleFixtures=<dir> adds the .vive notebooks in that directory.
 
 import com.vivenotes.byteink.build.InkLibraryOverride
-import com.vivenotes.byteink.build.byteinkLinuxLibrary
+import com.vivenotes.byteink.build.byteinkHostLibrary
+import com.vivenotes.byteink.build.isLinuxHost
 import com.vivenotes.byteink.build.googleLinuxLibrary
 
 plugins {
@@ -50,20 +51,20 @@ fun registerDump(name: String, label: Provider<String>) = tasks.register<JavaExe
 }
 
 val googleLibrary = googleLinuxLibrary()
-val google = registerDump("oracleGoogle", provider { "Google's libink.so" }).also {
+val google = if (isLinuxHost) registerDump("oracleGoogle", provider { "Google's libink.so" }).also {
     it.configure {
         description = "Dumps the oracle's results on Google's libink.so."
         jvmArgumentProviders.add(InkLibraryOverride(googleLibrary))
     }
-}
+} else null
 
 // The byteink build's own record of which commit it is, when native/build-linux.sh made it.
-val byteinkLabel = byteinkLinuxLibrary().map { library ->
+val byteinkLabel = byteinkHostLibrary().map { library ->
     val info = library.asFile.resolveSibling("build.properties")
     if (info.isFile) "byteink " + info.readLines().first { it.startsWith("google.ink.commit=") }.substringAfter('=').take(12)
     else "byteink ${library.asFile}"
 }
-val byteinkMath = byteinkLinuxLibrary().map { library ->
+val byteinkMath = byteinkHostLibrary().map { library ->
     val info = library.asFile.resolveSibling("build.properties")
     if (info.isFile) info.readLines().firstOrNull { it.startsWith("float.angle.math=") }?.substringAfter('=') ?: "platform"
     else "platform"
@@ -77,7 +78,7 @@ val byteink = registerDump("oracleByteink", byteinkLabel).also {
     }
 }
 
-tasks.register<JavaExec>("oracleCompare") {
+if (google != null) tasks.register<JavaExec>("oracleCompare") {
     group = "oracle"
     description = "Compares byteink's results with Google's value by value; fails on any difference."
     classpath = sourceSets.main.get().runtimeClasspath

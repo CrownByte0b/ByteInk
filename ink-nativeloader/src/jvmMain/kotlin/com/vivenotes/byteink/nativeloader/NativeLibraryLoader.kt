@@ -9,6 +9,7 @@ import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
+import java.nio.charset.Charset
 import java.security.MessageDigest
 
 /**
@@ -78,7 +79,7 @@ internal class NativeLibraryLoader(
                 return LoadedInkLibrary(file, library.sha256, Origin.BUNDLED)
             } catch (failure: UnsatisfiedLinkError) {
                 // A file system mounted noexec, for example; another location may still work.
-                attempts += "$file: ${failure.message}"
+                attempts += "$file: ${failure.message}${nativePathAdvice(file)}"
                 failures += failure
             }
         }
@@ -105,10 +106,22 @@ internal class NativeLibraryLoader(
             systemLoad(file.toString())
         } catch (failure: UnsatisfiedLinkError) {
             throw UnsatisfiedLinkError(
-                "Could not load $file, named by -D${InkNativeLibrary.LIBRARY_PROPERTY}: ${failure.message}",
+                "Could not load $file, named by -D${InkNativeLibrary.LIBRARY_PROPERTY}: ${failure.message}${nativePathAdvice(file)}",
             ).apply { initCause(failure) }
         }
         return LoadedInkLibrary(file, Files.newInputStream(file).use { sha256(it, null) }, Origin.PROPERTY)
+    }
+
+    /** Some Windows JVMs still convert System.load paths through the Windows native code page. */
+    private fun nativePathAdvice(file: Path): String {
+        if (platform != Platform.WINDOWS_X86_64) return ""
+        val encoding = System.getProperty("sun.jnu.encoding") ?: return ""
+        val charset = runCatching { Charset.forName(encoding) }.getOrNull() ?: return ""
+        if (charset.newEncoder().canEncode(file.toString())) return ""
+        return "\nThis Windows JVM's native path encoding ($encoding) cannot represent this path. " +
+            "Use a directory with ASCII characters via -D${InkNativeLibrary.CACHE_PROPERTY}, " +
+            "or an ASCII library path via -D${InkNativeLibrary.LIBRARY_PROPERTY}, " +
+            "or a JVM with Unicode native-library loading, such as JBR."
     }
 
     /** The bundled [library], verified, in [location]: reused if already there, written if not. */
