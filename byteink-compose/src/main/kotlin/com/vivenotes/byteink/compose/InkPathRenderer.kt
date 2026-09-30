@@ -55,9 +55,11 @@ public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
     private val paint = Paint().apply { isAntiAlias = true; style = PaintingStyle.Fill }
     private val bounds = BoxAccumulator()
     private val coatBounds = BoxAccumulator()
-    internal var pathBuildCount: Long = 0
+    /** Total path builds since construction; pan and zoom should reuse cached paths. */
+    public var pathBuildCount: Long = 0
         private set
-    internal val cachedShapeCount: Int get() = shapes.size
+    /** Number of finished meshes retained, bounded by [cacheCapacity]. */
+    public val cachedShapeCount: Int get() = shapes.size
 
     /** Whether every coat has a texture-free ANY or DISCARD paint this renderer supports. */
     public fun canDraw(stroke: Stroke): Boolean = supported(stroke.brush)

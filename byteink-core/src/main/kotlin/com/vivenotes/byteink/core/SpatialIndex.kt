@@ -34,8 +34,7 @@ public class SpatialIndex<T> private constructor(
         val lastColumn = cellOf(xMax, cellSize)
         val firstRow = cellOf(yMin, cellSize)
         val lastRow = cellOf(yMax, cellSize)
-        val cellCount = (lastColumn.toLong() - firstColumn + 1) * (lastRow.toLong() - firstRow + 1)
-        if (cellCount > cells.size) {
+        if (spansMoreCellsThan(firstColumn, lastColumn, firstRow, lastRow, cells.size.toLong())) {
             // A query this wide would visit more cells than hold anything: test every item instead.
             for (index in items.indices) if (meets(index, xMin, yMin, xMax, yMax)) hits.set(index)
         } else {
@@ -97,7 +96,7 @@ public class SpatialIndex<T> private constructor(
                 val lastColumn = cellOf(xMax, cellSize)
                 val firstRow = cellOf(yMin, cellSize)
                 val lastRow = cellOf(yMax, cellSize)
-                if ((lastColumn.toLong() - firstColumn + 1) * (lastRow.toLong() - firstRow + 1) > MAX_CELLS_PER_ITEM) {
+                if (spansMoreCellsThan(firstColumn, lastColumn, firstRow, lastRow, MAX_CELLS_PER_ITEM)) {
                     large += index
                 } else {
                     for (column in firstColumn..lastColumn) {
@@ -116,6 +115,13 @@ public class SpatialIndex<T> private constructor(
 
         /** The cell a coordinate falls in; `toInt` saturates, so no coordinate overflows. */
         private fun cellOf(coordinate: Float, cellSize: Float): Int = floor(coordinate.toDouble() / cellSize).toInt()
+
+        /** Test each dimension before multiplying: saturated cell coordinates can span 2^32 cells. */
+        private fun spansMoreCellsThan(firstColumn: Int, lastColumn: Int, firstRow: Int, lastRow: Int, limit: Long): Boolean {
+            val columns = lastColumn.toLong() - firstColumn + 1
+            val rows = lastRow.toLong() - firstRow + 1
+            return columns > limit || rows > limit || columns * rows > limit
+        }
 
         private fun key(column: Int, row: Int): Long = (column.toLong() shl 32) or (row.toLong() and 0xFFFF_FFFFL)
     }

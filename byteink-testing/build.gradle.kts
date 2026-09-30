@@ -102,3 +102,25 @@ tasks.register<JavaExec>("desktopParityCompare") {
     val candidate = parityDirectory
     argumentProviders.add(CommandLineArgumentProvider { listOf("compare", reference.get(), candidate.get()) })
 }
+
+// Independent JVM measurements avoid test-order effects in timings and native peer accounting.
+// Reports contain aggregate measurements only; personal notebook inputs remain opt-in and private.
+val performanceReports = layout.buildDirectory.dir("reports/performance")
+val performanceNotebook = providers.gradleProperty("byteinkPerformanceNotebook")
+    .orElse(providers.environmentVariable("BYTEINK_PERFORMANCE_NOTEBOOK"))
+val performanceCheck = tasks.register<JavaExec>("performanceCheck") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.InkPerformance")
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    maxHeapSize = "2g"
+    outputs.dir(performanceReports)
+    // Measurements describe this execution, so cached reports from an earlier JVM are insufficient.
+    outputs.upToDateWhen { false }
+    val reports = performanceReports
+    val notebook = performanceNotebook
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf(reports.get().asFile.absolutePath) + notebook.map { listOf(it) }.getOrElse(emptyList())
+    })
+}
+tasks.named("check") { dependsOn(performanceCheck) }

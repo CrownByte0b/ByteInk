@@ -54,6 +54,17 @@ class SpatialIndexTest {
         assertFailsWith<IllegalArgumentException> { SpatialIndex.of(emptyList<Item>(), cellSize = 0f) { it.box } }
     }
 
+    @org.junit.Test(timeout = 5_000)
+    fun saturatedCellRangesUseTheBoundedFallbackWithoutOverflow() {
+        val items = listOf(
+            Item(0, box(-1e20f, -1e20f, 1e20f, 1e20f)),
+            Item(1, box(0f, 0f, 10f, 10f)),
+        )
+        val index = SpatialIndex.of(items) { it.box }
+        assertEquals(listOf(0, 1), index.query(-1e20f, -1e20f, 1e20f, 1e20f).map { it.name })
+        assertEquals(listOf(0), index.query(1000f, 1000f, 1001f, 1001f).map { it.name })
+    }
+
     private fun scan(items: List<Item>, xMin: Float, yMin: Float, xMax: Float, yMax: Float): List<Int> =
         items.filter { item ->
             val box = item.box ?: return@filter false

@@ -229,6 +229,8 @@ jobs:
             **/build/reports/tests/
             **/build/test-results/
             conformance/oracle/build/reports/
+            byteink-compose/build/reports/performance/
+            byteink-testing/build/reports/performance/
           if-no-files-found: error
 
   jvm-windows:
@@ -323,5 +325,7 @@ jobs:
             conformance/oracle/build/oracle/
             conformance/oracle/build/reports/
             byteink-testing/build/desktop-parity/
+            byteink-compose/build/reports/performance/
+            byteink-testing/build/reports/performance/
             native/build/windows-tests/results/
           if-no-files-found: error

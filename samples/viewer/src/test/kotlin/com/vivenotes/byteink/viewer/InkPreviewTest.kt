@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
@@ -19,12 +20,43 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.vive.PageStroke
 import com.vivenotes.byteink.vive.ViveBrushes
+import com.vivenotes.byteink.vive.ViveInkTool
+import com.vivenotes.byteink.vive.ViveInkCodec
+import com.vivenotes.byteink.vive.AuthoredViveStroke
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertNotNull
 
 @OptIn(ExperimentalTestApi::class)
 class InkPreviewTest {
+    @Test
+    fun drawingProducesReadableRowsAndEmptyPageIdentityDoesNotLeakInk() = runDesktopComposeUiTest(width = 128, height = 128) {
+        val pageId = mutableStateOf("page-a")
+        val finished = mutableListOf<AuthoredViveStroke>()
+        val tool = ViveInkTool(sizeDp = 10f)
+        setContent {
+            InkPreview(emptyList(), 1f, Modifier.size(128.dp).testTag("ink"), tool,
+                pageId.value, onStrokeFinished = { finished += it })
+        }
+        val node = onNodeWithTag("ink")
+        node.performTouchInput { swipe(Offset(20f, 60f), Offset(108f, 60f), durationMillis = 200) }
+        runOnIdle {
+            val result = finished.single()
+            assertEquals("page-a", result.row.pageId)
+            assertEquals(ViveBrushes.MARKER, result.row.brushFamily)
+            assertNotNull(ViveInkCodec.decode(result.row))
+        }
+        assertTrue(node.captureToImage().toPixelMap()[64, 60] != Color.White, "finished ink stays visible")
+        runOnIdle { pageId.value = "page-b" }
+        assertEquals(Color.White, node.captureToImage().toPixelMap()[64, 60], "another empty page starts blank")
+        node.performTouchInput { swipe(Offset(20f, 80f), Offset(108f, 80f), durationMillis = 200) }
+        runOnIdle {
+            assertEquals("page-b", finished.last().row.pageId)
+            assertEquals(0, finished.last().row.seq)
+        }
+    }
+
     @Test
     fun draggingPansTheInkAndZoomChangesItsScale() = runDesktopComposeUiTest(width = 128, height = 128) {
         val inputs = MutableStrokeInputBatch().apply {

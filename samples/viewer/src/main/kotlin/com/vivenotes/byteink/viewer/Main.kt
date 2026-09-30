@@ -1,6 +1,5 @@
 package com.vivenotes.byteink.viewer
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -14,6 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -23,23 +24,34 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.ink.geometry.ImmutableAffineTransform
 import com.vivenotes.byteink.compose.InkPathRenderer
-import com.vivenotes.byteink.compose.drawInk
+import com.vivenotes.byteink.compose.InkDrawingSurface
+import com.vivenotes.byteink.compose.InkScene
+import com.vivenotes.byteink.compose.InkSceneStroke
+import com.vivenotes.byteink.compose.drawCachedInkScene
+import com.vivenotes.byteink.compose.rememberInkSceneRasterCache
+import com.vivenotes.byteink.compose.InkAuthoringController
 import com.vivenotes.byteink.testing.NotebookInkImages
 import com.vivenotes.byteink.testing.ViveNotebook
 import com.vivenotes.byteink.vive.PageStroke
 import com.vivenotes.byteink.vive.ViveInkPage
 import com.vivenotes.byteink.vive.AUTOMATIC_DARK
 import com.vivenotes.byteink.vive.automaticColorOr
+import com.vivenotes.byteink.vive.AuthoredViveStroke
+import com.vivenotes.byteink.vive.ViveBrushes
+import com.vivenotes.byteink.vive.ViveInkTool
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -79,7 +91,7 @@ internal fun exportPages(source: File, directory: File) {
     }
 }
 
-private data class ViewerPage(val strokes: List<PageStroke>, val unreadable: Int)
+private data class ViewerPage(val id: String, val strokes: List<PageStroke>, val unreadable: Int)
 
 @Composable
 internal fun NotebookViewer(file: File?, onOpen: () -> Unit) {
@@ -96,7 +108,7 @@ internal fun NotebookViewer(file: File?, onOpen: () -> Unit) {
                     ViveNotebook.open(file).use { notebook -> notebook.pageIds.map { id ->
                         val page = notebook.page(id)
                         val loaded = ViveInkPage.load(page.strokes, page.erases, page.moves)
-                        ViewerPage(loaded.strokes, loaded.unreadable.size)
+                        ViewerPage(id, loaded.strokes, loaded.unreadable.size)
                     } }
                 }
                 message = if (pages.isEmpty()) "This notebook has no pages" else file.name
@@ -104,6 +116,15 @@ internal fun NotebookViewer(file: File?, onOpen: () -> Unit) {
         }
     }
     var zoom by remember(file, pageIndex) { mutableStateOf(1f) }
+    var mode by remember(file) { mutableStateOf(if (file == null) "Pen" else "Pan") }
+    var stabilization by remember { mutableStateOf(0) }
+    var authoredCount by remember(file, pageIndex) { mutableStateOf(0) }
+    val tool = remember(mode, stabilization) { when (mode) {
+        "Pen" -> ViveInkTool(stabilization = stabilization)
+        "Calligraphy" -> ViveInkTool(ViveBrushes.calligraphy(3), stabilization, sizeDp = 8f)
+        "Highlighter" -> ViveInkTool(ViveBrushes.HIGHLIGHTER, colorArgb = 0x80ffe000.toInt(), sizeDp = 18f)
+        else -> null
+    } }
     Column(Modifier.fillMaxSize().background(Color(0xffeeeeee))) {
         Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Control("Open", action = onOpen)
@@ -114,42 +135,83 @@ internal fun NotebookViewer(file: File?, onOpen: () -> Unit) {
             Control("Fit") { zoom = 1f }
             BasicText("${if (pages.isEmpty()) 0 else pageIndex + 1}/${pages.size}   ${(zoom * 100).toInt()}%", style = textStyle)
         }
+        Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            listOf("Pan", "Pen", "Calligraphy", "Highlighter").forEach { name ->
+                Control(if (mode == name) "[$name]" else name) { mode = name }
+            }
+            Control("Smoothing: $stabilization", enabled = mode == "Pen" || mode == "Calligraphy") {
+                stabilization = (stabilization + 1) % 6
+            }
+            if (authoredCount > 0) BasicText("$authoredCount unsaved strokes", style = textStyle)
+        }
         BasicText(message, Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = textStyle)
-        pages.getOrNull(pageIndex)?.let { page ->
-            BasicText("${page.strokes.size} ink projections · ${page.unreadable} unreadable rows · Drag to pan", Modifier.padding(12.dp), style = textStyle)
-            InkPreview(page.strokes, zoom, Modifier.weight(1f).fillMaxSize())
+        val page = pages.getOrNull(pageIndex)
+        if (page != null || file == null) {
+            BasicText(if (page == null) "Draw on the blank page" else
+                "${page.strokes.size} ink projections · ${page.unreadable} unreadable rows", Modifier.padding(12.dp), style = textStyle)
+            key(file, pageIndex) {
+                InkPreview(page?.strokes ?: emptyList(), zoom, Modifier.weight(1f).fillMaxSize(), tool,
+                    page?.id ?: "scratch") { authoredCount++ }
+            }
         }
     }
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-internal fun InkPreview(strokes: List<PageStroke>, zoom: Float, modifier: Modifier = Modifier) {
-    val renderer = remember(strokes) { InkPathRenderer() }
+internal fun InkPreview(
+    strokes: List<PageStroke>,
+    zoom: Float,
+    modifier: Modifier = Modifier,
+    tool: ViveInkTool? = null,
+    pageId: String = "preview",
+    onStrokeFinished: (AuthoredViveStroke) -> Unit = {},
+) {
+    val renderer = remember(strokes, pageId) { InkPathRenderer() }
+    val controller = remember(strokes, pageId) { InkAuthoringController() }
+    val authored = remember(strokes, pageId) { mutableStateListOf<AuthoredViveStroke>() }
+    val scene = remember(strokes) { InkScene(strokes.map { projection ->
+        InkSceneStroke(projection.stroke, projection.strokeToPageTransform(),
+            automaticColorOr(projection.stroke.brush.colorIntArgb, projection.colorFollowsTheme, AUTOMATIC_DARK))
+    }) }
+    val authoredSnapshot = authored.toList()
+    val additions = remember(authoredSnapshot) { InkScene(authoredSnapshot.map { InkSceneStroke(it.stroke) }) }
+    val pageRaster = key(strokes, pageId) { rememberInkSceneRasterCache() }
+    val additionsRaster = key(strokes, pageId) { rememberInkSceneRasterCache() }
     var pan by remember(strokes, zoom) { mutableStateOf(Offset.Zero) }
     var scrollZoom by remember(strokes, zoom) { mutableStateOf(1f) }
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     val boxes = remember(strokes) { strokes.mapNotNull { it.pageBounds } }
     val left = boxes.minOfOrNull { it.left } ?: 0f
     val top = boxes.minOfOrNull { it.top } ?: 0f
     val width = (boxes.maxOfOrNull { it.right } ?: left) - left
     val height = (boxes.maxOfOrNull { it.bottom } ?: top) - top
-    Canvas(modifier.background(Color.White)
-        .pointerInput(strokes, zoom) { detectDragGestures { change, drag -> change.consume(); pan += drag } }
+    val fit = if (boxes.isEmpty()) 1f else minOf((canvasSize.width - 32f) / maxOf(1f, width),
+        (canvasSize.height - 32f) / maxOf(1f, height)).coerceAtLeast(0.001f)
+    val scale = fit * zoom * scrollZoom
+    val transform = ImmutableAffineTransform(scale, 0f, 16f + pan.x - scale * left,
+        0f, scale, 16f + pan.y - scale * top)
+    val panModifier = if (tool == null) Modifier.pointerInput(strokes, zoom) {
+        detectDragGestures { change, drag -> change.consume(); pan += drag }
+    } else Modifier
+    val canvasModifier = modifier.background(Color.White).onSizeChanged { canvasSize = it }.then(panModifier)
         .onPointerEvent(PointerEventType.Scroll) { event ->
+            if (controller.isDrawing) return@onPointerEvent
             val change = event.changes.first()
             val next = (scrollZoom * if (change.scrollDelta.y < 0) 1.1f else 1 / 1.1f).coerceIn(0.1f, 20f)
             val anchor = change.position - Offset(16f, 16f)
             pan = anchor - (anchor - pan) * (next / scrollZoom)
             scrollZoom = next
-        }) {
-        val fit = minOf((size.width - 32f) / maxOf(1f, width), (size.height - 32f) / maxOf(1f, height)).coerceAtLeast(0.001f)
-        val scale = fit * zoom * scrollZoom
-        strokes.forEach { projection ->
-            drawInk(renderer, projection.stroke, ImmutableAffineTransform(
-                scale * projection.scaleX, 0f, 16f + pan.x + scale * (projection.offsetX - left),
-                0f, scale * projection.scaleY, 16f + pan.y + scale * (projection.offsetY - top),
-            ), colorArgb = automaticColorOr(projection.stroke.brush.colorIntArgb, projection.colorFollowsTheme, AUTOMATIC_DARK))
         }
+    InkDrawingSurface(controller, tool?.brush ?: remember { ViveInkTool().brush }, canvasModifier,
+        strokeToView = transform, renderer = renderer, enabled = tool != null,
+        onStrokeFinished = { stroke ->
+            val completed = requireNotNull(tool).complete(stroke, UUID.randomUUID().toString(), pageId, authored.size, System.currentTimeMillis())
+            authored.add(completed)
+            onStrokeFinished(completed)
+        }) {
+        drawCachedInkScene(pageRaster, scene, renderer, transform)
+        if (additions.strokes.isNotEmpty()) drawCachedInkScene(additionsRaster, additions, renderer, transform)
     }
 }
 
