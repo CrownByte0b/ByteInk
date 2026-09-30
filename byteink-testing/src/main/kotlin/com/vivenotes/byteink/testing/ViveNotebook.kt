@@ -101,6 +101,15 @@ public class ViveNotebook private constructor(
      * existing destination is refused. This is not the application's export/sync implementation.
      */
     public fun writeCopyWithStrokes(destination: File, strokes: List<StoredInkStroke>) {
+        writeCopyWithInk(destination, strokes, emptyList())
+    }
+
+    /** Appends new strokes and erases, including target links, in one transaction to a fresh copy. */
+    public fun writeCopyWithInk(
+        destination: File,
+        strokes: List<StoredInkStroke>,
+        erases: List<StoredInkErase>,
+    ) {
         require(destination.canonicalFile != source.canonicalFile) { "The copy must differ from the source" }
         require(!destination.exists()) { "The destination already exists: $destination" }
         val copy = Files.createTempFile("vive-copy-", ".sqlite").toFile()
@@ -121,6 +130,37 @@ public class ViveNotebook private constructor(
                         statement.addBatch()
                     }
                     statement.executeBatch()
+                }
+                db.prepareStatement("INSERT INTO ink_erases (id,pageId,mode,sizeDp,points,enc,createdAt,deletedAt) VALUES (?,?,?,?,?,?,?,?)").use { statement ->
+                    erases.forEach { row ->
+                        val values = listOf(row.id, row.pageId, row.mode, row.sizeDp, row.points, row.enc, row.createdAt, row.deletedAt)
+                        values.forEachIndexed { index, value ->
+                            if (value is ByteArray) statement.setBytes(index + 1, value) else statement.setObject(index + 1, value)
+                        }
+                        statement.addBatch()
+                    }
+                    statement.executeBatch()
+                }
+                // Android's target table intentionally has no stroke FK (targets can outlive rows).
+                // New operations still need real same-page targets; do not create broken gestures.
+                db.prepareStatement("SELECT pageId FROM ink_strokes WHERE id = ?").use { lookup ->
+                    db.prepareStatement("INSERT INTO ink_erase_targets (eraseId,strokeId) VALUES (?,?)").use { statement ->
+                        erases.forEach { row ->
+                            require(row.targetIds.distinct().size == row.targetIds.size) { "Duplicate erase targets: ${row.id}" }
+                            row.targetIds.forEach { target ->
+                                lookup.setString(1, target)
+                                lookup.executeQuery().use { result ->
+                                    require(result.next() && result.getString(1) == row.pageId) {
+                                        "Erase target must exist on its page: ${row.id}/$target"
+                                    }
+                                }
+                                statement.setString(1, row.id)
+                                statement.setString(2, target)
+                                statement.addBatch()
+                            }
+                        }
+                        statement.executeBatch()
+                    }
                 }
                 db.commit()
                 db.createStatement().use { statement ->

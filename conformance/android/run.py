@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture Android fidelity references using an isolated, pinned ViveNotes checkout."""
+"""Verify Android fidelity and notebook transfers in an isolated, pinned ViveNotes checkout."""
 
 import argparse
 from datetime import datetime, timezone
@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--android-project", type=Path, required=True, help="ViveNotes Git checkout; dirty files are excluded")
     parser.add_argument("--notebooks", type=Path, help="Directory of local .vive fixtures")
     parser.add_argument("--matrix", action="store_true", help="Generate the public synthetic matrix on API 36 x86_64 / SwiftShader")
+    parser.add_argument("--roundtrip", action="store_true", help="Import desktop-authored notebooks, verify their ink and retrieve the Android re-export")
     parser.add_argument("--capture-only", action="store_true", help="Retrieve references without running the desktop comparison")
     parser.add_argument("--emulator", type=Path, help="Emulator executable, when it is outside PATH/the configured SDK")
     parser.add_argument("--device", required=True, help="ADB serial of an already running emulator")
@@ -35,29 +36,31 @@ def main():
     args = parser.parse_args()
     if args.matrix and (args.notebooks or args.diagnose):
         parser.error("--matrix cannot be combined with --notebooks or --diagnose")
-    if not args.matrix and not args.notebooks:
-        parser.error("--notebooks is required unless --matrix is selected")
+    if args.roundtrip and (args.matrix or args.notebooks or args.diagnose):
+        parser.error("--roundtrip cannot be combined with --matrix, --notebooks or --diagnose")
+    if not args.matrix and not args.roundtrip and not args.notebooks:
+        parser.error("--notebooks is required unless --matrix or --roundtrip is selected")
     source = args.android_project.resolve()
     results = (args.results or ROOT / "conformance/android/build" /
                datetime.now(timezone.utc).strftime("results-%Y%m%d-%H%M%S")).resolve()
     checkout = ROOT / "conformance/android/build/app"
     adb = ["adb", "-s", args.device]
     environment = {}
-    if args.matrix:
+    if args.matrix or args.roundtrip:
         for property in ["ro.build.version.sdk", "ro.product.cpu.abi", "ro.build.fingerprint"]:
             environment[property] = run(adb + ["shell", "getprop", property], capture_output=True, text=True).stdout.strip()
         environment["graphics"] = run(adb + ["shell", "dumpsys", "SurfaceFlinger"], capture_output=True, text=True).stdout
         if environment["ro.build.version.sdk"] != "36" or environment["ro.product.cpu.abi"] != "x86_64":
-            raise RuntimeError("The synthetic matrix requires the pinned API 36 x86_64 reference")
+            raise RuntimeError("The synthetic checks require the pinned API 36 x86_64 reference")
         graphics = next((line for line in environment["graphics"].splitlines() if line.startswith("GLES:")), "")
         if "SwiftShader" not in graphics:
-            raise RuntimeError("The synthetic matrix requires SwiftShader; refusing a host-GPU reference")
+            raise RuntimeError("The synthetic checks require SwiftShader; refusing a host-GPU reference")
         environment["graphics"] = graphics
         sdk = Path(os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or Path.home() / "Android/Sdk")
         emulator = args.emulator or shutil.which("emulator") or sdk / "emulator/emulator"
         environment["emulator"] = run([emulator, "-version"], capture_output=True, text=True).stdout.splitlines()[0]
         results.mkdir(parents=True, exist_ok=True)
-        if (results / "android-matrix").exists():
+        if args.matrix and (results / "android-matrix").exists():
             raise RuntimeError("Use a fresh result directory for synthetic references")
     marker = checkout / "byteink-reference-commit.txt"
     archive = run(["git", "archive", REFERENCE_COMMIT], cwd=source, capture_output=True).stdout
@@ -84,7 +87,10 @@ def main():
             for file in (checkout / directory).rglob("*"):
                 if file.is_file() and file.relative_to(checkout).as_posix() not in expected:
                     raise RuntimeError(f"Unexpected reference source: {file.relative_to(checkout)}")
-    if not args.matrix and not (results / "pages.tsv").exists():
+    if args.roundtrip and not (results / "expectations.json").exists():
+        run([ROOT / "gradlew", ":byteink-testing:prepareAndroidRoundTrip", "--offline",
+             f"-PbyteinkRoundTripDirectory={results}"])
+    elif not args.matrix and not args.roundtrip and not (results / "pages.tsv").exists():
         run([ROOT / "gradlew", ":byteink-testing:prepareAndroidOracle", "--offline",
              f"-PbyteinkNotebooks={args.notebooks.resolve()}", f"-PbyteinkFidelityDirectory={results}"])
     run([checkout / "gradlew", ":app:assembleDebug", ":app:assembleDebugAndroidTest", "--offline",
@@ -102,13 +108,31 @@ def main():
     private = "files/byteink-oracle"
     run(adb + ["shell", "mkdir", "-p", staging])
     run(adb + ["shell", "run-as", PACKAGE, "mkdir", "-p", private])
-    files = [] if args.matrix else [results / "pages.tsv", *sorted(results.glob("notebook-*.sqlite"))]
+    if args.roundtrip:
+        files = [results / "expectations.json", results / "desktop.vive", results / "unknown-enc.vive"]
+        if any(not file.is_file() for file in files):
+            raise RuntimeError("Missing prepared round-trip inputs")
+        files.extend(sorted((results / "pages").glob("*/geometry.json")))
+        expected_pages = json.loads((results / "expectations.json").read_text())["pages"]
+        if {file.relative_to(results).as_posix() for file in files[3:]} != {page["geometry"] for page in expected_pages}:
+            raise RuntimeError("Missing round-trip geometry expectations")
+        inputs = results / "roundtrip-inputs.tar"
+        with tarfile.open(inputs, "w") as package:
+            for file in files:
+                package.add(file, arcname=file.relative_to(results).as_posix(), recursive=False)
+        run(adb + ["push", inputs, staging + "/"])
+        run(adb + ["shell", "run-as", PACKAGE, "tar", "-C", private, "-xf", staging + "/" + inputs.name])
+    else:
+        files = [] if args.matrix else [results / "pages.tsv", *sorted(results.glob("notebook-*.sqlite"))]
     if args.diagnose:
         files.append(results / "diagnostics.tsv")
-    for file in files:
+    for file in [] if args.roundtrip else files:
         run(adb + ["push", file, staging + "/"])
         run(adb + ["shell", "run-as", PACKAGE, "cp", f"{staging}/{file.name}", private + "/"])
-    method = "generateSyntheticMatrix" if args.matrix else "diagnoseStrokes" if args.diagnose else "rebuildAndRender"
+    # Delete only this harness's previous output, so a retry cannot retrieve stale evidence.
+    artifact = "android-matrix" if args.matrix else "android"
+    run(adb + ["shell", "run-as", PACKAGE, "rm", "-rf", private + "/" + artifact])
+    method = "roundTripNotebooks" if args.roundtrip else "generateSyntheticMatrix" if args.matrix else "diagnoseStrokes" if args.diagnose else "rebuildAndRender"
     instrumentation = run(adb + ["shell", "am", "instrument", "-w", "-r", "-e", "class",
                                  "com.vivenotes.byteink.AndroidNotebookOracleTest#" + method,
                                  PACKAGE + ".test/androidx.test.runner.AndroidJUnitRunner"],
@@ -117,15 +141,18 @@ def main():
     (results / "instrumentation.txt").write_text(log)
     print(log, end="", flush=True)
     # am instrument can exit zero even when a test fails.
-    if not re.search(r"OK \(1 test\)", log) or "FAILURES!!!" in log:
-        raise RuntimeError(f"Android reference test failed; see {results / 'instrumentation.txt'}")
-    artifact = "android-matrix" if args.matrix else "android"
-    archive = run(adb + ["exec-out", "run-as", PACKAGE, "tar", "-C", private, "-cf", "-", artifact],
-                  capture_output=True).stdout
+    succeeded = bool(re.search(r"OK \(1 test\)", log)) and "FAILURES!!!" not in log
+    # Retrieve partial diagnostics on failure too; strict encoder checks write their evidence
+    # before asserting, which makes a mismatch reproducible without rerunning instrumentation.
+    retrieved = subprocess.run(adb + ["exec-out", "run-as", PACKAGE, "tar", "-C", private, "-cf", "-", artifact],
+                               cwd=ROOT, capture_output=True, check=False)
+    if retrieved.returncode:
+        raise RuntimeError(f"Could not retrieve Android artifacts; see {results / 'instrumentation.txt'}")
+    archive = retrieved.stdout
     with tarfile.open(fileobj=io.BytesIO(archive)) as package:
         package.extractall(results, filter="data")
     (results / "reference.txt").write_text(f"android_app_commit={REFERENCE_COMMIT}\n")
-    if args.matrix:
+    if args.matrix or args.roundtrip:
         source_hashes = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                          for directory in ["conformance/android/src", "conformance/android/shared"]
                          for path in sorted((ROOT / directory).rglob("*.kt"))}
@@ -134,16 +161,26 @@ def main():
             "environment": environment, "sources": source_hashes,
             "apk_sha256": {name: hashlib.sha256((checkout / "app/build/outputs/apk" / directory / name).read_bytes()).hexdigest()
                            for directory, name in [("debug", "app-debug.apk"), ("androidTest/debug", "app-debug-androidTest.apk")]},
+            "instrumentation_passed": succeeded,
+            "roundtrip_inputs_sha256": {file.relative_to(results).as_posix(): hashlib.sha256(file.read_bytes()).hexdigest()
+                                        for file in files} if args.roundtrip else {},
         }, indent=2) + "\n"
         (results / "capture-environment.json").write_text(capture_metadata)
-        public = results / artifact
-        (public / "capture-environment.json").write_text(capture_metadata)
-        manifest = public / "manifest.sha256"
-        manifest.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(public).as_posix()}\n"
-                                   for path in sorted(public.rglob("*")) if path.is_file() and path != manifest))
-        if not args.capture_only:
+        captured = results / artifact
+        (captured / "capture-environment.json").write_text(capture_metadata)
+        manifest = captured / "manifest.sha256"
+        manifest.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(captured).as_posix()}\n"
+                                   for path in sorted(captured.rglob("*")) if path.is_file() and path != manifest))
+        if not succeeded:
+            raise RuntimeError(f"Android reference test failed; see {results / 'instrumentation.txt'}")
+        if args.roundtrip and not args.capture_only:
+            run([ROOT / "gradlew", ":byteink-testing:verifyAndroidRoundTrip", "--offline",
+                 f"-PbyteinkRoundTripDirectory={results}"])
+        elif args.matrix and not args.capture_only:
             run([ROOT / "gradlew", ":byteink-testing:androidFidelityMatrix", "--offline",
                  f"-PbyteinkMatrixDirectory={results / artifact}", f"-PbyteinkMatrixOutput={results / 'comparison'}"])
+    elif not succeeded:
+        raise RuntimeError(f"Android reference test failed; see {results / 'instrumentation.txt'}")
     elif not args.diagnose and not args.capture_only:
         run([ROOT / "gradlew", ":byteink-testing:compareAndroidOracle", "--offline",
              f"-PbyteinkFidelityDirectory={results}"])

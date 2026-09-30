@@ -4,7 +4,7 @@ import java.io.File
 
 /**
  * What a Windows `ink.dll` has to be before byteink ships it: an x86-64 DLL exporting exactly the
- * JNI surface of Google's binary for the pinned release, and importing only what every Windows 10
+ * pinned Google JNI surface plus declared ByteInk extensions, importing only what every Windows 10
  * or later provides — no C++ runtime, unwinder or threads library of its own.
  */
 internal object WindowsLibrary {
@@ -42,7 +42,7 @@ internal fun checkWindowsLibraryCommand(arguments: Arguments): Int {
         "$binary: ${library.exportedNames.count { it.startsWith("Java_") }} JNI functions; " +
             "imports ${library.importedLibraries.joinToString()}",
     )
-    val problems = WindowsLibrary.problems(library, SymbolList.read(File(arguments.required("--exports"))))
+    val problems = WindowsLibrary.problems(library, LibraryExportContract.read(arguments))
     if (problems.isNotEmpty()) {
         throw CheckFailed("$binary is not shippable:\n" + problems.joinToString("\n") { "- $it" })
     }

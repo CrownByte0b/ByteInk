@@ -96,6 +96,38 @@ tasks.register("androidFidelityMatrix") {
 // Optional Android notebook oracle. Test runtime supplies Skiko's platform library.
 val fidelityDirectory = providers.gradleProperty("byteinkFidelityDirectory")
     .orElse(rootProject.layout.projectDirectory.dir("conformance/android/build/results").asFile.absolutePath)
+
+val roundTripDirectory = providers.gradleProperty("byteinkRoundTripDirectory")
+    .map(rootProject.layout.projectDirectory::dir).map { it.asFile.absolutePath }
+    .orElse(layout.buildDirectory.dir("reports/android-roundtrip").map { it.asFile.absolutePath })
+tasks.register<JavaExec>("prepareAndroidRoundTrip") {
+    group = "verification"
+    description = "Authors desktop ink into synthetic Android notebook copies and prepares exact round-trip expectations."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.AndroidNotebookRoundTrip")
+    maxHeapSize = "2g"
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    val output = roundTripDirectory
+    val reference = matrixReference
+    inputs.dir(reference).withPropertyName("androidRoundTripBase")
+    argumentProviders.add(CommandLineArgumentProvider { listOf("prepare", output.get(), reference.get()) })
+    outputs.dir(output.map { File(it).resolve("pages") })
+    outputs.files(output.map { path -> listOf("source.vive", "source-unknown-enc.vive", "desktop.vive", "unknown-enc.vive",
+        "expectations.json", "desktop-runtime.json", "source-rows.json", "desktop-rows.json").map { File(path, it) } })
+}
+tasks.register<JavaExec>("verifyAndroidRoundTrip") {
+    group = "verification"
+    description = "Checks Android notebook re-exports, exact encoded bytes, replay geometry and rendering."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.AndroidNotebookRoundTrip")
+    maxHeapSize = "2g"
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    val output = roundTripDirectory
+    argumentProviders.add(CommandLineArgumentProvider { listOf("verify", output.get()) })
+}
+
 tasks.register<JavaExec>("prepareAndroidOracle") {
     dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath

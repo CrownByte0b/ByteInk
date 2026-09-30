@@ -10,8 +10,10 @@ MinGW-w64/UCRT, baseline x86-64, optimized code and static libc++/libunwind.
 | 0002 | Add the Zig Windows toolchain, a PE linker branch, and a portable zlib Bazel definition. | Local portability patch; no upstream PR submitted. |
 | 0003 | Use the pinned Android float-angle arithmetic for geometry and subtraction interpolation. | Local Android fidelity patch; no upstream PR submitted. See [ANGLE-MATH.md](ANGLE-MATH.md) for source hashes and licenses. |
 | 0004 | Use the pinned Android float-magnitude arithmetic for vector lengths, polyline closure and subtraction interpolation. | Local Android fidelity patch; no upstream PR submitted. See [ANGLE-MATH.md](ANGLE-MATH.md). |
+| 0005 | Add one ByteInk JNI entry point using the existing pinned classic zlib to emit Android-identical gzip for notebook input protobufs. | Local codec extension; the 341 upstream JNI functions and engine code stay unchanged. |
 
-The Windows branch relies on `JNIEXPORT` for the 341 JNI exports; static libunwind additionally
+The Windows branch relies on `JNIEXPORT` for the 341 upstream JNI exports and the one explicitly
+listed ByteInk gzip export in `upstream/jni/byteink.exports.txt`; static libunwind additionally
 exports its own small API. `:upstream:checkWindowsLibrary` checks the complete allowed surface,
 system-only imports and absence of path-dependent debug entries. The portable upstream C++ subset
 also links Windows' `dbghelp` for Abseil's symbolizer.
@@ -29,6 +31,15 @@ shipped libraries use every patch and must pass the Android matrix and cross-OS 
 When updating upstream, apply each patch to the new pin, drop any upstreamed changes, and run both
 native contracts, the full JVM runtime matrix, the C++ tests and the geometry/raster comparisons.
 Do not change the native pin independently of the AndroidX release and Android app.
+
+The gzip extension uses zlib `1.3.1` already linked through the pinned native dependencies,
+compression level 6, a 32 KiB window, memory level 8, and one finish without intermediate flushes.
+Its header has modification time zero and OS 255, matching Android's `GZIPOutputStream`.
+The extension owns no native peer and releases its temporary buffers before returning.
+`ViveInkCodec` preserves the engine's protobuf and supplies alpha06's missing default private
+animation-phase field before compression. Original stored blobs are never re-encoded on transfer.
+Host JVM zlib implementations and older Java ports produced different large-payload bytes;
+strict Android input and gzip goldens guard this contract.
 
 References: [Zig 0.14 driver](https://github.com/ziglang/zig/blob/0.14.0/src/main.zig),
 [LLVM deterministic builds](https://blog.llvm.org/2019/11/deterministic-builds-with-clang-and-lld.html),

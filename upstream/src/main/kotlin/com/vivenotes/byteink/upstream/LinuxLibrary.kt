@@ -3,8 +3,8 @@ package com.vivenotes.byteink.upstream
 import java.io.File
 
 /**
- * What a Linux `libink.so` has to be before byteink ships it: the same JNI surface as Google's
- * binary for the pinned release, and nothing to load but the C library, no newer than a given glibc.
+ * What a Linux `libink.so` has to be before byteink ships it: the declared JNI surface (the pinned
+ * Google release plus explicit ByteInk extensions), and only the C library below a given glibc.
  */
 internal object LinuxLibrary {
 
@@ -62,7 +62,7 @@ internal fun checkLinuxLibraryCommand(arguments: Arguments): Int {
             "needs ${library.neededLibraries.joinToString()}; " +
             "newest glibc symbol ${LinuxLibrary.newestGlibc(library)?.let { "GLIBC_$it" } ?: "none"}",
     )
-    val problems = LinuxLibrary.problems(library, SymbolList.read(File(arguments.required("--exports"))), maxGlibc)
+    val problems = LinuxLibrary.problems(library, LibraryExportContract.read(arguments), maxGlibc)
     if (problems.isNotEmpty()) {
         throw CheckFailed("$binary is not shippable:\n" + problems.joinToString("\n") { "- $it" })
     }

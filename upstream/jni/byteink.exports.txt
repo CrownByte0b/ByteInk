@@ -1,0 +1,3 @@
+# ByteInk-owned native extensions, separate from the generated AndroidX Ink JNI contract.
+# Every production binary must provide exactly these additional Java_* exports.
+Java_com_vivenotes_byteink_vive_AndroidInkCompressionNative_gzip

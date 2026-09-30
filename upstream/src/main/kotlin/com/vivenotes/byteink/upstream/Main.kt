@@ -14,13 +14,14 @@ private val USAGE = """
       exports --binary FILE
           Prints the Java_* functions an ELF shared library exports.
 
-      check-linux-library --binary FILE --exports FILE --max-glibc VERSION
-          Fails unless a Linux libink.so exports exactly the Java_* functions listed in FILE, loads
+      check-linux-library --binary FILE --exports FILE --max-glibc VERSION [--extensions FILE]
+          Fails unless a Linux libink.so exports exactly the listed upstream Java_* functions and
+          optional explicitly declared ByteInk extensions, loads
           nothing but glibc libraries, and needs no glibc symbol newer than VERSION.
 
-      check-windows-library --binary FILE --exports FILE
-          Fails unless a Windows ink.dll is x86-64, exports exactly the Java_* functions listed in
-          FILE and otherwise only LLVM's unwinder API, and imports only libraries Windows 10 and
+      check-windows-library --binary FILE --exports FILE [--extensions FILE]
+          Fails unless a Windows ink.dll is x86-64, exports exactly the listed upstream Java_*
+          functions and optional ByteInk extensions, otherwise only LLVM's unwinder API, and imports only libraries Windows 10 and
           later provide.
 
       compare-abi --reference JAR --candidate JAR --package NAME

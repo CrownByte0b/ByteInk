@@ -42,6 +42,11 @@ class AndroidNotebookOracleTest {
     }
 
     @Test
+    fun roundTripNotebooks() {
+        verifyAndroidNotebookRoundTrip(::hardwareBitmap, ::drawPage, ::replay)
+    }
+
+    @Test
     fun diagnoseStrokes() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = File(context.filesDir, "byteink-oracle")

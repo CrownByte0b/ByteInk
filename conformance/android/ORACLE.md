@@ -182,11 +182,17 @@ pixel remains subject to the two-channel-level gate. The hardware comparison sep
 constrains the accepted AA and translucent ANY differences and records per-case metrics and
 failure diagnostics. A missing/corrupt reference or geometry mismatch fails the check.
 
-Gzip transport bytes depend on Android/JVM zlib and are recorded separately from the
-byte-identical brush protobuf payload. Re-encoding decoded inputs also drops Google's
-private animation-phase field 10, which the public native source reserves. Every remaining
-protobuf byte must match, and every original stored input blob is preserved byte for byte.
-These measured encoding differences do not permit changes to input values or brush meaning.
+The matrix's direct upstream AndroidX storage calls record Android/JVM gzip differences
+separately from the byte-identical brush protobuf payload. Direct upstream JVM input
+re-encoding also omits Google's private animation-phase field 10, which the public native
+source reserves. Every remaining protobuf byte must match, and every original stored
+input blob is preserved byte for byte. ByteInk's ViveNotes row encoder now restores that
+field and uses pinned native compression; its separate notebook round-trip check requires
+exact fresh protobuf and gzip bytes without these direct-upstream exceptions.
 
 Measured per-family results and final verification evidence are summarized in
 [FIDELITY.md](FIDELITY.md).
+
+Notebook import/export acceptance, exact fresh Android encoding, opaque-row
+preservation and the Linux/Windows workflow are documented in
+[ROUNDTRIP.md](ROUNDTRIP.md).

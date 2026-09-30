@@ -4,6 +4,7 @@ import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.vive.StoredInkStroke
+import com.vivenotes.byteink.vive.InkEraseMode
 import com.vivenotes.byteink.vive.ViveBrushes
 import com.vivenotes.byteink.vive.ViveInkCodec
 import java.io.File
@@ -112,6 +113,55 @@ class NotebookArchiveTest {
             assertFalse(destination.exists())
             assertEquals(2, notebook.page("page").strokes.size)
         }
+    }
+
+    @Test
+    fun strokesErasesAndTheirTargetLinksAreAppendedTogether() {
+        val source = syntheticNotebook(temporary.root)
+        val row = newStroke("drawn", "page", 5)
+        val mask = ViveBrushes.eraseMask(requireNotNull(ViveInkCodec.decode(row)).inputs, 20f)
+        val erase = ViveInkCodec.encodeErase(mask, "new-erase", "page", InkEraseMode.Object, 200L, listOf(row.id))
+        val copy = File(temporary.root, "with-erase.vive")
+        ViveNotebook.open(source).use { it.writeCopyWithInk(copy, listOf(row), listOf(erase)) }
+        ViveNotebook.open(copy).use { notebook ->
+            val page = notebook.page("page")
+            assertEquals(row, page.strokes.single { it.id == row.id })
+            assertEquals(erase, page.erases.single { it.id == erase.id })
+            assertEquals(listOf("opaque"), page.erases.single { it.id == "erase" }.targetIds)
+        }
+        AndroidNotebookRoundTrip.assertOriginalRowsPreserved(source, copy)
+    }
+
+    @Test
+    fun anInvalidEraseTargetRollsBackNewStrokesAndLeavesNoDestination() {
+        val source = syntheticNotebook(temporary.root)
+        val row = newStroke("drawn", "page", 5)
+        val mask = ViveBrushes.eraseMask(requireNotNull(ViveInkCodec.decode(row)).inputs, 20f)
+        val erase = ViveInkCodec.encodeErase(mask, "bad-erase", "page", InkEraseMode.Object, 200L, listOf("absent"))
+        val copy = File(temporary.root, "bad.vive")
+        val before = AndroidNotebookRoundTrip.snapshot(source)
+        ViveNotebook.open(source).use { notebook ->
+            assertFailsWith<IllegalArgumentException> { notebook.writeCopyWithInk(copy, listOf(row), listOf(erase)) }
+            assertFalse(copy.exists())
+            assertEquals(2, notebook.page("page").strokes.size)
+        }
+        assertEquals(before, AndroidNotebookRoundTrip.snapshot(source))
+    }
+
+    @Test
+    fun anEraseCannotTargetAnotherPageOrRepeatItsTarget() {
+        val source = syntheticNotebook(temporary.root)
+        val row = newStroke("other-page", "empty", 5)
+        val mask = ViveBrushes.eraseMask(requireNotNull(ViveInkCodec.decode(row)).inputs, 20f)
+        val erase = ViveInkCodec.encodeErase(mask, "bad-erase", "page", InkEraseMode.Object, 200L, listOf(row.id))
+        val copy = File(temporary.root, "bad-page.vive")
+        ViveNotebook.open(source).use { notebook ->
+            assertFailsWith<IllegalArgumentException> { notebook.writeCopyWithInk(copy, listOf(row), listOf(erase)) }
+            assertFailsWith<IllegalArgumentException> {
+                notebook.writeCopyWithInk(copy, emptyList(), listOf(erase.copy(targetIds = listOf("opaque", "opaque"))))
+            }
+        }
+        assertFalse(copy.exists())
     }
 }
 

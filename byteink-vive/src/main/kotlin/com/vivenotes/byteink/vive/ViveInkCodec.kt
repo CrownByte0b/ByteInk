@@ -242,11 +242,62 @@ public object ViveInkCodec {
             .array()
     }
 
-    internal fun encodeInputs(inputs: StrokeInputBatch): ByteArray =
-        ByteArrayOutputStream().use { out ->
+    internal fun encodeInputs(inputs: StrokeInputBatch): ByteArray {
+        // Keep the real engine's delta-coded protobuf. The pinned Android binary additionally
+        // writes its private fixed32 field 10, the default animation phase, even when it is zero;
+        // public google/ink reserves that field. Compression uses pinned classic deflate rather
+        // than the host JVM's zlib, whose implementation changes output bytes across machines.
+        // The upstream raw encoder is internal, so use its public gzip API rather than reflection.
+        val encoded = ByteArrayOutputStream().use { out ->
             inputs.encode(out)
             out.toByteArray()
         }
+        val proto = GZIPInputStream(encoded.inputStream()).use { it.readBytes() }
+        return AndroidInkCompression.gzip(withAndroidAnimationPhase(proto))
+    }
+
+    /** Supplies alpha06's default private phase without rewriting any engine-produced field. */
+    internal fun withAndroidAnimationPhase(proto: ByteArray): ByteArray {
+        var at = 0
+        var insertion = proto.size
+        var hasPhase = false
+        fun varint(): Long {
+            var value = 0L
+            var shift = 0
+            while (true) {
+                require(at < proto.size && shift < 64) { "Malformed input protobuf varint" }
+                val byte = proto[at++].toInt() and 0xff
+                value = value or ((byte and 0x7f).toLong() shl shift)
+                if (byte and 0x80 == 0) return value
+                shift += 7
+            }
+        }
+        while (at < proto.size) {
+            val start = at
+            val key = varint()
+            val field = key ushr 3
+            require(field > 0) { "Invalid input protobuf field" }
+            if (field == 10L) hasPhase = true
+            if (field > 10L && insertion == proto.size) insertion = start
+            val size = when ((key and 7).toInt()) {
+                0 -> { varint(); 0L }
+                1 -> 8L
+                2 -> varint()
+                5 -> 4L
+                else -> throw IllegalArgumentException("Unsupported input protobuf wire type")
+            }
+            require(size >= 0L && size <= proto.size.toLong() - at) { "Truncated input protobuf" }
+            at += size.toInt()
+        }
+        // Preserve an existing native phase verbatim, including a non-default value.
+        if (hasPhase) return proto
+        return ByteArrayOutputStream(proto.size + 5).use { out ->
+            out.write(proto, 0, insertion)
+            out.write(byteArrayOf(0x55, 0, 0, 0, 0))
+            out.write(proto, insertion, proto.size - insertion)
+            out.toByteArray()
+        }
+    }
 
     internal fun decodeInputs(points: ByteArray): StrokeInputBatch {
         requireWithinLimit(points)

@@ -21,4 +21,13 @@ tasks.test {
             iterations.map { listOf("-Dbyteink.test.fuzzIterations=$it") }.getOrElse(emptyList()) +
             seed.map { listOf("-Dbyteink.test.fuzzSeed=$it") }.getOrElse(emptyList())
     })
+    // Exact wire encodings captured through the pinned Android app, including gzip transport.
+    val matrix = rootProject.layout.projectDirectory.dir("conformance/android/fixtures/matrix")
+    inputs.files(fileTree(matrix) {
+        include("cases/**/*.inputs.pb.gz", "cases/**/*.roundtrip.pb.gz")
+    }).withPropertyName("androidInputEncodingGoldens")
+    val goldenPath = matrix.asFile.absolutePath
+    jvmArgumentProviders.add(CommandLineArgumentProvider {
+        listOf("-Dbyteink.test.androidInputGoldens=$goldenPath")
+    })
 }

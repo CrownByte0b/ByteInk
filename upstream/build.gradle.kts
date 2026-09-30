@@ -41,6 +41,7 @@ val inkVersion: String = libs.versions.androidx.ink.get()
 val pinsFile: RegularFile = layout.projectDirectory.file("pins.properties")
 val nativesFile: RegularFile = layout.projectDirectory.file("jni/androidx-ink-$inkVersion.natives.txt")
 val exportsFile: RegularFile = layout.projectDirectory.file("jni/androidx-ink-$inkVersion.exports.txt")
+val byteinkExportsFile: RegularFile = layout.projectDirectory.file("jni/byteink.exports.txt")
 
 /** The `surface` command over [jars]; everything is passed in so the configuration cache can store it. */
 fun surfaceArguments(
@@ -97,19 +98,22 @@ fun registerLibraryCheck(name: String, library: Provider<RegularFile>, command: 
         mainClass = application.mainClass
         inputs.file(library).withPropertyName("library")
         inputs.file(exportsFile).withPropertyName("exports")
+        inputs.file(byteinkExportsFile).withPropertyName("byteinkExports")
         val marker = layout.buildDirectory.file("$name/ok")
         outputs.file(marker)
         val exports = exportsFile
+        val extensions = byteinkExportsFile
         argumentProviders.add(CommandLineArgumentProvider {
-            listOf(command.first(), "--binary", library.get().asFile.path, "--exports", exports.asFile.path) + command.drop(1)
+            listOf(command.first(), "--binary", library.get().asFile.path, "--exports", exports.asFile.path,
+                "--extensions", extensions.asFile.path) + command.drop(1)
         })
         doLast { marker.get().asFile.writeText("ok\n") }
     }
 
 registerLibraryCheck("checkLinuxLibrary", byteinkLinuxLibrary(), listOf("check-linux-library", "--max-glibc", MAX_GLIBC))
-    .configure { description = "Checks byteink's libink.so: the pinned JNI surface, glibc alone, nothing newer than $MAX_GLIBC." }
+    .configure { description = "Checks byteink's libink.so: pinned JNI plus declared ByteInk extensions, glibc alone, nothing newer than $MAX_GLIBC." }
 registerLibraryCheck("checkWindowsLibrary", byteinkWindowsLibrary(), listOf("check-windows-library"))
-    .configure { description = "Checks byteink's ink.dll: x86-64, the pinned JNI surface, only libraries Windows provides." }
+    .configure { description = "Checks byteink's ink.dll: x86-64, pinned JNI plus declared ByteInk extensions, only libraries Windows provides." }
 
 tasks.register<JavaExec>("scanGoogleInk") {
     group = "upstream"
