@@ -94,6 +94,23 @@ class DeleteProjectionTest {
     }
 
     @Test
+    fun mixedWholeRowsAndPiecesKeepSurvivorsInDrawOrder() {
+        val pieces = cutInHalf()
+        val first = PageStroke("first", ViveBrushes.eraseMask(inputs(10f to 200f, 90f to 200f), 6f))
+        val untouched = first.copy(id = "untouched")
+        val last = first.copy(id = "last")
+        val page = listOf(first, pieces.left(), untouched, pieces.right(), last)
+
+        val plan = page.planProjectionDelete(setOf(first.projectionKey, pieces.left().projectionKey, last.projectionKey))
+
+        assertEquals(listOf("first", "last"), plan.wholeRows)
+        assertEquals(listOf("stroke"), plan.erases.map { it.rowId })
+        assertEquals(listOf("untouched", "stroke"), plan.after.map { it.id })
+        assertEquals(untouched.projectionKey, plan.after.first().projectionKey)
+        assertEquals(pieces.right().pageBounds!!.left, plan.after.last().pageBounds!!.left, 0.001f)
+    }
+
+    @Test
     fun everyLivePieceOffersAPointOnItsInk() {
         cutInHalf().forEach { piece ->
             val point = assertNotNull(piece.pointOnInk(), "a live projection had no point to place a mask on")

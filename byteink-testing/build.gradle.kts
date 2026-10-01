@@ -211,3 +211,44 @@ val performanceCheck = tasks.register<JavaExec>("performanceCheck") {
     })
 }
 tasks.named("check") { dependsOn(performanceCheck) }
+
+// Optional review/baseline workload; intentionally separate from the gross-regression CI checks.
+val hotPathOutput = providers.gradleProperty("byteinkHotPathOutput")
+    .orElse(layout.buildDirectory.file("reports/hot-paths/results.json").map { it.asFile.absolutePath })
+val hotPathProfile = providers.gradleProperty("byteinkHotPathProfile")
+tasks.register<JavaExec>("hotPathBenchmark") {
+    group = "verification"
+    description = "Measures codec, replay, selection, spatial queries, mesh export and long live strokes."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.InkHotPathBenchmark")
+    workingDir(rootProject.layout.projectDirectory)
+    minHeapSize = "512m"
+    maxHeapSize = "2g"
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseG1GC")
+    val output = hotPathOutput
+    val profile = hotPathProfile
+    outputs.file(output)
+    outputs.upToDateWhen { false }
+    argumentProviders.add(CommandLineArgumentProvider { listOf(output.get()) })
+    jvmArgumentProviders.add(CommandLineArgumentProvider {
+        profile.map { listOf("-XX:StartFlightRecording=settings=profile,filename=$it,dumponexit=true") }.getOrElse(emptyList())
+    })
+}
+
+val pathConstructionOutput = providers.gradleProperty("byteinkPathOutput")
+    .orElse(layout.buildDirectory.file("reports/hot-paths/path-construction.json").map { it.asFile.absolutePath })
+tasks.register<JavaExec>("pathConstructionBenchmark") {
+    group = "verification"
+    description = "Compares scalar and bulk Skiko path construction and separately measures prepared-path rasterization."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.InkPathConstructionBenchmark")
+    minHeapSize = "512m"
+    maxHeapSize = "2g"
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseG1GC")
+    val output = pathConstructionOutput
+    outputs.file(output)
+    outputs.upToDateWhen { false }
+    argumentProviders.add(CommandLineArgumentProvider { listOf(output.get()) })
+}

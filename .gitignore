@@ -1,5 +1,6 @@
 androidx-ink/
 memory/
+benchmarks/
 
 # Gradle, Kotlin and IDE state
 .gradle/

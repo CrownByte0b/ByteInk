@@ -7,6 +7,7 @@ import androidx.ink.geometry.ImmutableVec
 import androidx.ink.geometry.MutableVec
 import androidx.ink.geometry.PartitionedMesh
 import androidx.ink.strokes.MutableStrokeInputBatch
+import java.math.BigDecimal
 import androidx.ink.strokes.createClosedShape
 import kotlin.math.floor
 import kotlin.math.hypot
@@ -267,7 +268,55 @@ public fun List<InkPoint>.closesIntoALoop(touch: Float): Boolean {
     val reach = maxOf(touch, CLOSING_TOUCH_FLOOR)
     val travelled = travelledTo()
     val apart = reach * CLOSING_TRAVEL
+    var wideSeparationIndex = -1
+    var wideLastSeparated = -1
+    fun separated(earlier: Int, index: Int): Boolean {
+        val distance = travelled[index] - travelled[earlier + 1]
+        if (distance.isFinite() && apart.isFinite()) return distance > apart
+        // A finite path can overflow Float travel, making infinity - infinity NaN. Sum only
+        // this index's recent travel in Double, so a huge prefix cannot swallow a small loop.
+        if (wideSeparationIndex != index) {
+            wideSeparationIndex = index
+            wideLastSeparated = -1
+            var total = 0.0
+            for (segment in index - 1 downTo 1) {
+                val from = this[segment]
+                val to = this[segment + 1]
+                total += hypot(to.x.toDouble() - from.x.toDouble(), to.y.toDouble() - from.y.toDouble())
+                if (total > reach.toDouble() * CLOSING_TRAVEL) {
+                    wideLastSeparated = segment - 1
+                    break
+                }
+            }
+        }
+        return earlier <= wideLastSeparated
+    }
+    fun scanFrom(firstIndex: Int): Boolean {
+        for (index in firstIndex until size - 1) {
+            val from = this[index]
+            val to = this[index + 1]
+            val minColumn = cellOf(minOf(from.x, to.x) - reach, reach)
+            val maxColumn = cellOf(maxOf(from.x, to.x) + reach, reach)
+            val minRow = cellOf(minOf(from.y, to.y) - reach, reach)
+            val maxRow = cellOf(maxOf(from.y, to.y) + reach, reach)
+            for (earlier in 0 until index) {
+                if (!separated(earlier, index)) continue
+                val a = this[earlier]
+                val b = this[earlier + 1]
+                // Preserve the grid's candidate rule without enumerating its cells. Float
+                // distance rounding must not invent contacts outside the original buckets.
+                if (cellOf(minOf(a.x, b.x) - reach, reach) > maxColumn ||
+                    cellOf(maxOf(a.x, b.x) + reach, reach) < minColumn ||
+                    cellOf(minOf(a.y, b.y) - reach, reach) > maxRow ||
+                    cellOf(maxOf(a.y, b.y) + reach, reach) < minRow) continue
+                if (meets(earlier, index, reach)) return true
+            }
+        }
+        return false
+    }
     val buckets = HashMap<Long, MutableList<Int>>()
+    val testedAt = IntArray(size - 1)
+    var remainingWork = CLOSING_GRID_WORK_LIMIT
     for (index in 0 until size - 1) {
         val from = this[index]
         val to = this[index + 1]
@@ -275,14 +324,27 @@ public fun List<InkPoint>.closesIntoALoop(touch: Float): Boolean {
         val maxColumn = cellOf(maxOf(from.x, to.x) + reach, reach)
         val minRow = cellOf(minOf(from.y, to.y) - reach, reach)
         val maxRow = cellOf(maxOf(from.y, to.y) + reach, reach)
+        val columns = maxColumn.toLong() - minColumn.toLong() + 1L
+        val rows = maxRow.toLong() - minRow.toLong() + 1L
+        // Saturated Int cells can span 2^32 per dimension. Check before multiplying, and
+        // charge the whole gesture rather than letting each segment spend a fresh budget.
+        if (columns <= 0L || rows <= 0L || columns > remainingWork || rows > remainingWork / columns) {
+            return scanFrom(index)
+        }
+        remainingWork -= columns * rows
         for (column in minColumn..maxColumn) {
             for (row in minRow..maxRow) {
                 val cell = (column.toLong() shl 32) or (row.toLong() and 0xFFFF_FFFFL)
                 val sharing = buckets.getOrPut(cell) { mutableListOf() }
-                val met = sharing.any { earlier ->
-                    travelled[index] - travelled[earlier + 1] > apart && meets(earlier, index, reach)
+                var candidate = 0
+                while (candidate < sharing.size) {
+                    val earlier = sharing[candidate++]
+                    if (remainingWork == 0L) return scanFrom(index)
+                    remainingWork--
+                    if (testedAt[earlier] == index + 1) continue
+                    testedAt[earlier] = index + 1
+                    if (separated(earlier, index) && meets(earlier, index, reach)) return true
                 }
-                if (met) return true
                 sharing += index
             }
         }
@@ -309,10 +371,56 @@ private fun List<InkPoint>.meets(first: Int, second: Int, reach: Float): Boolean
     val d = this[second + 1]
     if (crosses(a, b, c, d)) return true
     val touching = reach * reach
-    return a.distanceSquaredToSegment(c, d) <= touching ||
-        b.distanceSquaredToSegment(c, d) <= touching ||
-        c.distanceSquaredToSegment(a, b) <= touching ||
-        d.distanceSquaredToSegment(a, b) <= touching
+    return a.withinClosingReach(c, d, reach, touching) ||
+        b.withinClosingReach(c, d, reach, touching) ||
+        c.withinClosingReach(a, b, reach, touching) ||
+        d.withinClosingReach(a, b, reach, touching)
+}
+
+/** Keeps the shared Float distance API unchanged; only closure repairs nonfinite intermediates. */
+private fun InkPoint.withinClosingReach(start: InkPoint, end: InkPoint, reach: Float, touching: Float): Boolean {
+    val dx = end.x - start.x
+    val dy = end.y - start.y
+    val lengthSquared = dx * dx + dy * dy
+    if (!lengthSquared.isFinite() || !touching.isFinite()) return withinWideClosingReach(start, end, reach)
+    val distance = if (lengthSquared == 0f) {
+        val pointDx = x - start.x
+        val pointDy = y - start.y
+        pointDx * pointDx + pointDy * pointDy
+    } else {
+        val numerator = (x - start.x) * dx + (y - start.y) * dy
+        val projection = numerator / lengthSquared
+        if (!numerator.isFinite() || !projection.isFinite()) return withinWideClosingReach(start, end, reach)
+        val fraction = projection.coerceIn(0f, 1f)
+        val nearestX = start.x + fraction * dx
+        val nearestY = start.y + fraction * dy
+        val pointDx = x - nearestX
+        val pointDy = y - nearestY
+        pointDx * pointDx + pointDy * pointDy
+    }
+    return if (distance.isFinite()) distance <= touching else withinWideClosingReach(start, end, reach)
+}
+
+private fun InkPoint.withinWideClosingReach(start: InkPoint, end: InkPoint, reach: Float): Boolean {
+    if (!x.isFinite() || !y.isFinite() || !start.x.isFinite() || !start.y.isFinite() ||
+        !end.x.isFinite() || !end.y.isFinite() || !reach.isFinite()) return false
+    val dx = exactCoordinate(end.x) - exactCoordinate(start.x)
+    val dy = exactCoordinate(end.y) - exactCoordinate(start.y)
+    val lengthSquared = dx * dx + dy * dy
+    val startDx = exactCoordinate(x) - exactCoordinate(start.x)
+    val startDy = exactCoordinate(y) - exactCoordinate(start.y)
+    val endDx = exactCoordinate(x) - exactCoordinate(end.x)
+    val endDy = exactCoordinate(y) - exactCoordinate(end.y)
+    val startDistance = startDx * startDx + startDy * startDy
+    val endDistance = endDx * endDx + endDy * endDy
+    val allowance = exactCoordinate(reach)
+    val touching = allowance * allowance
+    if (lengthSquared.signum() == 0 || (startDx * dx + startDy * dy).signum() <= 0) return startDistance <= touching
+    if ((endDx * dx + endDy * dy).signum() >= 0) return endDistance <= touching
+    // Only the overflow path uses exact arithmetic: even Double subtraction can lose a small
+    // endpoint or central offset when the original Float coordinates span hundreds of bits.
+    val area = startDx * dy - startDy * dx
+    return area * area <= touching * lengthSquared
 }
 
 /** Proper crossing: each segment has one end on either side of the other's line. */
@@ -321,8 +429,18 @@ private fun crosses(a: InkPoint, b: InkPoint, c: InkPoint, d: InkPoint): Boolean
     val second = side(a, b, d)
     val third = side(c, d, a)
     val fourth = side(c, d, b)
-    return first * second < 0f && third * fourth < 0f
+    if (first.isFinite() && second.isFinite() && third.isFinite() && fourth.isFinite()) {
+        return first * second < 0f && third * fourth < 0f
+    }
+    if (listOf(a, b, c, d).any { !it.x.isFinite() || !it.y.isFinite() }) return false
+    fun wideSide(from: InkPoint, to: InkPoint, point: InkPoint): BigDecimal =
+        (exactCoordinate(to.x) - exactCoordinate(from.x)) * (exactCoordinate(point.y) - exactCoordinate(from.y)) -
+            (exactCoordinate(to.y) - exactCoordinate(from.y)) * (exactCoordinate(point.x) - exactCoordinate(from.x))
+    return (wideSide(a, b, c) * wideSide(a, b, d)).signum() < 0 &&
+        (wideSide(c, d, a) * wideSide(c, d, b)).signum() < 0
 }
+
+private fun exactCoordinate(value: Float): BigDecimal = BigDecimal(value.toDouble())
 
 private fun side(from: InkPoint, to: InkPoint, point: InkPoint): Float =
     (to.x - from.x) * (point.y - from.y) - (to.y - from.y) * (point.x - from.x)
@@ -334,3 +452,6 @@ private const val CLOSING_TOUCH_FLOOR = 2f
 
 /** How far the pen must travel between two segments, in multiples of the reach, for them to close a loop. */
 private const val CLOSING_TRAVEL = 8f
+
+/** Bounds grid cell visits, stored memberships and sharing-list visits before exact pair scanning. */
+private const val CLOSING_GRID_WORK_LIMIT = 16_384L

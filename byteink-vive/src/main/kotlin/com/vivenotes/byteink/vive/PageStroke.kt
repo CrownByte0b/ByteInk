@@ -227,7 +227,12 @@ public fun List<PageStroke>.planProjectionDelete(held: Set<InkProjectionKey>): I
             erases += InkPieceErase(mask, rowId, current)
         }
     }
-    val after = if (wholeRows.isEmpty()) current else current.filterNot { it.id in wholeRows.toSet() }
+    val after = if (wholeRows.isEmpty()) {
+        current
+    } else {
+        val wholeRowIds = wholeRows.toSet()
+        current.filterNot { it.id in wholeRowIds }
+    }
     return InkProjectionDelete(erases, wholeRows, after)
 }
 

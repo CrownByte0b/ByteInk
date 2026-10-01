@@ -304,16 +304,26 @@ public object ViveInkCodec {
         return StrokeInputBatch.decode(points)
     }
 
+    // Cache only one fixed-size scratch array per decoding thread, never a point blob or decoded
+    // batch. The entry is empty while leased, so reentrant validation gets its own array. A lease
+    // returns on failure as well as success; the cache's lifetime ends with its worker thread.
+    private val validationScratch = ThreadLocal<ByteArray?>()
+
     /** Refuses a blob that decompresses past [MAX_DECOMPRESSED_BYTES], before AndroidX tries to hold all of it. */
     private fun requireWithinLimit(points: ByteArray) {
         GZIPInputStream(ByteArrayInputStream(points)).use { gzip ->
-            val buffer = ByteArray(1 shl 16)
-            var total = 0L
-            while (true) {
-                val read = gzip.read(buffer)
-                if (read < 0) break
-                total += read
-                if (total > MAX_DECOMPRESSED_BYTES) throw IOException("The ink blob expands past $MAX_DECOMPRESSED_BYTES bytes")
+            val buffer = validationScratch.get() ?: ByteArray(1 shl 16)
+            validationScratch.set(null)
+            try {
+                var total = 0L
+                while (true) {
+                    val read = gzip.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    if (total > MAX_DECOMPRESSED_BYTES) throw IOException("The ink blob expands past $MAX_DECOMPRESSED_BYTES bytes")
+                }
+            } finally {
+                validationScratch.set(buffer)
             }
         }
     }
