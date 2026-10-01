@@ -10,6 +10,7 @@ import androidx.ink.geometry.MutableAffineTransform
 import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.core.SpatialIndex
 import java.util.Collections
+import java.util.IdentityHashMap
 
 /** One finished stroke, positioned and optionally recoloured within a scene. */
 public data class InkSceneStroke(
@@ -63,10 +64,31 @@ public class InkScene(strokes: List<InkSceneStroke>) {
         renderer: InkPathRenderer,
         sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
         viewport: Rect,
+    ): Int = draw(canvas, renderer, sceneToCanvas, viewport, emptySet())
+
+    /**
+     * Draws visible strokes except [excludedStrokes], preserving their original drawing order.
+     * Exclusions are checked only for viewport candidates, so changing them reuses this scene and
+     * its spatial index. Use entries from [strokes] as keys: mutable transforms supplied to the
+     * constructor were snapshotted there. Keys are matched by instance identity, allowing equal
+     * stroke occurrences to be excluded independently. Use an identity-backed set when excluding
+     * multiple equal occurrences together.
+     */
+    public fun draw(
+        canvas: Canvas,
+        renderer: InkPathRenderer,
+        sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
+        viewport: Rect,
+        excludedStrokes: Set<InkSceneStroke>,
     ): Int {
+        val exclusions = if (excludedStrokes.isEmpty()) emptySet() else
+            Collections.newSetFromMap(IdentityHashMap<InkSceneStroke, Boolean>(excludedStrokes.size)).apply {
+                addAll(excludedStrokes)
+            }
         val transform = MutableAffineTransform()
         var drawn = 0
-        visibleStrokes(viewport, sceneToCanvas).forEach { item ->
+        for (item in visibleStrokes(viewport, sceneToCanvas)) {
+            if (item in exclusions) continue
             AffineTransform.multiply(sceneToCanvas, item.strokeToScene, transform)
             if (renderer.draw(canvas, item.stroke, transform, viewport, item.colorArgb)) drawn++
         }
@@ -79,7 +101,15 @@ public fun DrawScope.drawInkScene(
     scene: InkScene,
     renderer: InkPathRenderer,
     sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
-): Int = scene.draw(drawContext.canvas, renderer, sceneToCanvas, Rect(0f, 0f, size.width, size.height))
+): Int = drawInkScene(scene, renderer, sceneToCanvas, emptySet())
+
+/** Draws visible scene strokes, matching [excludedStrokes] to [scene]'s strokes by instance identity. */
+public fun DrawScope.drawInkScene(
+    scene: InkScene,
+    renderer: InkPathRenderer,
+    sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
+    excludedStrokes: Set<InkSceneStroke>,
+): Int = scene.draw(drawContext.canvas, renderer, sceneToCanvas, Rect(0f, 0f, size.width, size.height), excludedStrokes)
 
 private fun requireFinite(transform: AffineTransform) {
     require(transform.m00.isFinite() && transform.m10.isFinite() && transform.m20.isFinite() &&
