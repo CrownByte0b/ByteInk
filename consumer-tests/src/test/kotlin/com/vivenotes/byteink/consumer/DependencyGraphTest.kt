@@ -18,6 +18,7 @@ class DependencyGraphTest {
     val temporary = TemporaryFolder()
 
     private val repository = System.getProperty("byteink.test.repository")
+    private val group = System.getProperty("byteink.test.group")
     private val byteink = System.getProperty("byteink.test.version")
     private val nativeloader = System.getProperty("byteink.test.nativeloaderVersion")
     private val ink = System.getProperty("byteink.test.inkVersion")
@@ -98,12 +99,12 @@ class DependencyGraphTest {
                 val scenario = providers.gradleProperty("scenario").get()
                 dependencies {
                     when (scenario) {
-                        "loader" -> implementation("com.vivenotes.byteink:ink-nativeloader:$nativeloader")
-                        "core" -> implementation("com.vivenotes.byteink:byteink-core:$byteink")
-                        "vive" -> implementation("com.vivenotes.byteink:byteink-vive:$byteink")
-                        "compose" -> implementation("com.vivenotes.byteink:byteink-compose:$byteink")
+                        "loader" -> implementation("$group:ink-nativeloader:$nativeloader")
+                        "core" -> implementation("$group:byteink-core:$byteink")
+                        "vive" -> implementation("$group:byteink-vive:$byteink")
+                        "compose" -> implementation("$group:byteink-compose:$byteink")
                         else -> {
-                            implementation("com.vivenotes.byteink:byteink-core:$byteink")
+                            implementation("$group:byteink-core:$byteink")
                             implementation("androidx.ink:ink-strokes:$ink")
                         }
                     }
@@ -114,7 +115,7 @@ class DependencyGraphTest {
                     configurations.configureEach {
                         resolutionStrategy.dependencySubstitution {
                             substitute(module("androidx.ink:ink-nativeloader"))
-                                .using(module("com.vivenotes.byteink:ink-nativeloader:$nativeloader"))
+                                .using(module("$group:ink-nativeloader:$nativeloader"))
                         }
                     }
                 }

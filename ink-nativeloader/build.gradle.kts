@@ -4,6 +4,7 @@
 
 import com.vivenotes.byteink.build.BundleNativeLibraries
 import com.vivenotes.byteink.build.GitSparseCheckout
+import com.vivenotes.byteink.build.NativeDebugSymbolsMetadata
 import com.vivenotes.byteink.build.PatchedSources
 import com.vivenotes.byteink.build.SyncForkSources
 import com.vivenotes.byteink.build.VerifyForkSources
@@ -20,7 +21,7 @@ plugins {
 }
 
 // Versioned after the upstream release it forks (byteink-nativeloader in the catalog).
-version = libs.versions.byteink.nativeloader.get()
+version = providers.gradleProperty("byteinkNativeLoaderVersion").getOrElse(libs.versions.byteink.nativeloader.get())
 check(version.toString().startsWith("${libs.versions.androidx.ink.get()}-byteink.")) {
     "byteink-nativeloader ($version) must be androidx-ink's version followed by -byteink.<N>"
 }
@@ -31,6 +32,31 @@ val bundledNatives = tasks.register<BundleNativeLibraries>("bundleNativeLibrarie
     windows.from(byteinkWindowsLibrary())
     googleInkCommit = upstreamPins().map { it.getProperty("google.ink.commit") }
     directory = layout.buildDirectory.dir("natives")
+}
+
+// Symbols are addressable separately by classifier and never enter the runtime resources or jar.
+val linuxLibrary = byteinkLinuxLibrary()
+val symbolsProjectRoot = rootProject.layout.projectDirectory
+val linuxSymbols = layout.file(providers.gradleProperty("byteinkLinuxDebugSymbols")
+    .map(symbolsProjectRoot::file).map { it.asFile }
+    .orElse(linuxLibrary.map { it.asFile.resolveSibling("libink.so.debug") }))
+val symbolsMetadata = tasks.register<NativeDebugSymbolsMetadata>("linuxDebugSymbolsMetadata") {
+    library = linuxLibrary
+    symbols = linuxSymbols
+    buildMetadata = layout.file(linuxLibrary.map { it.asFile.resolveSibling("build.properties") })
+    manifest = layout.buildDirectory.file("debug-symbols/build.properties")
+}
+val linuxDebugSymbols = tasks.register<Zip>("linuxDebugSymbols") {
+    group = "publishing"
+    description = "Packages Linux native debug symbols separately from the runtime jar."
+    archiveClassifier = "linux-x86_64-debug-symbols"
+    from(linuxSymbols) { into("linux-x86_64") }
+    from(symbolsMetadata.flatMap { it.manifest }) { into("linux-x86_64") }
+    from(rootProject.layout.projectDirectory.file("LICENSE"))
+    from(layout.projectDirectory.file("src/jvmMain/resources/com/vivenotes/byteink/nativeloader/ANDROID-MATH-LICENSE.txt"))
+}
+publishing.publications.withType<MavenPublication>().configureEach {
+    if (name == "jvm") artifact(linuxDebugSymbols)
 }
 
 kotlin {

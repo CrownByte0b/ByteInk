@@ -32,5 +32,6 @@ install -m 644 "$bin/ink/jni/libink.so" "$out/libink.so.debug"
     echo "patch.$(basename "$patch")=$(sha256sum "$patch" | cut -d' ' -f1)"
   done
   echo "libink.so.sha256=$(sha256sum "$out/libink.so" | cut -d' ' -f1)"
+  echo "libink.so.debug.sha256=$(sha256sum "$out/libink.so.debug" | cut -d' ' -f1)"
 } > "$out/build.properties"
 echo "Built $out/libink.so"

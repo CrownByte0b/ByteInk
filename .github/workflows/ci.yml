@@ -55,6 +55,13 @@ jobs:
             native/build/out/*/linux-x86_64/build.properties
           if-no-files-found: error
 
+      - name: Upload Linux debug symbols separately
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: libink-linux-x86_64-debug-symbols
+          path: native/build/out/*/linux-x86_64/libink.so.debug
+          if-no-files-found: error
+
       - name: Upload unshipped oracle baseline
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -178,6 +185,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Select exact release coordinates
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: bash .github/scripts/release-versions.sh "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: zulu
@@ -204,17 +214,21 @@ jobs:
           path: native/build/out
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          name: libink-linux-x86_64-debug-symbols
+          path: native/build/out
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
           name: ink-windows-x86_64
           path: native/build/out
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: oracle-baseline-linux-x64
           path: native/build/oracle-linux-x64
-      - name: Build, full suites, native contracts, engine oracle and replay/raster dump
+      - name: Build, consumer smoke, full suites, engine oracle and synthetic fidelity reports
         run: >-
           ./gradlew build :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary
           :conformance:oracle:oracleCompare :conformance:oracle:oracleProduction :conformance:oracle:installDist
-          :byteink-testing:desktopParityDump --continue
+          :byteink-testing:desktopParityDump :byteink-testing:androidFidelityMatrix --continue
           "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
           -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }}
           -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
@@ -247,6 +261,7 @@ jobs:
             byteink-compose/build/reports/performance/
             byteink-testing/build/reports/performance/
             byteink-testing/build/reports/android-matrix*/
+            consumer-tests/build/reports/consumer/
           if-no-files-found: error
 
   jvm-windows:
@@ -265,6 +280,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Select exact release coordinates
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: bash .github/scripts/release-versions.sh "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: zulu
@@ -291,6 +309,10 @@ jobs:
           path: native/build/out
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          name: libink-linux-x86_64-debug-symbols
+          path: native/build/out
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
           name: ink-windows-x86_64
           path: native/build/out
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -310,11 +332,12 @@ jobs:
           for test in "${tests[@]}"; do
             "$test" "--gtest_output=xml:native/build/windows-tests/results/$(basename "$test").xml"
           done
-      - name: Build, full suites, native contracts and replay/raster comparison
+      - name: Build, consumer smoke, full suites and synthetic fidelity comparison
         run: |
           reference=$(cygpath -w "$PWD/linux-reference/byteink-testing/build/desktop-parity")
           ./gradlew.bat build :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary \
-            :conformance:oracle:oracleProduction :byteink-testing:desktopParityCompare --continue \
+            :conformance:oracle:oracleProduction :byteink-testing:desktopParityCompare \
+            :byteink-testing:androidFidelityMatrix --continue \
             "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME" \
             "-PbyteinkParityFixtures=$reference\fixtures" "-PbyteinkParityReference=$reference" \
             -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }} \
@@ -343,4 +366,50 @@ jobs:
             byteink-testing/build/reports/performance/
             byteink-testing/build/reports/android-matrix*/
             native/build/windows-tests/results/
+            consumer-tests/build/reports/consumer/
           if-no-files-found: error
+
+  publish:
+    name: Publish tested tag to GitHub Packages
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [native-linux, native-windows, native-linux-tests, native-pin, jvm-linux, jvm-windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select the coordinates tested by the matrix
+        run: bash .github/scripts/release-versions.sh "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: zulu
+          java-version: 27
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: libink-linux-x86_64
+          path: native/build/out
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: libink-linux-x86_64-debug-symbols
+          path: native/build/out
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ink-windows-x86_64
+          path: native/build/out
+      - name: Publish libraries, sources, metadata and separate Linux symbols
+        run: >-
+          ./gradlew :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary
+          :ink-nativeloader:publishAllPublicationsToGitHubPackagesRepository
+          :byteink-core:publishAllPublicationsToGitHubPackagesRepository
+          :byteink-vive:publishAllPublicationsToGitHubPackagesRepository
+          :byteink-compose:publishAllPublicationsToGitHubPackagesRepository
+          :byteink-testing:publishAllPublicationsToGitHubPackagesRepository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
