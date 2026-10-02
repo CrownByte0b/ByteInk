@@ -42,6 +42,8 @@ dependencies {
 }
 
 tasks.test {
+    // Check primitive-array releases and local references in the owned geometry JNI bridge.
+    jvmArgs("-Xcheck:jni")
     // InkRuntimeTest starts a JVM with Google's loader ahead of byteink's on the classpath.
     val google = googleNativeLoaderJar()
     val runtime = sourceSets.test.get().runtimeClasspath
@@ -50,4 +52,3 @@ tasks.test {
         listOf("-Dbyteink.test.googleNativeLoaderJar=${google.singleFile}", "-Dbyteink.test.classpath=${runtime.asPath}")
     })
 }
-

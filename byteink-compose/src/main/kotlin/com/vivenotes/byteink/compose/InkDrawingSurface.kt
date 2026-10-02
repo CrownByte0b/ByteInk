@@ -93,8 +93,8 @@ public fun InkDrawingSurface(
     }
 
     LaunchedEffect(controller) {
-        snapshotFlow { controller.revision }.collect {
-            while (controller.liveStroke?.isUpdateNeeded() == true) {
+        snapshotFlow { controller.isDrawing to controller.hasPendingInputs }.collect {
+            while (controller.isUpdateNeeded()) {
                 withFrameNanos { frameNanos -> controller.advance(timing.uptimeMillis(frameNanos)) }
             }
         }

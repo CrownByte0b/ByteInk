@@ -35,6 +35,78 @@ class InkAuthoringControllerTest {
     private val black = 0xff000000.toInt()
     private fun marker(level: Int = 0): Brush = ViveBrushes.brush(ViveBrushes.MARKER, level, black, 10f)
 
+    @OptIn(androidx.ink.nativeloader.InkInternalOnlyApi::class)
+    @Test
+    fun bufferedObservationsKeepTheWetPathUntilOneProcessedFrame() {
+        InkAuthoringController().use { controller ->
+            val renderer = InkPathRenderer()
+            Surface.makeRasterN32Premul(128, 128).use { surface ->
+                val canvas = surface.canvas.asComposeCanvas()
+                controller.begin(marker(), sample(10f, 50f, 1_000L))
+                val wet = assertNotNull(controller.liveStroke)
+                renderer.draw(canvas, wet)
+                val version = wet.getVersion()
+                val revision = controller.revision
+                repeat(32) { i ->
+                    assertTrue(controller.append(sample(12f + i * 3f, 50f, 1_001L + i)))
+                    renderer.draw(canvas, wet)
+                    assertEquals(version, wet.getVersion(), "buffering does not enqueue into the engine")
+                    assertEquals(revision, controller.revision, "buffering does not invalidate drawing")
+                    assertEquals(1L, renderer.pathBuildCount)
+                }
+                assertTrue(controller.hasPendingInputs)
+                assertTrue(controller.isUpdateNeeded())
+                assertEquals(1, wet.getInputCount())
+                assertTrue(controller.advance(1_040L))
+                assertFalse(controller.hasPendingInputs)
+                assertEquals(version + 2, wet.getVersion(), "one enqueue and one shape update")
+                assertEquals(revision + 1, controller.revision)
+                assertEquals(33, wet.getInputCount())
+                renderer.draw(canvas, wet)
+                assertEquals(2L, renderer.pathBuildCount)
+                assertFalse(controller.advance(1_050L))
+                assertEquals(revision + 1, controller.revision)
+                assertEquals(33, assertNotNull(controller.finish()).inputs.size)
+            }
+            renderer.clearCache()
+        }
+    }
+
+    @Test
+    fun finishingWithoutAFrameFlushesAllPendingPressureAndFinalInput() {
+        InkAuthoringController().use { controller ->
+            controller.begin(marker(), InkPointerSample(10f, 50f, 1_000L, InputToolType.STYLUS, .2f))
+            repeat(32) { i ->
+                controller.append(InkPointerSample(12f + i * 3f, 50f, 1_001L + i,
+                    InputToolType.STYLUS, if (i % 2 == 0) .6f else null))
+            }
+            val finished = assertNotNull(controller.finish(InkPointerSample(112f, 50f, 1_040L,
+                InputToolType.STYLUS, .8f)))
+            assertEquals(34, finished.inputs.size)
+            assertEquals(.2f, finished.inputs[0].pressure)
+            repeat(32) { i -> assertEquals(.6f, finished.inputs[i + 1].pressure) }
+            assertEquals(.8f, finished.inputs[33].pressure)
+            assertFalse(controller.hasPendingInputs)
+            assertFalse(controller.isUpdateNeeded())
+            assertEquivalentOutlines(Stroke(finished.brush, finished.inputs), finished, "pending finish")
+        }
+    }
+
+    @Test
+    fun cancellationDiscardsUnprocessedHistoryBeforeRestart() {
+        InkAuthoringController().use { controller ->
+            controller.begin(marker(), sample(10f, 50f, 1_000L))
+            repeat(32) { controller.append(sample(it.toFloat(), 60f, 1_001L + it)) }
+            assertTrue(controller.hasPendingInputs)
+            controller.cancel()
+            assertFalse(controller.hasPendingInputs)
+            assertFalse(controller.isUpdateNeeded())
+            controller.begin(marker(), sample(80f, 90f, 2_000L))
+            assertFalse(controller.hasPendingInputs)
+            assertEquals(1, assertNotNull(controller.finish()).inputs.size)
+        }
+    }
+
     @Test
     fun dragPreservesRealInputsBrushAndEventRelativeTimes() {
         InkAuthoringController().use { controller ->

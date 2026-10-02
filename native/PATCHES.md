@@ -11,9 +11,10 @@ MinGW-w64/UCRT, baseline x86-64, optimized code and static libc++/libunwind.
 | 0003 | Use the pinned Android float-angle arithmetic for geometry and subtraction interpolation. | Local Android fidelity patch; no upstream PR submitted. See [ANGLE-MATH.md](ANGLE-MATH.md) for source hashes and licenses. |
 | 0004 | Use the pinned Android float-magnitude arithmetic for vector lengths, polyline closure and subtraction interpolation. | Local Android fidelity patch; no upstream PR submitted. See [ANGLE-MATH.md](ANGLE-MATH.md). |
 | 0005 | Add one ByteInk JNI entry point using the existing pinned classic zlib to emit Android-identical gzip for notebook input protobufs. | Local codec extension; the 341 upstream JNI functions and engine code stay unchanged. |
+| 0006 | Copy finished/live outlines and triangle partitions into owned JVM arrays in four checked JNI calls. | Local geometry extension; upstream engine, arithmetic and 341 JNI functions stay unchanged. |
 
-The Windows branch relies on `JNIEXPORT` for the 341 upstream JNI exports and the one explicitly
-listed ByteInk gzip export in `upstream/jni/byteink.exports.txt`; static libunwind additionally
+The Windows branch relies on `JNIEXPORT` for the 341 upstream JNI exports and the five explicitly
+listed ByteInk exports in `upstream/jni/byteink.exports.txt`; static libunwind additionally
 exports its own small API. `:upstream:checkWindowsLibrary` checks the complete allowed surface,
 system-only imports and absence of path-dependent debug entries. The portable upstream C++ subset
 also links Windows' `dbghelp` for Abseil's symbolizer.
@@ -40,6 +41,18 @@ The extension owns no native peer and releases its temporary buffers before retu
 animation-phase field before compression. Original stored blobs are never re-encoded on transfer.
 Host JVM zlib implementations and older Java ports produced different large-payload bytes;
 strict Android input and gzip goldens guard this contract.
+
+The geometry extension ships in native loader `1.1.0-alpha06-byteink.2`. Each call takes its typed
+JVM owner, which JNI retains through the copy. It resolves alpha06's `PartitionedMesh.getNativePointer`
+or `InProgressStroke.getNativePointer$ink_strokes`; a pin change must reverify these getters and
+the native casts. Invalid group/coat indices and JVM array size overflow throw before indexed
+access. Coordinates use the same Ink position decoders; indices widen unsigned 16-bit values.
+Live partitions copy the corresponding vertex slice, including nonzero and overlapping offsets.
+No native pointer, buffer view, global reference or scratch allocation survives the call. JVM
+arrays are independent and mutable by their caller. Live reads require the authoring thread;
+immutable shape reads are concurrent. Tests run with `-Xcheck:jni`, compare scalar getters and
+partition buffers, and cover owner lifetime, predictions, clear/restart, coats and large partitions.
+See [JNI reference and array guidance](https://developer.android.com/ndk/guides/jni-tips).
 
 References: [Zig 0.14 driver](https://github.com/ziglang/zig/blob/0.14.0/src/main.zig),
 [LLVM deterministic builds](https://blog.llvm.org/2019/11/deterministic-builds-with-clang-and-lld.html),

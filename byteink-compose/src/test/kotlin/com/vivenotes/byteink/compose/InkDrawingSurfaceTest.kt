@@ -598,7 +598,9 @@ class InkDrawingSurfaceTest {
             node.captureToImage()
             val rasterCompletedNanos = System.nanoTime()
             runOnIdle {
-                assertTrue(renderedRevision >= queuedRevision, "the raster includes this input observation")
+                assertTrue(renderedRevision > queuedRevision, "the raster follows a processed shape revision")
+                assertEquals(index + 2, assertNotNull(controller.liveStroke).getInputCount(),
+                    "this frame consumes the queued observation")
                 assertTrue(drawStartedNanos >= handlerStartedNanos, "the observed frame follows the handler")
                 if (index >= 5) {
                     handlerToDrawMillis += (drawStartedNanos - handlerStartedNanos) / 1_000_000.0

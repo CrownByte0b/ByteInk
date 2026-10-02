@@ -25,7 +25,7 @@ and in-progress strokes, affine transforms, viewport culling and bounded geometr
 # Tooling
 
 ```bash
-./gradlew :samples:viewer:run`
+./gradlew :samples:viewer:run
 
 ```
 

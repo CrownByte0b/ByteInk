@@ -17,7 +17,7 @@ import androidx.ink.strokes.StrokeInput
  * Builds live strokes with the real Ink engine. Use one controller on the Compose UI thread.
  *
  * A gesture freezes its brush, tool type, pressure availability and view transform at [begin].
- * Input is queued by [append] and its shape advanced by [advance], normally once per frame. No
+ * Input is buffered by [append] and enqueued together by [advance], normally once per frame. No
  * prediction is fabricated. The [revision] and [isDrawing] properties are Compose snapshot state,
  * so reading [revision] in a draw block invalidates that block when the wet geometry changes.
  *
@@ -31,6 +31,10 @@ public class InkAuthoringController : AutoCloseable {
         private set
 
     public var isDrawing: Boolean by mutableStateOf(false)
+        private set
+
+    /** Scheduling state for frame loops; reading this in a draw block is unnecessary. */
+    public var hasPendingInputs: Boolean by mutableStateOf(false)
         private set
 
     /** The active wet stroke, or null when no gesture is active. Do not mutate it directly. */
@@ -88,7 +92,8 @@ public class InkAuthoringController : AutoCloseable {
         reportedPressure = sample.pressure
         lastX = x
         lastY = y
-        enqueue(stroke, x, y, 0L)
+        buffer(x, y, 0L)
+        enqueuePending(stroke)
         stroke.updateShape(0L)
         isDrawing = true
         revision++
@@ -106,15 +111,18 @@ public class InkAuthoringController : AutoCloseable {
         val nativeTimeSeconds = elapsed.toFloat() * 0.001f
         if (x == lastX && y == lastY && nativeTimeSeconds == lastNativeTimeSeconds) return false
         if (reportedPressure != null && sample.pressure != null) reportedPressure = sample.pressure
-        enqueue(requireNotNull(engine), x, y, elapsed)
+        buffer(x, y, elapsed)
         lastX = x
         lastY = y
         lastUptime = sample.uptimeMillis
         lastInputElapsed = elapsed
         lastNativeTimeSeconds = nativeTimeSeconds
-        revision++
         return true
     }
+
+    /** Whether a frame must consume buffered observations or advance timed brush behavior. */
+    public fun isUpdateNeeded(): Boolean = isDrawing &&
+        (hasPendingInputs || requireNotNull(engine).isUpdateNeeded())
 
     /**
      * Updates queued geometry and any timed brush behavior. [uptimeMillis] uses the input event
@@ -125,6 +133,7 @@ public class InkAuthoringController : AutoCloseable {
         require(uptimeMillis >= 0L) { "Frame uptime must be nonnegative" }
         if (!isDrawing) return false
         val stroke = requireNotNull(engine)
+        enqueuePending(stroke)
         if (!stroke.isUpdateNeeded()) return false
         val elapsed = maxOf(lastShapeElapsed, lastInputElapsed, (uptimeMillis - startUptime).coerceAtLeast(0L))
         stroke.updateShape(elapsed)
@@ -144,6 +153,7 @@ public class InkAuthoringController : AutoCloseable {
         if (!isDrawing) return null
         if (sample != null) append(sample)
         val stroke = requireNotNull(engine)
+        enqueuePending(stroke)
         stroke.finishInput()
         // Consume the last inputs and complete timed behavior before taking the real input batch.
         stroke.updateShape()
@@ -154,6 +164,7 @@ public class InkAuthoringController : AutoCloseable {
         val finished = Stroke(requireNotNull(stroke.brush), inputs)
         stroke.clear()
         incrementalInputs?.clear()
+        hasPendingInputs = false
         isDrawing = false
         reportedPressure = null
         revision++
@@ -165,6 +176,7 @@ public class InkAuthoringController : AutoCloseable {
         if (!isDrawing) return
         engine?.clear()
         incrementalInputs?.clear()
+        hasPendingInputs = false
         isDrawing = false
         reportedPressure = null
         revision++
@@ -179,12 +191,19 @@ public class InkAuthoringController : AutoCloseable {
         closed = true
     }
 
-    private fun enqueue(stroke: InProgressStroke, x: Float, y: Float, elapsed: Long) {
+    private fun buffer(x: Float, y: Float, elapsed: Long) {
         val inputs = incrementalInputs ?: MutableStrokeInputBatch().also { incrementalInputs = it }
-        inputs.clear()
         inputs.add(toolType, x, y, elapsed, pressure = reportedPressure ?: StrokeInput.NO_PRESSURE)
+        hasPendingInputs = true
+    }
+
+    private fun enqueuePending(stroke: InProgressStroke) {
+        if (!hasPendingInputs) return
+        val inputs = requireNotNull(incrementalInputs)
         val prediction = emptyPrediction ?: MutableStrokeInputBatch().also { emptyPrediction = it }
         stroke.enqueueInputs(inputs, prediction)
+        inputs.clear()
+        hasPendingInputs = false
     }
 
     private fun mapX(transform: AffineTransform, sample: InkPointerSample): Float =
