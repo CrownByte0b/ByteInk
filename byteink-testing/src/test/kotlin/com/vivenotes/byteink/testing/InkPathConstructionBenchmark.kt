@@ -5,6 +5,8 @@ package com.vivenotes.byteink.testing
 import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.asSkiaPath
 import com.vivenotes.byteink.core.InkMeshes
 import com.vivenotes.byteink.core.InkRuntime
 import com.vivenotes.byteink.vive.ViveBrushes
@@ -37,8 +39,8 @@ object InkPathConstructionBenchmark {
             put("max_heap_bytes", Runtime.getRuntime().maxMemory())
             put("java_arguments", JsonArray(ManagementFactory.getRuntimeMXBean().inputArguments.map(::JsonPrimitive)))
             put("gc", JsonArray(ManagementFactory.getGarbageCollectorMXBeans().map { JsonPrimitive(it.name) }))
-            put("scope", "Prepared Ink outlines; fresh WINDING builder, detach, consumed point count and deterministic path/builder close. Raster: clear + draw already-built path on 512x512 CPU surface; readback outside timing.")
-            put("limitations", "Fixed case order and finite batch means; no confidence intervals, native allocation accounting, Compose materialization, compositor/vsync or physical latency. No geometry/extraction inside construction timing.")
+            put("scope", "Prepared Ink outlines; fresh WINDING builder, detach, consumed point count and deterministic path/builder close. Compose controls include wrapping/materialization and clearing/closing the native snapshot. Raster: clear + draw already-built path on 512x512 CPU surface; readback outside timing.")
+            put("limitations", "Fixed case order and finite batch means; no confidence intervals, native allocation accounting, compositor/vsync or physical latency. No geometry/extraction inside construction timing. Compose owns its private wrapper builder; retirement clears its geometry, and its empty native wrapper is collected by Skiko.")
         }.toMutableMap()
         try {
             val workloads = listOf(Triple("marker_1024", ViveBrushes.MARKER, 1024),
@@ -77,6 +79,24 @@ object InkPathConstructionBenchmark {
                             cases["$name.build.$method"] = measure(8) {
                                 build(outlines, bulkMode).use { path -> pathSink = path; path.pointsCount.toLong() }
                             }
+                            val composed = buildCompose(outlines, bulkMode)
+                            try {
+                                val native = composed.asSkiaPath()
+                                check(native.verbs.contentEquals(scalar.verbs) && native.points.contentEquals(scalar.points))
+                                check(pixels.contentEquals(raster(native)))
+                            } finally {
+                                retire(composed)
+                            }
+                            cases["$name.compose_build_and_retire.$method"] = measure(8) {
+                                val path = buildCompose(outlines, bulkMode)
+                                try {
+                                    val native = path.asSkiaPath()
+                                    pathSink = native
+                                    native.pointsCount.toLong()
+                                } finally {
+                                    retire(path)
+                                }
+                            }
                         }
                         cases["$name.raster_prebuilt"] = measure(16) {
                             surface.canvas.clear(0); surface.canvas.drawPath(bulk, paint)
@@ -107,6 +127,21 @@ object InkPathConstructionBenchmark {
             }
         }
         b.detach()
+    }
+
+    private fun buildCompose(outlines: List<FloatArray>, bulk: Boolean): androidx.compose.ui.graphics.Path =
+        if (bulk) build(outlines, true).asComposePath() else androidx.compose.ui.graphics.Path().apply {
+            fillType = androidx.compose.ui.graphics.PathFillType.NonZero
+            for (p in outlines) if (p.isNotEmpty()) {
+                moveTo(p[0], p[1])
+                for (i in 2 until p.size step 2) lineTo(p[i], p[i + 1])
+                close()
+            }
+        }
+
+    private fun retire(path: androidx.compose.ui.graphics.Path) {
+        path.reset()
+        path.asSkiaPath().close()
     }
 
     private fun measure(batch: Int, operation: () -> Long): JsonObject {

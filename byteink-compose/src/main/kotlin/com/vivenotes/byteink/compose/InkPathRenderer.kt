@@ -16,8 +16,6 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.PaintingStyle
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.ink.brush.Brush
 import androidx.ink.brush.BrushPaint
@@ -29,7 +27,8 @@ import androidx.ink.geometry.PartitionedMesh
 import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.core.InkMeshes
-import java.util.WeakHashMap
+import java.lang.ref.ReferenceQueue
+import java.lang.ref.WeakReference
 
 /**
  * Draws the real Ink geometry as antialiased filled paths on Compose Desktop/Skia.
@@ -47,11 +46,9 @@ import java.util.WeakHashMap
 public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
     init { require(cacheCapacity >= 0) { "cacheCapacity must be nonnegative" } }
 
-    private val shapes = object : LinkedHashMap<PartitionedMesh, List<Path>>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<PartitionedMesh, List<Path>>): Boolean =
-            size > cacheCapacity
-    }
-    private val live = WeakHashMap<InProgressStroke, LivePaths>()
+    private val shapes = LinkedHashMap<PartitionedMesh, List<InkRenderPath>>(16, 0.75f, true)
+    private val collectedStrokes = ReferenceQueue<InProgressStroke>()
+    private val live = HashMap<StrokeReference, LivePaths>()
     private val paint = Paint().apply { isAntiAlias = true; style = PaintingStyle.Fill }
     private val bounds = BoxAccumulator()
     private val coatBounds = BoxAccumulator()
@@ -81,15 +78,29 @@ public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
         viewport: Rect? = null,
         colorArgb: Int? = null,
     ): Boolean {
+        releaseCollectedPaths()
         val box = stroke.shape.computeBoundingBox() ?: return false
         if (stroke.inputs.size == 0) return false
         val matrix = strokeToCanvas.composeMatrix()
         if (!visible(box, matrix, viewport)) return false
         val paints = paints(stroke.brush)
-        val paths = shapes[stroke.shape] ?: List(stroke.shape.getRenderGroupCount()) { group ->
+        val paths = shapes[stroke.shape] ?: buildPaths(stroke.shape.getRenderGroupCount()) { group ->
             finishedPath(stroke.shape, group)
-        }.also { shapes[stroke.shape] = it }
-        drawPaths(canvas, paths, paints, stroke.brush, matrix, colorArgb)
+        }.also { paths ->
+            if (cacheCapacity > 0) {
+                shapes[stroke.shape] = paths
+                if (shapes.size > cacheCapacity) {
+                    val oldest = shapes.entries.iterator()
+                    oldest.next().value.forEach(InkRenderPath::close)
+                    oldest.remove()
+                }
+            }
+        }
+        try {
+            drawPaths(canvas, paths, paints, stroke.brush, matrix, colorArgb)
+        } finally {
+            if (cacheCapacity == 0) paths.forEach(InkRenderPath::close)
+        }
         return true
     }
 
@@ -101,18 +112,30 @@ public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
         viewport: Rect? = null,
         colorArgb: Int? = null,
     ): Boolean {
-        val brush = stroke.brush ?: return false
-        if (stroke.getInputCount() == 0) return false
+        releaseCollectedPaths()
+        val key = StrokeReference(stroke)
+        val brush = stroke.brush
+        if (brush == null || stroke.getInputCount() == 0) {
+            live.remove(key)?.paths?.forEach(InkRenderPath::close)
+            return false
+        }
         bounds.reset()
         repeat(brush.family.coats.size) { bounds.add(stroke.populateMeshBounds(it, coatBounds).box) }
-        val box = bounds.box ?: return false
+        val box = bounds.box ?: run {
+            live.remove(key)?.paths?.forEach(InkRenderPath::close)
+            return false
+        }
         val matrix = strokeToCanvas.composeMatrix()
         if (!visible(box, matrix, viewport)) return false
         val paints = paints(brush)
-        val cached = live[stroke]
+        val cached = live[key]
         val paths = if (cached != null && cached.version == stroke.shapeVersion()) cached.paths else {
-            List(brush.family.coats.size) { coat -> outlinePath(InkMeshes.outlines(stroke, coat)) }
-                .also { live[stroke] = LivePaths(stroke.shapeVersion(), it) }
+            buildPaths(brush.family.coats.size) { coat -> outlinePath(InkMeshes.outlines(stroke, coat)) }
+                .also {
+                    live[if (cached == null) StrokeReference(stroke, collectedStrokes) else key] =
+                        LivePaths(stroke.shapeVersion(), it)
+                    cached?.paths?.forEach(InkRenderPath::close)
+                }
         }
         drawPaths(canvas, paths, paints, brush, matrix, colorArgb)
         return true
@@ -120,8 +143,11 @@ public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
 
     /** Drops both finished and live path caches. */
     public fun clearCache() {
+        shapes.values.forEach { paths -> paths.forEach(InkRenderPath::close) }
         shapes.clear()
+        live.values.forEach { it.paths.forEach(InkRenderPath::close) }
         live.clear()
+        releaseCollectedPaths()
     }
 
     private fun supported(brush: Brush): Boolean = brush.family.coats.all { coat ->
@@ -137,27 +163,26 @@ public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
         }
     }
 
-    private fun drawPaths(canvas: Canvas, paths: List<Path>, paints: List<BrushPaint>, brush: Brush, matrix: Matrix, colorArgb: Int?) {
+    private fun drawPaths(canvas: Canvas, paths: List<InkRenderPath>, paints: List<BrushPaint>, brush: Brush, matrix: Matrix, colorArgb: Int?) {
         canvas.save()
         try {
             canvas.concat(matrix)
             paths.forEachIndexed { coat, path ->
                 paint.color = paints[coat].composeColor(brush, colorArgb)
-                canvas.drawPath(path, paint)
+                canvas.drawPath(path.path, paint)
             }
         } finally {
             canvas.restore()
         }
     }
 
-    private fun finishedPath(shape: PartitionedMesh, group: Int): Path {
+    private fun finishedPath(shape: PartitionedMesh, group: Int): InkRenderPath {
         val outlines = InkMeshes.outlines(shape, group)
         if (outlines.any { it.isNotEmpty() }) return outlinePath(outlines)
         // split() drops outlines. Fill all triangles together, with matching winding: this draws
         // their union without dark seams at shared edges or repeated alpha at self intersections.
         pathBuildCount++
-        return Path().apply {
-            fillType = PathFillType.NonZero
+        return buildInkPath {
             InkMeshes.triangles(shape, group).forEach { mesh ->
                 val p = mesh.positions
                 val indices = mesh.triangles
@@ -171,30 +196,47 @@ public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
                     moveTo(p[a], p[a + 1])
                     lineTo(p[b], p[b + 1])
                     lineTo(p[c], p[c + 1])
-                    close()
+                    closePath()
                 }
             }
         }
     }
 
-    private fun outlinePath(outlines: List<FloatArray>): Path {
+    private fun outlinePath(outlines: List<FloatArray>): InkRenderPath {
         pathBuildCount++
-        return Path().apply {
-            fillType = PathFillType.NonZero
-            outlines.forEach { points ->
-                if (points.isNotEmpty()) {
-                    moveTo(points[0], points[1])
-                    for (i in 2 until points.size step 2) lineTo(points[i], points[i + 1])
-                    close()
-                }
-            }
+        return outlineInkPath(outlines)
+    }
+
+    private fun buildPaths(count: Int, build: (Int) -> InkRenderPath): List<InkRenderPath> {
+        val result = ArrayList<InkRenderPath>(count)
+        try {
+            repeat(count) { result.add(build(it)) }
+            return result
+        } catch (failure: Throwable) {
+            result.forEach(InkRenderPath::close)
+            throw failure
+        }
+    }
+
+    private fun releaseCollectedPaths() {
+        while (true) {
+            val key = collectedStrokes.poll() ?: return
+            live.remove(key)?.paths?.forEach(InkRenderPath::close)
         }
     }
 
     private fun visible(box: Box, matrix: Matrix, viewport: Rect?): Boolean = viewport == null ||
         matrix.map(Rect(box.xMin, box.yMin, box.xMax, box.yMax)).inflate(1f).overlaps(viewport)
 
-    private class LivePaths(val version: Long, val paths: List<Path>)
+    private class LivePaths(val version: Long, val paths: List<InkRenderPath>)
+
+    private class StrokeReference(stroke: InProgressStroke, queue: ReferenceQueue<InProgressStroke>? = null) :
+        WeakReference<InProgressStroke>(stroke, queue) {
+        private val hash = System.identityHashCode(stroke)
+        override fun hashCode(): Int = hash
+        override fun equals(other: Any?): Boolean = this === other ||
+            (other is StrokeReference && get()?.let { it === other.get() } == true)
+    }
 }
 
 /** Draws Ink in this scope's pixel coordinates, with viewport culling. Reuse [renderer] across frames. */

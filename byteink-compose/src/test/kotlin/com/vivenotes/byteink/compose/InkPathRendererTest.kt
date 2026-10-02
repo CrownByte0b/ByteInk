@@ -2,8 +2,13 @@ package com.vivenotes.byteink.compose
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.asComposeCanvas
+import androidx.compose.ui.graphics.asSkiaPath
 import androidx.ink.brush.Brush
+import androidx.ink.brush.BrushBehavior
 import androidx.ink.brush.BrushCoat
 import androidx.ink.brush.BrushFamily
 import androidx.ink.brush.BrushPaint
@@ -11,12 +16,15 @@ import androidx.ink.brush.BrushTip
 import androidx.ink.brush.ExperimentalInkCustomBrushApi
 import androidx.ink.brush.InputToolType
 import androidx.ink.brush.SelfOverlap
+import androidx.ink.brush.behavior.SourceNode
+import androidx.ink.brush.behavior.TargetNode
 import androidx.ink.geometry.AffineTransform
 import androidx.ink.geometry.ImmutableAffineTransform
 import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.vive.PageStroke
+import com.vivenotes.byteink.core.InkMeshes
 import com.vivenotes.byteink.vive.ViveBrushes
 import com.vivenotes.byteink.vive.subtract
 import org.jetbrains.skia.Bitmap
@@ -147,6 +155,53 @@ class InkPathRendererTest {
         raster { assertFalse(renderer.draw(it, live)) }.use { image -> assertTrue(pixels(image).all { it == 0 }) }
     }
 
+    @Test
+    fun predictionsAreReplacedAndFinishingUsesTheWholeCurrentShape() {
+        val live = InProgressStroke()
+        live.start(ViveBrushes.highlighter(0x80ff0000.toInt(), 10f))
+        live.enqueueInputs(inputs(10f to 20f, 40f to 40f), MutableStrokeInputBatch().apply {
+            add(InputToolType.MOUSE, 110f, 110f, 200L)
+        })
+        live.updateShape(100L)
+        assertCurrentLiveMatchesScalar(live)
+        live.enqueueInputs(MutableStrokeInputBatch().apply {
+            add(InputToolType.MOUSE, 60f, 20f, 200L)
+        }, MutableStrokeInputBatch().apply { add(InputToolType.MOUSE, 100f, 30f, 300L) })
+        live.updateShape(200L)
+        assertCurrentLiveMatchesScalar(live)
+        live.updateShape(200L)
+        assertCurrentLiveMatchesScalar(live)
+        live.finishInput()
+        live.updateShape(1000L)
+        assertCurrentLiveMatchesScalar(live)
+        renderer.clearCache()
+        live.clear()
+    }
+
+    @Test
+    fun timedGeometryReplacesPathsWithoutAnyAdditionalInputs() {
+        val family = BrushFamily(BrushTip(behaviors = listOf(BrushBehavior(TargetNode(
+            target = TargetNode.Target.CORNER_ROUNDING_OFFSET,
+            targetModifierRangeStart = 0f,
+            targetModifierRangeEnd = 1f,
+            input = SourceNode(SourceNode.Source.TIME_SINCE_INPUT_IN_SECONDS, 0f, 1f),
+        )))))
+        val live = InProgressStroke()
+        live.start(Brush.createWithColorIntArgb(family, black, 20f, .25f))
+        live.enqueueInputs(inputs(40f to 40f), MutableStrokeInputBatch())
+        live.updateShape(0L)
+        assertCurrentLiveMatchesScalar(live)
+        val builds = renderer.pathBuildCount
+        live.updateShape(500L)
+        assertCurrentLiveMatchesScalar(live)
+        assertTrue(renderer.pathBuildCount > builds)
+        live.finishInput()
+        live.updateShape(2000L)
+        assertCurrentLiveMatchesScalar(live)
+        renderer.clearCache()
+        live.clear()
+    }
+
     @OptIn(ExperimentalInkCustomBrushApi::class)
     @Test
     fun coatsUseTheirOwnColourFunctionsInDrawOrder() {
@@ -183,6 +238,34 @@ class InkPathRendererTest {
 
     private fun marker(inputs: MutableStrokeInputBatch): Stroke =
         Stroke(ViveBrushes.brush(ViveBrushes.MARKER, 0, black, 10f), inputs.toImmutable())
+
+    private fun assertCurrentLiveMatchesScalar(live: InProgressStroke) {
+        val brush = requireNotNull(live.brush)
+        raster { renderer.draw(it, live) }.use { actual ->
+            raster { canvas ->
+                brush.family.coats.forEachIndexed { coat, value ->
+                    val path = Path().apply {
+                        fillType = PathFillType.NonZero
+                        for (p in InkMeshes.outlines(live, coat)) if (p.isNotEmpty()) {
+                            moveTo(p[0], p[1])
+                            for (i in 2 until p.size step 2) lineTo(p[i], p[i + 1])
+                            close()
+                        }
+                    }
+                    val snapshot = path.asSkiaPath()
+                    try {
+                        canvas.drawPath(path, Paint().apply {
+                            isAntiAlias = true
+                            color = value.paintPreferences.first().composeColor(brush, null)
+                        })
+                    } finally {
+                        path.reset()
+                        snapshot.close()
+                    }
+                }
+            }.use { expected -> assertEquals(pixels(expected), pixels(actual)) }
+        }
+    }
 
     private fun inputs(vararg points: Pair<Float, Float>): MutableStrokeInputBatch = MutableStrokeInputBatch().apply {
         points.forEachIndexed { i, (x, y) -> add(InputToolType.MOUSE, x, y, i * 100L) }
