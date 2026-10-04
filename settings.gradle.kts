@@ -40,7 +40,7 @@ include(":upstream")
 include(":ink-nativeloader")
 include(":byteink-core")
 include(":byteink-compose")
-include(":byteink-vive")
+include(":byteink-kit")
 include(":byteink-testing")
 
 // Unpublished verification and sample code.

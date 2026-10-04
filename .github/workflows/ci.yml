@@ -408,7 +408,7 @@ jobs:
           ./gradlew :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary
           :ink-nativeloader:publishAllPublicationsToGitHubPackagesRepository
           :byteink-core:publishAllPublicationsToGitHubPackagesRepository
-          :byteink-vive:publishAllPublicationsToGitHubPackagesRepository
+          :byteink-kit:publishAllPublicationsToGitHubPackagesRepository
           :byteink-compose:publishAllPublicationsToGitHubPackagesRepository
           :byteink-testing:publishAllPublicationsToGitHubPackagesRepository
         env:

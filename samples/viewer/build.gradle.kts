@@ -7,7 +7,7 @@ plugins {
 
 dependencies {
     implementation(project(":byteink-compose"))
-    implementation(project(":byteink-vive"))
+    implementation(project(":byteink-kit"))
     implementation(project(":byteink-testing"))
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.core)

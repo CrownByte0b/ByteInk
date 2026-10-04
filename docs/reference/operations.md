@@ -1,6 +1,6 @@
 # Page operations and selection
 
-Module: `byteink-vive`. [Conventions](index.md). Signatures and defaults follow the current source.
+Module: `byteink-kit`. [Conventions](index.md). Signatures and defaults follow the current source.
 
 ## InkGeometry
 
@@ -17,7 +17,7 @@ public data class InkPoint(val x: Float, val y: Float)
 | `x` | `Float` | `Required` | Horizontal coordinate; surface pixels for pointer samples, page dp for InkPoint. |
 | `y` | `Float` | `Required` | Vertical coordinate; surface pixels for pointer samples, page dp for InkPoint. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L4)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L4)
 
 ### `InkBounds`
 
@@ -34,7 +34,7 @@ public data class InkBounds(val left: Float, val top: Float, val right: Float, v
 | `right` | `Float` | `Required` | Right bound in page dp. |
 | `bottom` | `Float` | `Required` | Bottom bound in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L7)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L7)
 
 ### `InkBounds.center`
 
@@ -44,7 +44,7 @@ public val center: InkPoint
 
 Midpoint of the page rectangle.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L9)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L9)
 
 ### `InkBounds.contains`
 
@@ -56,7 +56,7 @@ public fun contains(point: InkPoint): Boolean
 | --- | --- | --- | --- |
 | `point` | `InkPoint` | `Required` | Point in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L11)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L11)
 
 ### `InkBounds.translated`
 
@@ -69,7 +69,7 @@ public fun translated(dx: Float, dy: Float): InkBounds
 | `dx` | `Float` | `Required` | Horizontal translation in page dp. |
 | `dy` | `Float` | `Required` | Vertical translation in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L13)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L13)
 
 ### `InkBounds.scaled`
 
@@ -83,7 +83,7 @@ public fun scaled(anchor: InkPoint, scaleX: Float, scaleY: Float): InkBounds
 | `scaleX` | `Float` | `Required` | Horizontal scale multiplier; 1 leaves that axis unchanged. |
 | `scaleY` | `Float` | `Required` | Vertical scale multiplier; 1 leaves that axis unchanged. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L15)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L15)
 
 ### `List<InkBounds>.unionBounds`
 
@@ -91,7 +91,7 @@ public fun scaled(anchor: InkPoint, scaleX: Float, scaleY: Float): InkBounds
 public fun List<InkBounds>.unionBounds(): InkBounds?
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L25)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L25)
 
 ### `InkProjectionKey`
 
@@ -106,7 +106,7 @@ public data class InkProjectionKey(val strokeId: String, val projection: Int)
 | `strokeId` | `String` | `Required` | Stored stroke-row ID owning this process-local projection key. |
 | `projection` | `Int` | `Required` | Process-local piece number; preserve with copy, never store as a database identifier. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L41)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L41)
 
 ### `InkLassoMove`
 
@@ -122,7 +122,7 @@ public data class InkLassoMove( val path: List<InkPoint>, val targetIds: Set<Str
 | `dx` | `Float` | `Required` | Horizontal translation in page dp. |
 | `dy` | `Float` | `Required` | Vertical translation in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L44)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L44)
 
 ### `InkLassoResize`
 
@@ -139,7 +139,7 @@ public data class InkLassoResize( val path: List<InkPoint>, val targetIds: Set<S
 | `scaleX` | `Float` | `Required` | Horizontal scale multiplier; 1 leaves that axis unchanged. |
 | `scaleY` | `Float` | `Required` | Vertical scale multiplier; 1 leaves that axis unchanged. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L53)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L53)
 
 ### `InkLassoSelection`
 
@@ -154,7 +154,7 @@ public data class InkLassoSelection( val path: List<InkPoint>, val targetIds: Se
 | `projections` | `Set<InkProjectionKey>` | `Required` | Process-local keys of selected pieces; use only with the matching live page snapshot. |
 | `bounds` | `InkBounds` | `Required` | Page-space bounds; a callback returning null omits that item's geometry from queries. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L63)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkGeometry.kt#L63)
 
 ## PageStroke
 
@@ -181,7 +181,7 @@ public data class PageStroke( val id: String, val stroke: Stroke, val offsetX: F
 | `groupId` | `String?` | `null` | Optional logical group ID; grouped ink selects together. |
 | `projection` | `Int` | `newProjection()` | Process-local piece number; preserve with copy, never store as a database identifier. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L22)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L22)
 
 ### `PageStroke.pageBounds`
 
@@ -191,7 +191,7 @@ val pageBounds: InkBounds?
 
 Lazily computed page rectangle, or null for no geometry; PageStroke assumes axis-aligned positive scales.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L50)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L50)
 
 ### `PageStroke.projectionKey`
 
@@ -201,7 +201,7 @@ val projectionKey: InkProjectionKey
 
 Stored row ID plus process-local piece number, carried through copy operations.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L62)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L62)
 
 ### `PageStroke.strokeToPageTransform`
 
@@ -209,7 +209,7 @@ Stored row ID plus process-local piece number, carried through copy operations.
 public fun strokeToPageTransform(): AffineTransform
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L65)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L65)
 
 ### `List<PageStroke>.keepingProjectionsOf`
 
@@ -221,7 +221,7 @@ public fun List<PageStroke>.keepingProjectionsOf(previous: List<PageStroke>): Li
 | --- | --- | --- | --- |
 | `previous` | `List<PageStroke>` | `Required` | Prior page projections used to retain matching row/piece/bounds identities. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L85)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L85)
 
 ### `Stroke.hasGeometry`
 
@@ -231,7 +231,7 @@ public val Stroke.hasGeometry: Boolean
 
 Whether the native bounding box exists; guard exact native geometry tests with it.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L108)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L108)
 
 ### `PageStroke.touches`
 
@@ -243,7 +243,7 @@ public fun PageStroke.touches(mask: Stroke): Boolean
 | --- | --- | --- | --- |
 | `mask` | `Stroke` | `Required` | Eraser geometry in page coordinates; canonicalize through the codec before preview/target selection. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L114)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L114)
 
 ### `List<PageStroke>.targetsFor`
 
@@ -255,7 +255,7 @@ public fun List<PageStroke>.targetsFor(mask: Stroke): List<String>
 | --- | --- | --- | --- |
 | `mask` | `Stroke` | `Required` | Eraser geometry in page coordinates; canonicalize through the codec before preview/target selection. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L124)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L124)
 
 ### `List<PageStroke>.subtract`
 
@@ -268,7 +268,7 @@ public fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<String>
 | `mask` | `Stroke` | `Required` | Eraser geometry in page coordinates; canonicalize through the codec before preview/target selection. |
 | `targetIds` | `Collection<String>` | `Required` | Stored stroke-row IDs the operation applies to; preserve exact same-page targets. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L140)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L140)
 
 ### `List<PageStroke>.eraseObjects`
 
@@ -281,7 +281,7 @@ public fun List<PageStroke>.eraseObjects(mask: Stroke, targetIds: Collection<Str
 | `mask` | `Stroke` | `Required` | Eraser geometry in page coordinates; canonicalize through the codec before preview/target selection. |
 | `targetIds` | `Collection<String>` | `Required` | Stored stroke-row IDs the operation applies to; preserve exact same-page targets. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L172)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L172)
 
 ### `InkPieceErase`
 
@@ -297,7 +297,7 @@ public data class InkPieceErase(val mask: Stroke, val rowId: String, val after: 
 | `rowId` | `String` | `Required` | Stored stroke-row ID owning the projection. |
 | `after` | `List<PageStroke>` | `Required` | Resulting page projections; commit matching stored operations separately. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L202)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L202)
 
 ### `InkProjectionDelete`
 
@@ -313,7 +313,7 @@ public data class InkProjectionDelete( val erases: List<InkPieceErase>, val whol
 | `wholeRows` | `List<String>` | `Required` | Rows whose every projection is deleted; persist row tombstones. |
 | `after` | `List<PageStroke>` | `Required` | Resulting page projections; commit matching stored operations separately. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L205)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L205)
 
 ### `List<PageStroke>.planProjectionDelete`
 
@@ -325,7 +325,7 @@ public fun List<PageStroke>.planProjectionDelete(held: Set<InkProjectionKey>): I
 | --- | --- | --- | --- |
 | `held` | `Set<InkProjectionKey>` | `Required` | Selected projection keys to delete; returned plans may leave unprovable pieces intact. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L219)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L219)
 
 ### `PageStroke.pointOnInk`
 
@@ -333,7 +333,7 @@ public fun List<PageStroke>.planProjectionDelete(held: Set<InkProjectionKey>): I
 public fun PageStroke.pointOnInk(): InkPoint?
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L271)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L271)
 
 ### `List<PageStroke>.recolor`
 
@@ -346,7 +346,7 @@ public fun List<PageStroke>.recolor(ids: Collection<String>, colorArgb: Int): Li
 | `ids` | `Collection<String>` | `Required` | Stored stroke-row IDs to recolor. |
 | `colorArgb` | `Int` | `Required` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L318)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L318)
 
 ### `List<PageStroke>.regroup`
 
@@ -358,7 +358,7 @@ public fun List<PageStroke>.regroup(groups: Map<String, String?>): List<PageStro
 | --- | --- | --- | --- |
 | `groups` | `Map<String, String?>` | `Required` | Map of stored row ID to group ID; null removes a row from a group. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L333)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L333)
 
 ### `PageStroke.translatedCopy`
 
@@ -371,7 +371,7 @@ public fun PageStroke.translatedCopy(dx: Float, dy: Float): Stroke
 | `dx` | `Float` | `Required` | Horizontal translation in page dp. |
 | `dy` | `Float` | `Required` | Vertical translation in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L343)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L343)
 
 ### `List<PageStroke>.moveSelected`
 
@@ -383,7 +383,7 @@ public fun List<PageStroke>.moveSelected(move: InkLassoMove): List<PageStroke>
 | --- | --- | --- | --- |
 | `move` | `InkLassoMove` | `Required` | Completed lasso translation, including held projection keys and stored row targets. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L373)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L373)
 
 ### `List<PageStroke>.resizeSelected`
 
@@ -395,7 +395,7 @@ public fun List<PageStroke>.resizeSelected(resize: InkLassoResize): List<PageStr
 | --- | --- | --- | --- |
 | `resize` | `InkLassoResize` | `Required` | Completed lasso resize, including anchor, scale, held keys and stored row targets. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L382)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L382)
 
 ### `List<PageStroke>.replayMove`
 
@@ -410,7 +410,7 @@ public fun List<PageStroke>.replayMove( path: List<InkPoint>, targetIds: Collect
 | `dx` | `Float` | `Required` | Horizontal translation in page dp. |
 | `dy` | `Float` | `Required` | Vertical translation in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L399)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L399)
 
 ### `List<PageStroke>.replayResize`
 
@@ -426,7 +426,7 @@ public fun List<PageStroke>.replayResize( path: List<InkPoint>, targetIds: Colle
 | `scaleX` | `Float` | `Required` | Horizontal scale multiplier; 1 leaves that axis unchanged. |
 | `scaleY` | `Float` | `Required` | Vertical scale multiplier; 1 leaves that axis unchanged. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L423)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageStroke.kt#L423)
 
 ## Lasso
 
@@ -436,7 +436,7 @@ public fun List<PageStroke>.replayResize( path: List<InkPoint>, targetIds: Colle
 public const val DEFAULT_LASSO_EDGE_TOLERANCE: Float = 4f
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L16)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L16)
 
 ### `List<PageStroke>.selectInkWithLasso`
 
@@ -449,7 +449,7 @@ public fun List<PageStroke>.selectInkWithLasso( path: List<InkPoint>, edgeTolera
 | `path` | `List<InkPoint>` | `Required` | Page-space lasso vertices; codec requires at least three finite points. |
 | `edgeTolerance` | `Float` | `DEFAULT_LASSO_EDGE_TOLERANCE` | Lasso edge reach in page dp; default is 4f. Use finite nonnegative values. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L22)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L22)
 
 ### `List<PageStroke>.selectWithLasso`
 
@@ -462,7 +462,7 @@ public fun List<PageStroke>.selectWithLasso( path: List<InkPoint>, edgeTolerance
 | `path` | `List<InkPoint>` | `Required` | Page-space lasso vertices; codec requires at least three finite points. |
 | `edgeTolerance` | `Float` | `DEFAULT_LASSO_EDGE_TOLERANCE` | Lasso edge reach in page dp; default is 4f. Use finite nonnegative values. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L36)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L36)
 
 ### `LassoShape`
 
@@ -477,7 +477,7 @@ public class LassoShape( public val path: List<InkPoint>, private val edgeTolera
 | `path` | `List<InkPoint>` | `Required` | Page-space lasso vertices; codec requires at least three finite points. |
 | `edgeTolerance` | `Float` | `DEFAULT_LASSO_EDGE_TOLERANCE` | Lasso edge reach in page dp; default is 4f. Use finite nonnegative values. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L75)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L75)
 
 ### `LassoShape.usable`
 
@@ -487,7 +487,7 @@ public val usable: Boolean
 
 Whether the lasso has at least three vertices.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L79)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L79)
 
 ### `LassoShape.acceptsWholeBox`
 
@@ -497,7 +497,7 @@ public val acceptsWholeBox: Boolean
 
 Whether the polygon is convex, enabling the four-corner containment shortcut.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L87)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L87)
 
 ### `LassoShape.couldContain`
 
@@ -509,7 +509,7 @@ public fun couldContain(bounds: InkBounds): Boolean
 | --- | --- | --- | --- |
 | `bounds` | `InkBounds` | `Required` | Page-space bounds; a callback returning null omits that item's geometry from queries. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L90)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L90)
 
 ### `LassoShape.contains`
 
@@ -521,7 +521,7 @@ public fun contains(stroke: PageStroke): Boolean
 | --- | --- | --- | --- |
 | `stroke` | `PageStroke` | `Required` | Native finished or live stroke, as specified by the type. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L93)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L93)
 
 ### `pointInOrNearPolygon`
 
@@ -535,7 +535,7 @@ public fun pointInOrNearPolygon(point: InkPoint, polygon: List<InkPoint>, edgeTo
 | `polygon` | `List<InkPoint>` | `Required` | Nonempty page-space polygon for point tests; use at least three finite vertices. |
 | `edgeTolerance` | `Float` | `Required` | Lasso edge reach in page dp; default is 4f. Use finite nonnegative values. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L228)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L228)
 
 ### `InkPoint.distanceSquaredToSegment`
 
@@ -548,7 +548,7 @@ public fun InkPoint.distanceSquaredToSegment(start: InkPoint, end: InkPoint): Fl
 | `start` | `InkPoint` | `Required` | Segment start in page dp. |
 | `end` | `InkPoint` | `Required` | Segment end in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L241)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L241)
 
 ### `List<InkPoint>.closesIntoALoop`
 
@@ -560,7 +560,7 @@ public fun List<InkPoint>.closesIntoALoop(touch: Float): Boolean
 | --- | --- | --- | --- |
 | `touch` | `Float` | `Required` | Loop-closing reach in page dp; the algorithm applies a minimum of 2 dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L266)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/Lasso.kt#L266)
 
 ## InkPageIndex
 
@@ -576,7 +576,7 @@ public class InkPageIndex(public val strokes: List<PageStroke>)
 | --- | --- | --- | --- |
 | `strokes` | `List<PageStroke>` | `Required` | Stroke entries or stored rows, as specified by the type; preserve their order. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L19)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L19)
 
 ### `InkPageIndex.touching`
 
@@ -588,7 +588,7 @@ public fun touching(mask: Stroke): List<PageStroke>
 | --- | --- | --- | --- |
 | `mask` | `Stroke` | `Required` | Eraser geometry in page coordinates; canonicalize through the codec before preview/target selection. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L26)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L26)
 
 ### `InkPageIndex.targetsFor`
 
@@ -600,7 +600,7 @@ public fun targetsFor(mask: Stroke): List<String>
 | --- | --- | --- | --- |
 | `mask` | `Stroke` | `Required` | Eraser geometry in page coordinates; canonicalize through the codec before preview/target selection. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L32)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L32)
 
 ### `InkPageIndex.selectWithLasso`
 
@@ -613,7 +613,7 @@ public fun selectWithLasso(path: List<InkPoint>, edgeTolerance: Float = DEFAULT_
 | `path` | `List<InkPoint>` | `Required` | Page-space lasso vertices; codec requires at least three finite points. |
 | `edgeTolerance` | `Float` | `DEFAULT_LASSO_EDGE_TOLERANCE` | Lasso edge reach in page dp; default is 4f. Use finite nonnegative values. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L35)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L35)
 
 ### `InkPageIndex.selectInkWithLasso`
 
@@ -626,7 +626,7 @@ public fun selectInkWithLasso(path: List<InkPoint>, edgeTolerance: Float = DEFAU
 | `path` | `List<InkPoint>` | `Required` | Page-space lasso vertices; codec requires at least three finite points. |
 | `edgeTolerance` | `Float` | `DEFAULT_LASSO_EDGE_TOLERANCE` | Lasso edge reach in page dp; default is 4f. Use finite nonnegative values. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L48)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L48)
 
 ### `InkPageIndex.at`
 
@@ -639,7 +639,7 @@ public fun at(point: InkPoint, reach: Float): List<PageStroke>
 | `point` | `InkPoint` | `Required` | Point in page dp. |
 | `reach` | `Float` | `Required` | Half-side of the square point-hit region in page dp; use finite nonnegative values. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L54)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L54)
 
 ### `InkPageIndex.crossing`
 
@@ -653,7 +653,7 @@ public fun crossing(from: InkPoint, to: InkPoint, width: Float): List<PageStroke
 | `to` | `InkPoint` | `Required` | Band end in page dp. |
 | `width` | `Float` | `Required` | Finite nonnegative eraser-band diameter in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L68)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/InkPageIndex.kt#L68)
 
 ## PageBounds
 
@@ -665,7 +665,7 @@ Origin walls are MIN_X = MIN_Y = 0f. clampTranslation returns the applied delta;
 public object PageBounds
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L9)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L9)
 
 ### `PageBounds.MIN_X`
 
@@ -673,7 +673,7 @@ public object PageBounds
 public const val MIN_X: Float = 0f
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L11)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L11)
 
 ### `PageBounds.MIN_Y`
 
@@ -681,7 +681,7 @@ public const val MIN_X: Float = 0f
 public const val MIN_Y: Float = 0f
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L12)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L12)
 
 ### `PageBounds.clampTranslation`
 
@@ -695,7 +695,7 @@ public fun clampTranslation(bounds: InkBounds, dx: Float, dy: Float): InkPoint
 | `dx` | `Float` | `Required` | Horizontal translation in page dp. |
 | `dy` | `Float` | `Required` | Vertical translation in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L19)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L19)
 
 ### `PageBounds.clampScale`
 
@@ -710,4 +710,4 @@ public fun clampScale(bounds: InkBounds, anchor: InkPoint, scaleX: Float, scaleY
 | `scaleX` | `Float` | `Required` | Horizontal scale multiplier; 1 leaves that axis unchanged. |
 | `scaleY` | `Float` | `Required` | Vertical scale multiplier; 1 leaves that axis unchanged. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-vive/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L27)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/PageBounds.kt#L27)

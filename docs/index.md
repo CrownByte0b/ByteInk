@@ -20,7 +20,7 @@ The header search indexes all guides, symbols and parameter tables. Search a nam
 | --- | --- |
 | `byteink-core` | AndroidX Ink types, native runtime, geometry snapshots, spatial queries |
 | `byteink-compose` | Live authoring and Compose/Skia rendering |
-| `byteink-vive` | Brushes, stored rows, codecs, erasing, lasso and replay |
+| `byteink-kit` | Brushes, stored rows, codecs, erasing, lasso and replay |
 | `byteink-testing` | Optional notebook fixtures and image utilities |
 | `ink-nativeloader` | Transitive Linux/Windows native bundle |
 

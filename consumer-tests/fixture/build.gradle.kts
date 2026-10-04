@@ -27,7 +27,7 @@ tasks.withType<JavaCompile>().configureEach { options.release = 25 }
 
 dependencies {
     implementation("$byteinkGroup:byteink-compose:$byteinkVersion")
-    implementation("$byteinkGroup:byteink-vive:$byteinkVersion")
+    implementation("$byteinkGroup:byteink-kit:$byteinkVersion")
     // The application's OS-specific Compose runtime supplies Skia. ByteInk itself stays portable.
     runtimeOnly("org.jetbrains.compose.desktop:desktop-jvm-$operatingSystem-x64:$composeVersion")
 }
@@ -41,7 +41,7 @@ val verifyConsumerClasspath = tasks.register("verifyConsumerClasspath") {
     val runtime = configurations.runtimeClasspath
     doLast {
         val components = runtime.get().incoming.resolutionResult.allComponents.map { it.id }
-        for (module in listOf("byteink-core", "byteink-compose", "byteink-vive", "ink-nativeloader")) {
+        for (module in listOf("byteink-core", "byteink-compose", "byteink-kit", "ink-nativeloader")) {
             val matching = components.filter { component ->
                 when (component) {
                     is ModuleComponentIdentifier -> component.group == byteinkGroup &&

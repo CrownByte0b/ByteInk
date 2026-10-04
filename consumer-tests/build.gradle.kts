@@ -21,7 +21,7 @@ tasks.test {
     dependsOn(
         ":ink-nativeloader:publishAllPublicationsToBuildRepository",
         ":byteink-core:publishAllPublicationsToBuildRepository",
-        ":byteink-vive:publishAllPublicationsToBuildRepository",
+        ":byteink-kit:publishAllPublicationsToBuildRepository",
         ":byteink-compose:publishAllPublicationsToBuildRepository",
     )
     systemProperty("byteink.test.repository", rootProject.layout.buildDirectory.dir("repo").get().asFile.path)

@@ -9,7 +9,7 @@ plugins {
 }
 
 dependencies {
-    api(project(":byteink-vive"))
+    api(project(":byteink-kit"))
     api(project(":byteink-compose"))
     implementation(libs.sqlite.jdbc)
     implementation(libs.kotlinx.serialization.json)

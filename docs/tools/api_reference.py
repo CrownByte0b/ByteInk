@@ -16,9 +16,9 @@ GROUPS = {
     "core": ("Engine and geometry", "byteink-core", ["InkRuntime", "InkMeshes", "SpatialIndex"]),
     "authoring": ("Input and authoring", "byteink-compose", ["InkPointerSample", "InkAuthoringController", "InkDrawingSurface"]),
     "rendering": ("Rendering and caches", "byteink-compose", ["InkPathRenderer", "InkScene", "InkSceneRasterCache"]),
-    "brushes": ("Brushes and tools", "byteink-vive", ["ViveBrushes", "ViveInkTool", "InkColors"]),
-    "storage": ("Stored rows and codecs", "byteink-vive", ["StoredInk", "ViveInkCodec", "ViveInkPage", "DecodedInkOperation"]),
-    "operations": ("Page operations and selection", "byteink-vive", ["InkGeometry", "PageStroke", "Lasso", "InkPageIndex", "PageBounds"]),
+    "brushes": ("Brushes and tools", "byteink-kit", ["ViveBrushes", "ViveInkTool", "InkColors"]),
+    "storage": ("Stored rows and codecs", "byteink-kit", ["StoredInk", "ViveInkCodec", "ViveInkPage", "DecodedInkOperation"]),
+    "operations": ("Page operations and selection", "byteink-kit", ["InkGeometry", "PageStroke", "Lasso", "InkPageIndex", "PageBounds"]),
     "loader": ("Native loading", "ink-nativeloader", ["InkNativeLibrary"]),
     "testing": ("Notebook utilities", "byteink-testing", ["ViveNotebook", "NotebookInkImages"]),
 }

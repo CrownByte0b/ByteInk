@@ -11,7 +11,7 @@ dependencies {
     api(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.kotlinx.coroutines.core)
-    testImplementation(project(":byteink-vive"))
+    testImplementation(project(":byteink-kit"))
     testImplementation(compose.desktop.currentOs)
     testImplementation(libs.compose.ui.test)
 }

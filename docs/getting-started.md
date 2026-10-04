@@ -33,7 +33,7 @@ kotlin {
     jvm()
     sourceSets.jvmMain.dependencies {
         implementation("com.vivenotes.byteink:byteink-compose:0.1.0-SNAPSHOT")
-        implementation("com.vivenotes.byteink:byteink-vive:0.1.0-SNAPSHOT")
+        implementation("com.vivenotes.byteink:byteink-kit:0.1.0-SNAPSHOT")
         implementation(compose.desktop.currentOs)
     }
 }
@@ -45,7 +45,7 @@ compose.desktop {
 }
 ```
 
-Apply the Kotlin Compose compiler and Compose Multiplatform plugins in your application. The application supplies its OS-specific Compose/Skiko runtime. `byteink-compose` and `byteink-vive` bring in core, the pinned AndroidX modules and the native loader.
+Apply the Kotlin Compose compiler and Compose Multiplatform plugins in your application. The application supplies its OS-specific Compose/Skiko runtime. `byteink-compose` and `byteink-kit` bring in core, the pinned AndroidX modules and the native loader.
 
 For a plain JVM project, put the same dependencies in `dependencies { ... }`. [The example build](examples/build.gradle.kts) uses a standalone JVM consumer.
 

@@ -62,7 +62,7 @@ class PublishedConsumerSmokeTest {
         }
         reports.resolve("gradle.log").writeText(result.output)
         assertContains(result.output, "byteink-consumer-smoke: passed")
-        for (module in listOf("byteink-core", "byteink-compose", "byteink-vive", "ink-nativeloader")) {
+        for (module in listOf("byteink-core", "byteink-compose", "byteink-kit", "ink-nativeloader")) {
             assertContains(result.output, "byteink-consumer-component: $module=" + if (composite) "project" else "published")
         }
         val report = Properties().apply { reports.resolve("smoke.properties").inputStream().use { load(it) } }

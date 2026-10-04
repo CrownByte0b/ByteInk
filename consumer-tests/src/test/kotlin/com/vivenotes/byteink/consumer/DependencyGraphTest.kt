@@ -40,8 +40,8 @@ class DependencyGraphTest {
     }
 
     @Test
-    fun byteinkViveBringsTheCoreWithIt() {
-        assertEquals(coreClasspath + "byteink-vive-$byteink.jar", inkJars(resolve("vive")))
+    fun byteinkKitBringsTheCoreWithIt() {
+        assertEquals(coreClasspath + "byteink-kit-$byteink.jar", inkJars(resolve("kit")))
     }
 
     @Test
@@ -101,7 +101,7 @@ class DependencyGraphTest {
                     when (scenario) {
                         "loader" -> implementation("$group:ink-nativeloader:$nativeloader")
                         "core" -> implementation("$group:byteink-core:$byteink")
-                        "vive" -> implementation("$group:byteink-vive:$byteink")
+                        "kit" -> implementation("$group:byteink-kit:$byteink")
                         "compose" -> implementation("$group:byteink-compose:$byteink")
                         else -> {
                             implementation("$group:byteink-core:$byteink")

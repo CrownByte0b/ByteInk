@@ -1,7 +1,7 @@
 # Desktop stroke authoring
 
 Use `com.vivenotes.byteink:byteink-compose:0.1.0-SNAPSHOT` for the drawing surface and
-`com.vivenotes.byteink:byteink-vive:0.1.0-SNAPSHOT` for catalog tools and stored rows.
+`com.vivenotes.byteink:byteink-kit:0.1.0-SNAPSHOT` for catalog tools and stored rows.
 The real Ink engine and packaged native loader arrive transitively. The consuming application
 supplies Compose Desktop's platform runtime and enables JVM native access.
 

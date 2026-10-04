@@ -11,11 +11,11 @@ The default group is `com.vivenotes.byteink`. The development coordinates are:
 | --- | --- | --- |
 | `byteink-core` | `0.1.0-SNAPSHOT` | Stroke engine, mesh geometry, spatial index and hit testing |
 | `byteink-compose` | `0.1.0-SNAPSHOT` | Skia rendering and live authoring |
-| `byteink-vive` | `0.1.0-SNAPSHOT` | ViveNotes brush catalog, row codecs and operation replay |
+| `byteink-kit` | `0.1.0-SNAPSHOT` | ViveNotes brush catalog, row codecs and operation replay |
 | `byteink-testing` | `0.1.0-SNAPSHOT` | Optional JVM fixture and comparison support |
 | `ink-nativeloader` / `ink-nativeloader-jvm` | `1.1.0-alpha06-byteink.1` | Transitive loader with both native platforms |
 
-`byteink-compose` and `byteink-vive` bring in `byteink-core`, the four unchanged
+`byteink-compose` and `byteink-kit` bring in `byteink-core`, the four unchanged
 AndroidX Ink modules and ByteInk's native loader. They exclude Google's loader.
 Adding Google's loader separately causes a Gradle capability conflict; remove that
 dependency, or exclude both `androidx.ink:ink-nativeloader` and
@@ -51,7 +51,7 @@ Use these in the desktop application's `jvmMain` dependencies:
 
 ```kotlin
 implementation("com.vivenotes.byteink:byteink-compose:0.1.0-SNAPSHOT")
-implementation("com.vivenotes.byteink:byteink-vive:0.1.0-SNAPSHOT")
+implementation("com.vivenotes.byteink:byteink-kit:0.1.0-SNAPSHOT")
 implementation(compose.desktop.currentOs)
 ```
 

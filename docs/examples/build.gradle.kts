@@ -19,7 +19,7 @@ val desktopOs = when {
 
 dependencies {
     implementation("com.vivenotes.byteink:byteink-compose:0.1.0-SNAPSHOT")
-    implementation("com.vivenotes.byteink:byteink-vive:0.1.0-SNAPSHOT")
+    implementation("com.vivenotes.byteink:byteink-kit:0.1.0-SNAPSHOT")
     implementation("com.vivenotes.byteink:byteink-testing:0.1.0-SNAPSHOT")
     implementation("org.jetbrains.compose.desktop:desktop-jvm-$desktopOs-x64:1.12.1")
 }

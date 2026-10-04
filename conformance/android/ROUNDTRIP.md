@@ -59,7 +59,7 @@ Android input decoding is lossy. On the long probes, Android's own decode/re-enc
 changes the quantized protobuf and gzip bytes relative to the original encoding.
 The harness records that separate result; it still requires exact fresh encoding
 and preserves original stored BLOBs. Permanent targets in
-[`byteink-vive` encoding fixtures](../../byteink-vive/src/test/resources/ink/androidx-ink-1.1.0-alpha06/encoding/)
+[`byteink-kit` encoding fixtures](../../byteink-kit/src/test/resources/ink/androidx-ink-1.1.0-alpha06/encoding/)
 capture both original Android encodings and Android's decoded re-encodings. The
 codec tests compare against the corresponding target, including all 840 existing
 matrix decoded-input re-encodings.

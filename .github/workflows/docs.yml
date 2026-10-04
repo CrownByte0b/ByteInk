@@ -9,7 +9,7 @@ on:
       - '.github/workflows/docs.yml'
       - 'byteink-core/src/**'
       - 'byteink-compose/src/**'
-      - 'byteink-vive/src/**'
+      - 'byteink-kit/src/**'
       - 'byteink-testing/src/**'
       - 'ink-nativeloader/src/**'
   pull_request:
@@ -20,7 +20,7 @@ on:
       - '.github/workflows/docs.yml'
       - 'byteink-core/src/**'
       - 'byteink-compose/src/**'
-      - 'byteink-vive/src/**'
+      - 'byteink-kit/src/**'
       - 'byteink-testing/src/**'
       - 'ink-nativeloader/src/**'
   workflow_dispatch:
