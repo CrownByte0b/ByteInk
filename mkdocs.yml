@@ -1,0 +1,70 @@
+site_name: ByteInk API wiki
+site_description: Practical Kotlin API guides and complete ByteInk parameter reference.
+site_url: !ENV [MKDOCS_SITE_URL, null]
+repo_url: https://github.com/CrownByte0b/ByteInk
+edit_uri: ""
+docs_dir: docs
+site_dir: build/wiki
+strict: true
+validation:
+  links:
+    anchors: warn
+theme:
+  name: material
+  font: false
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+plugins:
+  - search:
+      lang: en
+markdown_extensions:
+  - admonition
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+exclude_docs: |
+  requirements.txt
+  tools/
+  examples/build/
+nav:
+  - Overview: index.md
+  - Get started: getting-started.md
+  - Guides:
+      - Draw and capture input: guides/authoring.md
+      - Render and cache: guides/rendering.md
+      - Save and load: guides/storage.md
+      - Erase, select and transform: guides/operations.md
+      - Notebook utilities: guides/notebooks.md
+  - API reference:
+      - Reference conventions: reference/index.md
+      - Engine and geometry: reference/core.md
+      - Input and authoring: reference/authoring.md
+      - Rendering and caches: reference/rendering.md
+      - Brushes and tools: reference/brushes.md
+      - Stored rows and codecs: reference/storage.md
+      - Page operations and selection: reference/operations.md
+      - Native loading: reference/loader.md
+      - Notebook utilities: reference/testing.md
+  - Troubleshooting: troubleshooting.md
+  - Build this wiki: wiki.md
