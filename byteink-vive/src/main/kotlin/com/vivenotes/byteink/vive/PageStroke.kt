@@ -137,27 +137,29 @@ private val Stroke.isDrawnFromOutlines: Boolean
  * piece of a cut stroke becomes its own projection, so a later Object erase or lasso can take one of
  * them — except a stroke drawn from its outlines, which stays one projection however it is cut.
  */
-@OptIn(ExperimentalInkEraserApi::class)
 public fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<String>): List<PageStroke> {
     val targets = targetIds.toSet()
     if (targets.isEmpty() || !mask.hasGeometry) return this
-    return flatMap { pageStroke ->
-        if (pageStroke.id !in targets) {
-            listOf(pageStroke)
-        } else {
-            val cut = pageStroke.stroke.subtract(
-                maskShape = mask.shape,
-                maskToWorldTransform = AffineTransform.IDENTITY,
-                strokeToWorldTransform = pageStroke.strokeToPageTransform(),
-            )
-            if (cut.isDrawnFromOutlines) {
-                // Erased down to nothing is erased, not an invisible stroke that aborts the next
-                // comparison it meets. What is left is new geometry, so a new projection.
-                if (cut.hasGeometry) listOf(pageStroke.copy(stroke = cut, projection = newProjection())) else emptyList()
-            } else {
-                cut.split(strokeToWorldTransform = pageStroke.strokeToPageTransform(), tolerance = 0f)
-                    .map { component -> pageStroke.copy(stroke = component, projection = newProjection()) }
-            }
+    return buildList(size) {
+        for (stroke in this@subtract) {
+            if (stroke.id in targets) stroke.appendSubtracted(mask, this) else add(stroke)
+        }
+    }
+}
+
+internal fun List<PageStroke>.subtractTargeted(mask: Stroke): List<PageStroke> {
+    if (!mask.hasGeometry) return this
+    return buildList(size) { for (stroke in this@subtractTargeted) stroke.appendSubtracted(mask, this) }
+}
+
+@OptIn(ExperimentalInkEraserApi::class)
+private fun PageStroke.appendSubtracted(mask: Stroke, output: MutableList<PageStroke>) {
+    val cut = stroke.subtract(mask.shape, AffineTransform.IDENTITY, strokeToPageTransform())
+    if (cut.isDrawnFromOutlines) {
+        if (cut.hasGeometry) output.add(copy(stroke = cut, projection = newProjection()))
+    } else {
+        for (component in cut.split(strokeToWorldTransform = strokeToPageTransform(), tolerance = 0f)) {
+            output.add(copy(stroke = component, projection = newProjection()))
         }
     }
 }
@@ -167,27 +169,31 @@ public fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<String>
  * is removed, and each surviving piece becomes its own projection. A stroke drawn from its outlines
  * is never split, so touching it removes all of it.
  */
-@OptIn(ExperimentalInkEraserApi::class)
 public fun List<PageStroke>.eraseObjects(mask: Stroke, targetIds: Collection<String>): List<PageStroke> {
     val targets = targetIds.toSet()
     if (targets.isEmpty() || !mask.hasGeometry) return this
-    return flatMap { pageStroke ->
-        if (pageStroke.id !in targets) {
-            listOf(pageStroke)
-        } else if (pageStroke.stroke.isDrawnFromOutlines) {
-            if (pageStroke.touches(mask)) emptyList() else listOf(pageStroke)
-        } else {
-            pageStroke.stroke
-                .split(strokeToWorldTransform = pageStroke.strokeToPageTransform(), tolerance = 0f)
-                .filter { it.hasGeometry }
-                .filterNot { component ->
-                    component.shape.computeCoverageIsGreaterThan(
-                        other = mask.shape,
-                        coverageThreshold = 0f,
-                        otherShapeToThis = pageStroke.pageToStrokeTransform(),
-                    )
-                }
-                .map { component -> pageStroke.copy(stroke = component, projection = newProjection()) }
+    return buildList(size) {
+        for (stroke in this@eraseObjects) {
+            if (stroke.id in targets) stroke.appendObjectSurvivors(mask, this) else add(stroke)
+        }
+    }
+}
+
+internal fun List<PageStroke>.eraseObjectsTargeted(mask: Stroke): List<PageStroke> {
+    if (!mask.hasGeometry) return this
+    return buildList(size) { for (stroke in this@eraseObjectsTargeted) stroke.appendObjectSurvivors(mask, this) }
+}
+
+@OptIn(ExperimentalInkEraserApi::class)
+private fun PageStroke.appendObjectSurvivors(mask: Stroke, output: MutableList<PageStroke>) {
+    if (stroke.isDrawnFromOutlines) {
+        if (!touches(mask)) output.add(this)
+    } else {
+        val transform = pageToStrokeTransform()
+        for (component in stroke.split(strokeToWorldTransform = strokeToPageTransform(), tolerance = 0f)) {
+            if (component.hasGeometry && !component.shape.computeCoverageIsGreaterThan(mask.shape, 0f, transform)) {
+                output.add(copy(stroke = component, projection = newProjection()))
+            }
         }
     }
 }
@@ -400,6 +406,13 @@ public fun List<PageStroke>.replayMove(
     if (path.size < 3 || targets.isEmpty()) return this
     val lasso = LassoShape(path)
     val selected = map { it.id in targets && lasso.contains(it) }
+    return replayMove(selected, dx, dy)
+}
+
+internal fun List<PageStroke>.replayMove(lasso: LassoShape, dx: Float, dy: Float): List<PageStroke> =
+    replayMove(map { lasso.contains(it) }, dx, dy)
+
+private fun List<PageStroke>.replayMove(selected: List<Boolean>, dx: Float, dy: Float): List<PageStroke> {
     val delta = movingBounds(selected)?.let { PageBounds.clampTranslation(it, dx, dy) } ?: InkPoint(dx, dy)
     return mapIndexed { index, stroke ->
         if (selected[index]) stroke.copy(offsetX = stroke.offsetX + delta.x, offsetY = stroke.offsetY + delta.y) else stroke
@@ -420,6 +433,19 @@ public fun List<PageStroke>.replayResize(
     if (scaleX == 1f && scaleY == 1f) return this
     val lasso = LassoShape(path)
     val selected = map { it.id in targets && lasso.contains(it) }
+    return replayResize(selected, anchor, scaleX, scaleY)
+}
+
+internal fun List<PageStroke>.replayResize(
+    lasso: LassoShape, anchor: InkPoint, scaleX: Float, scaleY: Float,
+): List<PageStroke> {
+    if (scaleX == 1f && scaleY == 1f) return this
+    return replayResize(map { lasso.contains(it) }, anchor, scaleX, scaleY)
+}
+
+private fun List<PageStroke>.replayResize(
+    selected: List<Boolean>, anchor: InkPoint, scaleX: Float, scaleY: Float,
+): List<PageStroke> {
     val scale = movingBounds(selected)?.let { PageBounds.clampScale(it, anchor, scaleX, scaleY) } ?: InkPoint(scaleX, scaleY)
     return mapIndexed { index, stroke -> if (selected[index]) stroke.scaledAround(anchor, scale.x, scale.y) else stroke }
 }

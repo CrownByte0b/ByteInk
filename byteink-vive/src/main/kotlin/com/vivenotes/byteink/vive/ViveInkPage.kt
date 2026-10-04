@@ -2,9 +2,11 @@ package com.vivenotes.byteink.vive
 
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
+import java.util.Collections
+import java.util.TreeSet
 
 /** A page of ink as stored rows rebuild it. */
-public class LoadedInkPage(
+public class LoadedInkPage internal constructor(
     /** The page's projections, in draw order. */
     public val strokes: List<PageStroke>,
     /**
@@ -14,7 +16,17 @@ public class LoadedInkPage(
     public val erasedAway: List<String>,
     /** Live rows this build could not read — an encoder it does not know, or damaged data — and so did not draw. */
     public val unreadable: List<String>,
-)
+    sourceStrokes: List<PageStroke>,
+    operations: List<DecodedInkOperation>,
+) {
+    /** Decoded rows before replay, in draw order; their immutable inputs can supply portable data. */
+    public val sourceStrokes: List<PageStroke> = Collections.unmodifiableList(ArrayList(sourceStrokes))
+    /** Validated operation geometry, decoded once for this load and ordered by time/id. */
+    public val operations: List<DecodedInkOperation> = Collections.unmodifiableList(ArrayList(operations))
+
+    public constructor(strokes: List<PageStroke>, erasedAway: List<String>, unreadable: List<String>) :
+        this(strokes, erasedAway, unreadable, strokes, emptyList())
+}
 
 /**
  * Rebuilds a page from its stored rows exactly as the Android app does (its `InkPageLoader`): every
@@ -38,30 +50,45 @@ public object ViveInkPage {
         moves: List<StoredInkMove>,
         executor: Executor? = null,
         onPartial: ((List<PageStroke>) -> Unit)? = null,
+    ): LoadedInkPage = load(strokes, erases, moves, executor, onPartial, null)
+
+    internal fun load(
+        strokes: List<StoredInkStroke>, erases: List<StoredInkErase>, moves: List<StoredInkMove>,
+        executor: Executor?, onPartial: ((List<PageStroke>) -> Unit)?, work: InkReplayWork?,
     ): LoadedInkPage {
         val rows = strokes.filter { it.deletedAt == null }.sortedWith(DRAW_ORDER)
-        val operations = buildList {
+        val storedOperations = buildList {
             erases.filter { it.deletedAt == null }.forEach { add(Operation.Erase(it)) }
             moves.filter { it.deletedAt == null }.forEach { add(Operation.Move(it)) }
         }.sortedWith(compareBy(Operation::createdAt, Operation::id))
-        val streaming = onPartial != null && operations.none { it is Operation.Move }
+        val streaming = onPartial != null && storedOperations.none { it is Operation.Move }
+        val operations = prepare(storedOperations, work)
+        val operationsByRow = if (streaming) buildMap<String, MutableList<Int>> {
+            operations.forEachIndexed { index, operation ->
+                operation.targetIds.forEach { id -> getOrPut(id) { ArrayList() }.add(index) }
+            }
+        } else emptyMap()
         val shown = ArrayList<PageStroke>(rows.size)
         val unreadable = ArrayList<String>()
         val decoded = ArrayList<PageStroke>(rows.size)
-        decodeInChunks(rows, executor) { chunk, failed ->
+        decodeInChunks(rows, executor, work) { chunk, failed ->
             decoded += chunk
             unreadable += failed
             if (streaming) {
-                shown += replay(chunk, operations)
+                val relevant = TreeSet<Int>()
+                chunk.forEach { stroke -> operationsByRow[stroke.id]?.let(relevant::addAll) }
+                shown += replay(chunk, relevant.map(operations::get), work)
                 onPartial(ArrayList(shown))
             }
         }
-        val live = if (streaming) shown else replay(decoded, operations)
+        val live = if (streaming) shown else replay(decoded, operations, work)
         val drawn = live.mapTo(HashSet(live.size)) { it.id }
         return LoadedInkPage(
             strokes = live,
             erasedAway = decoded.mapNotNull { stroke -> stroke.id.takeIf { it !in drawn } }.distinct(),
             unreadable = unreadable,
+            sourceStrokes = decoded,
+            operations = operations,
         )
     }
 
@@ -78,47 +105,64 @@ public object ViveInkPage {
         )
     }
 
-    private fun replay(strokes: List<PageStroke>, operations: List<Operation>): List<PageStroke> =
-        operations.fold(strokes) { current, operation ->
+    private fun prepare(operations: List<Operation>, work: InkReplayWork?): List<DecodedInkOperation> =
+        operations.mapNotNull { operation ->
             when (operation) {
                 is Operation.Erase -> {
                     val stored = operation.stored
-                    val mode = InkEraseMode.of(stored.mode) ?: return@fold current
-                    val mask = ViveInkCodec.decodeErase(stored) ?: return@fold current
-                    when (mode) {
-                        InkEraseMode.Normal -> current.subtract(mask, stored.targetIds)
-                        InkEraseMode.Object -> current.eraseObjects(mask, stored.targetIds)
-                    }
+                    val mode = InkEraseMode.of(stored.mode) ?: return@mapNotNull null
+                    work?.let { it.maskDecodes++ }
+                    val mask = ViveInkCodec.decodeErase(stored) ?: return@mapNotNull null
+                    DecodedInkOperation.Erase(stored.id, stored.createdAt, stored.targetIds, mode, mask)
                 }
                 is Operation.Move -> {
                     val stored = operation.stored
-                    val path = ViveInkCodec.decodeMove(stored) ?: return@fold current
-                    current
-                        .replayMove(path = path, targetIds = stored.targetIds, dx = stored.dxDp, dy = stored.dyDp)
-                        .replayResize(
-                            path = path,
-                            targetIds = stored.targetIds,
-                            anchor = InkPoint(stored.anchorX, stored.anchorY),
-                            scaleX = stored.scaleX,
-                            scaleY = stored.scaleY,
-                        )
+                    work?.let { it.pathDecodes++ }
+                    val path = ViveInkCodec.decodeMove(stored) ?: return@mapNotNull null
+                    DecodedInkOperation.Move(stored.id, stored.createdAt, stored.targetIds, path,
+                        stored.dxDp, stored.dyDp, stored.scaleX, stored.scaleY, InkPoint(stored.anchorX, stored.anchorY))
                 }
             }
         }
+
+    private fun replay(
+        strokes: List<PageStroke>, operations: List<DecodedInkOperation>, work: InkReplayWork?,
+    ): List<PageStroke> {
+        if (operations.isEmpty() || strokes.isEmpty()) return strokes
+        return InkReplay(strokes, work).apply { operations.forEach(::apply) }.flatten()
+    }
 
     /** Decodes [rows] in draw order, handing each chunk's projections and unreadable ids to [onChunk] in order. */
     private fun decodeInChunks(
         rows: List<StoredInkStroke>,
         executor: Executor?,
+        work: InkReplayWork?,
         onChunk: (List<PageStroke>, List<String>) -> Unit,
     ) {
-        val chunks = rows.chunked(DECODE_CHUNK)
         if (executor == null) {
-            chunks.forEach { chunk -> decodeChunk(chunk).let { (decoded, failed) -> onChunk(decoded, failed) } }
+            for (start in rows.indices step DECODE_CHUNK) {
+                val (decoded, failed) = decodeChunk(rows.subList(start, minOf(start + DECODE_CHUNK, rows.size)))
+                onChunk(decoded, failed)
+            }
             return
         }
-        chunks.map { chunk -> CompletableFuture.supplyAsync({ decodeChunk(chunk) }, executor) }
-            .forEach { future -> future.join().let { (decoded, failed) -> onChunk(decoded, failed) } }
+        val pending = ArrayDeque<CompletableFuture<Pair<List<PageStroke>, List<String>>>>()
+        var next = 0
+        try {
+            while (next < rows.size || pending.isNotEmpty()) {
+                while (next < rows.size && pending.size < MAX_DECODE_JOBS) {
+                    val chunk = rows.subList(next, minOf(next + DECODE_CHUNK, rows.size))
+                    pending.addLast(CompletableFuture.supplyAsync({ decodeChunk(chunk) }, executor))
+                    next += chunk.size
+                    work?.let { it.peakDecodeJobs = maxOf(it.peakDecodeJobs, pending.size) }
+                }
+                val (decoded, failed) = pending.removeFirst().join()
+                onChunk(decoded, failed)
+            }
+        } finally {
+            // Cancel queued suppliers on failure; active native work may finish on the caller's executor.
+            pending.forEach { it.cancel(false) }
+        }
     }
 
     private fun decodeChunk(rows: List<StoredInkStroke>): Pair<List<PageStroke>, List<String>> {
@@ -149,6 +193,7 @@ public object ViveInkPage {
     }
 
     private const val DECODE_CHUNK = 512
+    internal const val MAX_DECODE_JOBS = 4
 
     /** A stored operation, ordered as Android orders them: by `createdAt`, then id. */
     private sealed interface Operation {

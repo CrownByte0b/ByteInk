@@ -4,7 +4,12 @@ import androidx.ink.brush.Brush
 import androidx.ink.strokes.Stroke
 
 /** A completed stroke and its new Android-compatible stored row. */
-public data class AuthoredViveStroke(public val stroke: Stroke, public val row: StoredInkStroke)
+public data class AuthoredViveStroke(public val stroke: Stroke, public val row: StoredInkStroke) {
+    /** Storage-roundtripped geometry, decoded once and independent of the authoring engine. */
+    public val canonicalStroke: Stroke by lazy {
+        requireNotNull(ViveInkCodec.decode(row)) { "The authored row could not be decoded" }
+    }
+}
 
 /**
  * A drawing tool whose brush and stored metadata stay together. Capture this value when a gesture

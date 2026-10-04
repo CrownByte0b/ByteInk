@@ -8,8 +8,34 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
+import kotlin.test.assertContentEquals
+import com.vivenotes.byteink.core.InkMeshes
 
 class ViveInkToolTest {
+    @Test
+    fun canonicalHandoffUsesStoredQuantizationAndIsDecodedOnlyOnce() {
+        val tool = ViveInkTool(ViveBrushes.PRESSURE_PEN, 3, 0xff182f51.toInt(), 8f)
+        val inputs = MutableStrokeInputBatch().apply {
+            repeat(19) { index -> add(InputToolType.STYLUS, 10.123457f + index * 1.376549f,
+                20.234569f + (index % 3) * 2.571389f, index * 17L, pressure = 0.123457f + index * 0.027654f) }
+        }
+        val source = Stroke(tool.brush, inputs)
+        val authored = tool.complete(source, "s", "p", 0, 1)
+        val canonical = authored.canonicalStroke
+        assertSame(canonical, authored.canonicalStroke)
+        assertSame(source, authored.stroke)
+        val reloaded = assertNotNull(ViveInkCodec.decode(authored.row))
+        assertTrue((0 until inputs.size).any { inputs[it].x != canonical.inputs[it].x || inputs[it].y != canonical.inputs[it].y },
+            "this fixture must exercise quantization rather than an accidentally exact handoff")
+        repeat(canonical.shape.getRenderGroupCount()) { group ->
+            InkMeshes.triangles(canonical.shape, group).zip(InkMeshes.triangles(reloaded.shape, group)).forEach { (a, b) ->
+                assertContentEquals(a.positions, b.positions)
+                assertContentEquals(a.triangles, b.triangles)
+            }
+        }
+    }
+
     @Test
     fun finishedStrokeKeepsCatalogMetadataAndProducesReadableRows() {
         val families = listOf(ViveBrushes.MARKER, ViveBrushes.PRESSURE_PEN, ViveBrushes.DASHED_LINE) +
