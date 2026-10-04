@@ -110,7 +110,7 @@ class ViveInkCodecValidationTest {
     }
 
     @Test
-    fun warmedSmallDecodesDoNotAllocateAnotherValidationArrayPerRow() {
+    fun warmedSmallDecodesDoNotAllocateAnExpandedProtobufArrayPerRow() {
         val allocation = ManagementFactory.getThreadMXBean() as? com.sun.management.ThreadMXBean
         assumeTrue("JVM exposes per-thread allocated bytes", allocation?.isThreadAllocatedMemorySupported == true)
         val counter = requireNotNull(allocation)
@@ -124,9 +124,17 @@ class ViveInkCodecValidationTest {
         val allocated = counter.getThreadAllocatedBytes(threadId) - before
 
         assertEquals(128, inputsRead)
-        // A broad allocation regression guard, not a throughput benchmark: upstream's 32 KiB
-        // decode array remains. Adding a fresh 64 KiB validator per row exceeds this budget.
-        assertTrue(allocated >= 0 && allocated < 64L * 60 * 1024, "allocated $allocated bytes for 64 small decodes")
+        // Broad structural guard: the former upstream 32 KiB inflate array exceeds this budget.
+        assertTrue(allocated >= 0 && allocated < 64L * 16 * 1024, "allocated $allocated bytes for 64 small decodes")
+    }
+
+    @Test
+    fun exactlyTheExpansionLimitStillChecksTheTrailerAndThenParsesTheProtobuf() {
+        val points = gzipZeros(ViveInkCodec.MAX_DECOMPRESSED_BYTES)
+        // Zero bytes are invalid protobuf, but exactly the expansion cap is permitted.
+        assertFailsWith<IllegalArgumentException> { ViveInkCodec.decodeInputs(points) }
+        assertFailsWith<IOException> { ViveInkCodec.decodeInputs(corrupt(points, points.size - 8)) }
+        assertEquals(2, ViveInkCodec.decodeInputs(fixture("two-point-unknown.bin")).size)
     }
 
     private fun fixture(name: String): ByteArray = requireNotNull(javaClass.getResource(

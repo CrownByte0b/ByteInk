@@ -43,10 +43,22 @@ import java.lang.ref.WeakReference
  * weakly and updated when InProgressStroke's version changes. Call [clearCache] when changing pages
  * to release cached geometry promptly.
  */
-public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
-    init { require(cacheCapacity >= 0) { "cacheCapacity must be nonnegative" } }
+public class InkPathRenderer(public val cacheCapacity: Int, public val cacheByteBudget: Long) {
+    public constructor() : this(2048, DEFAULT_CACHE_BYTE_BUDGET)
+    public constructor(cacheCapacity: Int = 2048) : this(cacheCapacity, DEFAULT_CACHE_BYTE_BUDGET)
 
-    private val shapes = LinkedHashMap<PartitionedMesh, List<InkRenderPath>>(16, 0.75f, true)
+    public companion object {
+        /** Budget for estimated finished path storage, separate from live paths and Ink meshes. */
+        public const val DEFAULT_CACHE_BYTE_BUDGET: Long = 64L * 1024 * 1024
+    }
+
+    init {
+        require(cacheCapacity >= 0) { "cacheCapacity must be nonnegative" }
+        require(cacheByteBudget >= 0L) { "cacheByteBudget must be nonnegative" }
+    }
+
+    private class CachedShape(val paths: List<InkRenderPath>, val bytes: Long)
+    private val shapes = LinkedHashMap<PartitionedMesh, CachedShape>(16, 0.75f, true)
     private val collectedStrokes = ReferenceQueue<InProgressStroke>()
     private val live = HashMap<StrokeReference, LivePaths>()
     private val paint = Paint().apply { isAntiAlias = true; style = PaintingStyle.Fill }
@@ -57,6 +69,15 @@ public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
         private set
     /** Number of finished meshes retained, bounded by [cacheCapacity]. */
     public val cachedShapeCount: Int get() = shapes.size
+
+    /** Twice Skia's approximate path size, accounting conservatively for Compose's copied builder.
+     * Excludes wrapper metadata, Ink meshes, and the current live geometry. Zero after [clearCache]. */
+    public var cachedPathBytes: Long = 0L
+        private set
+
+    /** Finished shape retirements caused by either cache limit. */
+    public var pathEvictionCount: Long = 0L
+        private set
 
     /** Whether every coat has a texture-free ANY or DISCARD paint this renderer supports. */
     public fun canDraw(stroke: Stroke): Boolean = supported(stroke.brush)
@@ -84,22 +105,31 @@ public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
         val matrix = strokeToCanvas.composeMatrix()
         if (!visible(box, matrix, viewport)) return false
         val paints = paints(stroke.brush)
-        val paths = shapes[stroke.shape] ?: buildPaths(stroke.shape.getRenderGroupCount()) { group ->
+        val cached = shapes[stroke.shape]
+        val paths = cached?.paths ?: buildPaths(stroke.shape.getRenderGroupCount()) { group ->
             finishedPath(stroke.shape, group)
-        }.also { paths ->
-            if (cacheCapacity > 0) {
-                shapes[stroke.shape] = paths
-                if (shapes.size > cacheCapacity) {
-                    val oldest = shapes.entries.iterator()
-                    oldest.next().value.forEach(InkRenderPath::close)
-                    oldest.remove()
+        }
+        var retained = cached != null
+        try {
+            if (!retained && cacheCapacity > 0 && cacheByteBudget > 0L) {
+                val bytes = paths.sumOf { it.approximateBytesUsed }
+                if (bytes <= cacheByteBudget) {
+                    while (shapes.size >= cacheCapacity || cachedPathBytes > cacheByteBudget - bytes) {
+                        val oldest = shapes.entries.iterator()
+                        val retired = oldest.next().value
+                        retired.paths.forEach(InkRenderPath::close)
+                        oldest.remove()
+                        cachedPathBytes -= retired.bytes
+                        pathEvictionCount++
+                    }
+                    shapes[stroke.shape] = CachedShape(paths, bytes)
+                    cachedPathBytes += bytes
+                    retained = true
                 }
             }
-        }
-        try {
             drawPaths(canvas, paths, paints, stroke.brush, matrix, colorArgb)
         } finally {
-            if (cacheCapacity == 0) paths.forEach(InkRenderPath::close)
+            if (!retained) paths.forEach(InkRenderPath::close)
         }
         return true
     }
@@ -143,8 +173,9 @@ public class InkPathRenderer(public val cacheCapacity: Int = 2048) {
 
     /** Drops both finished and live path caches. */
     public fun clearCache() {
-        shapes.values.forEach { paths -> paths.forEach(InkRenderPath::close) }
+        shapes.values.forEach { it.paths.forEach(InkRenderPath::close) }
         shapes.clear()
+        cachedPathBytes = 0L
         live.values.forEach { it.paths.forEach(InkRenderPath::close) }
         live.clear()
         releaseCollectedPaths()

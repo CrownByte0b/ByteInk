@@ -252,3 +252,20 @@ tasks.register<JavaExec>("pathConstructionBenchmark") {
     outputs.upToDateWhen { false }
     argumentProviders.add(CommandLineArgumentProvider { listOf(output.get()) })
 }
+
+val viewCacheOutput = providers.gradleProperty("byteinkViewCacheOutput")
+    .orElse(layout.buildDirectory.file("reports/hot-paths/view-cache.json").map { it.asFile.absolutePath })
+tasks.register<JavaExec>("viewCacheBenchmark") {
+    group = "verification"
+    description = "Compares exact return-to-view caching with the one-viewport policy at 40k distinct meshes."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.vivenotes.byteink.testing.InkViewCacheBenchmark")
+    minHeapSize = "512m"
+    maxHeapSize = "2g"
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseG1GC")
+    val output = viewCacheOutput
+    outputs.file(output)
+    outputs.upToDateWhen { false }
+    argumentProviders.add(CommandLineArgumentProvider { listOf(output.get()) })
+}

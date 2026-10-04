@@ -17,13 +17,16 @@ import java.util.IdentityHashMap
 import kotlin.math.ceil
 
 /**
- * Caches one finished scene as a transparent Skia raster in physical viewport pixels.
+ * Caches finished scene views as transparent Skia rasters in physical viewport pixels.
  *
  * Reuse on one drawing thread. An unchanged page and view only require one image draw, avoiding
  * repeated geometry rasterization beneath a live stroke even when the path cache cannot hold the
  * entire page. Scene identity, transform values, viewport, physical scale and excluded occurrences
  * invalidate the raster.
- * Every changed view is rendered at its new resolution; a stale raster is never scaled for zoom.
+ * Every new view is rendered at its requested resolution; revisiting a retained view reuses it.
+ * The default retains one view. A larger [cacheCapacity] enables pan/zoom return reuse within
+ * [pixelBudgetBytes]. Least recently used images close before a cacheable replacement is allocated.
+ * A view exceeding the retention budget is drawn once and closed, without retaining its image.
  *
  * The temporary surface is closed after taking its immutable snapshot. Replacement, [clearCache]
  * and [close] close the retained image deterministically. Layering translucent paths into an
@@ -32,22 +35,41 @@ import kotlin.math.ceil
  * any existing canvas transform or clipping also applies to the resulting image. Pixel storage is
  * limited to the physical viewport, at most [Int.MAX_VALUE] bytes per raster.
  */
-public class InkSceneRasterCache : AutoCloseable {
+public class InkSceneRasterCache(
+    public val cacheCapacity: Int,
+    public val pixelBudgetBytes: Long,
+) : AutoCloseable {
+    public constructor() : this(1, DEFAULT_PIXEL_BUDGET_BYTES)
+
+    init {
+        require(cacheCapacity >= 0) { "cacheCapacity must be nonnegative" }
+        require(pixelBudgetBytes >= 0L) { "pixelBudgetBytes must be nonnegative" }
+    }
+
+    public companion object {
+        /** Retained N32 pixel budget; wrapper, scene and renderer storage are accounted separately. */
+        public const val DEFAULT_PIXEL_BUDGET_BYTES: Long = 64L * 1024 * 1024
+    }
     /** Total viewport raster builds, retained across cache clears. */
     public var rasterBuildCount: Long = 0L
         private set
 
-    /** Pixel storage retained by the current N32 raster; zero after clear or close. */
+    /** Pixel storage retained by all N32 rasters, bounded by [pixelBudgetBytes]. */
     public var retainedPixelBytes: Long = 0L
         private set
 
-    private var image: Image? = null
+    /** Number of view images retained; bounded by [cacheCapacity]. */
+    public val cachedViewCount: Int get() = views.size
+
+    /** LRU image retirements caused by the capacity or pixel budget. */
+    public var rasterEvictionCount: Long = 0L
+        private set
+
+    private data class View(val transform: ImmutableAffineTransform, val viewport: Rect, val scale: Float)
+    private class Raster(val image: Image, val drawn: Int, val bytes: Long)
+    private val views = LinkedHashMap<View, Raster>(4, 0.75f, true)
     private var cachedScene: InkScene? = null
-    private var cachedTransform: ImmutableAffineTransform? = null
-    private var cachedViewport: Rect? = null
-    private var cachedRasterScale: Float = 0f
     private var cachedExcludedStrokes: Set<InkSceneStroke> = emptySet()
-    private var cachedDrawnCount: Int = 0
     private var closed: Boolean = false
 
     /**
@@ -121,13 +143,25 @@ public class InkSceneRasterCache : AutoCloseable {
             viewport.left + width * inverseScale, viewport.top + height * inverseScale)
             .inflate(maxOf(0f, inverseScale - 1f))
         requireFiniteViewportBounds(drawingViewport, canvasToScene)
-        if (image == null || cachedScene !== scene || cachedTransform != transform ||
-            cachedViewport != viewport || cachedRasterScale != rasterScale ||
+        if (cachedScene !== scene ||
             cachedExcludedStrokes.size != excludedStrokes.size ||
             excludedStrokes.any { it !in cachedExcludedStrokes }) {
             val exclusions = identitySnapshot(excludedStrokes)
-            // The old view cannot be reused. Release it before allocating the next viewport.
             clearCache()
+            cachedScene = scene
+            cachedExcludedStrokes = exclusions
+        }
+        val view = View(transform, viewport, rasterScale)
+        val bytes = pixelCount * 4L
+        val cacheable = cacheCapacity > 0 && bytes <= pixelBudgetBytes
+        val exclusions = cachedExcludedStrokes
+        val raster = views[view] ?: run {
+            if (cacheable) {
+                while (views.size >= cacheCapacity || retainedPixelBytes > pixelBudgetBytes - bytes) evictOldest()
+            } else {
+                // Avoid retaining a full budget alongside an oversized transient viewport.
+                clearCache()
+            }
             var drawn = 0
             val snapshot = Surface.makeRasterN32Premul(width, height).use { surface ->
                 surface.canvas.clear(0)
@@ -139,39 +173,42 @@ public class InkSceneRasterCache : AutoCloseable {
                 drawn = scene.draw(surface.canvas.asComposeCanvas(), renderer, transform, drawingViewport, exclusions)
                 surface.makeImageSnapshot()
             }
-            image = snapshot
-            cachedScene = scene
-            cachedTransform = transform
-            cachedViewport = viewport
-            cachedRasterScale = rasterScale
-            cachedExcludedStrokes = exclusions
-            cachedDrawnCount = drawn
-            retainedPixelBytes = pixelCount * 4L
             rasterBuildCount++
+            val created = Raster(snapshot, drawn, bytes)
+            if (cacheable) {
+                try {
+                    views[view] = created
+                    retainedPixelBytes += bytes
+                } catch (failure: Throwable) {
+                    snapshot.close()
+                    throw failure
+                }
+            }
+            created
         }
         val destination = canvas.skiaCanvas
-        destination.save()
         try {
-            destination.clipRect(viewport.left, viewport.top, viewport.right, viewport.bottom, false)
-            destination.translate(viewport.left, viewport.top)
-            destination.scale(inverseScale, inverseScale)
-            destination.drawImage(requireNotNull(image), 0f, 0f)
+            destination.save()
+            try {
+                destination.clipRect(viewport.left, viewport.top, viewport.right, viewport.bottom, false)
+                destination.translate(viewport.left, viewport.top)
+                destination.scale(inverseScale, inverseScale)
+                destination.drawImage(raster.image, 0f, 0f)
+            } finally {
+                destination.restore()
+            }
         } finally {
-            destination.restore()
+            if (!cacheable) raster.image.close()
         }
-        return cachedDrawnCount
+        return raster.drawn
     }
 
     /** Releases the cached raster and its page reference. The next draw builds a fresh snapshot. */
     public fun clearCache() {
-        image?.close()
-        image = null
+        views.values.forEach { it.image.close() }
+        views.clear()
         cachedScene = null
-        cachedTransform = null
-        cachedViewport = null
-        cachedRasterScale = 0f
         cachedExcludedStrokes = emptySet()
-        cachedDrawnCount = 0
         retainedPixelBytes = 0L
     }
 
@@ -179,6 +216,15 @@ public class InkSceneRasterCache : AutoCloseable {
     override public fun close() {
         clearCache()
         closed = true
+    }
+
+    private fun evictOldest() {
+        val oldest = views.entries.iterator()
+        val raster = oldest.next().value
+        raster.image.close()
+        oldest.remove()
+        retainedPixelBytes -= raster.bytes
+        rasterEvictionCount++
     }
 
     private fun requireFinite(transform: AffineTransform) {
@@ -229,6 +275,14 @@ public class InkSceneRasterCache : AutoCloseable {
 @Composable
 public fun rememberInkSceneRasterCache(): InkSceneRasterCache {
     val cache = remember { InkSceneRasterCache() }
+    DisposableEffect(cache) { onDispose { cache.close() } }
+    return cache
+}
+
+/** Remembers a byte-budgeted LRU of exact viewport views, closing every image on disposal. */
+@Composable
+public fun rememberInkSceneRasterCache(cacheCapacity: Int, pixelBudgetBytes: Long): InkSceneRasterCache {
+    val cache = remember(cacheCapacity, pixelBudgetBytes) { InkSceneRasterCache(cacheCapacity, pixelBudgetBytes) }
     DisposableEffect(cache) { onDispose { cache.close() } }
     return cache
 }

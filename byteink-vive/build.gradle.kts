@@ -10,6 +10,8 @@ dependencies {
 }
 
 tasks.test {
+    // Check raw input bridge array releases and owner references as well as byte goldens.
+    jvmArgs("-Xcheck:jni")
     // FuzzTest runs FuzzMain in a JVM of its own, on this classpath.
     val runtime = sourceSets.test.get().runtimeClasspath
     val iterations = providers.gradleProperty("byteinkFuzzIterations")

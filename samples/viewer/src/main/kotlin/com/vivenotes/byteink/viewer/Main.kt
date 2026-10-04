@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,7 @@ import com.vivenotes.byteink.compose.InkPathRenderer
 import com.vivenotes.byteink.compose.InkDrawingSurface
 import com.vivenotes.byteink.compose.InkScene
 import com.vivenotes.byteink.compose.InkSceneStroke
+import com.vivenotes.byteink.compose.InkSceneRasterCache
 import com.vivenotes.byteink.compose.drawCachedInkScene
 import com.vivenotes.byteink.compose.rememberInkSceneRasterCache
 import com.vivenotes.byteink.compose.InkAuthoringController
@@ -169,6 +171,9 @@ internal fun InkPreview(
 ) {
     val renderer = remember(strokes, pageId) { InkPathRenderer() }
     val controller = remember(strokes, pageId) { InkAuthoringController() }
+    DisposableEffect(renderer, controller) {
+        onDispose { controller.close(); renderer.clearCache() }
+    }
     val authored = remember(strokes, pageId) { mutableStateListOf<AuthoredViveStroke>() }
     val scene = remember(strokes) { InkScene(strokes.map { projection ->
         InkSceneStroke(projection.stroke, projection.strokeToPageTransform(),
@@ -176,17 +181,21 @@ internal fun InkPreview(
     }) }
     val authoredSnapshot = authored.toList()
     val additions = remember(authoredSnapshot) { InkScene(authoredSnapshot.map { InkSceneStroke(it.stroke) }) }
-    val pageRaster = key(strokes, pageId) { rememberInkSceneRasterCache() }
-    val additionsRaster = key(strokes, pageId) { rememberInkSceneRasterCache() }
+    val pageRaster = key(strokes, pageId) { rememberInkSceneRasterCache(4, InkSceneRasterCache.DEFAULT_PIXEL_BUDGET_BYTES) }
+    val additionsRaster = key(strokes, pageId) { rememberInkSceneRasterCache(4, InkSceneRasterCache.DEFAULT_PIXEL_BUDGET_BYTES) }
     var pan by remember(strokes, zoom) { mutableStateOf(Offset.Zero) }
     var scrollZoom by remember(strokes, zoom) { mutableStateOf(1f) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-    val boxes = remember(strokes) { strokes.mapNotNull { it.pageBounds } }
-    val left = boxes.minOfOrNull { it.left } ?: 0f
-    val top = boxes.minOfOrNull { it.top } ?: 0f
-    val width = (boxes.maxOfOrNull { it.right } ?: left) - left
-    val height = (boxes.maxOfOrNull { it.bottom } ?: top) - top
-    val fit = if (boxes.isEmpty()) 1f else minOf((canvasSize.width - 32f) / maxOf(1f, width),
+    val extent = remember(strokes) {
+        val boxes = strokes.mapNotNull { it.pageBounds }
+        if (boxes.isEmpty()) null else androidx.compose.ui.geometry.Rect(
+            boxes.minOf { it.left }, boxes.minOf { it.top }, boxes.maxOf { it.right }, boxes.maxOf { it.bottom })
+    }
+    val left = extent?.left ?: 0f
+    val top = extent?.top ?: 0f
+    val width = extent?.width ?: 0f
+    val height = extent?.height ?: 0f
+    val fit = if (extent == null) 1f else minOf((canvasSize.width - 32f) / maxOf(1f, width),
         (canvasSize.height - 32f) / maxOf(1f, height)).coerceAtLeast(0.001f)
     val scale = fit * zoom * scrollZoom
     val transform = ImmutableAffineTransform(scale, 0f, 16f + pan.x - scale * left,

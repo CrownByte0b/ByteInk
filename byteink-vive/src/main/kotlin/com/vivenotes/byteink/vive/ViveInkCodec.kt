@@ -1,8 +1,6 @@
 package com.vivenotes.byteink.vive
 
 import androidx.ink.brush.Brush
-import androidx.ink.storage.decode
-import androidx.ink.storage.encode
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInputBatch
 import java.io.ByteArrayInputStream
@@ -247,12 +245,7 @@ public object ViveInkCodec {
         // writes its private fixed32 field 10, the default animation phase, even when it is zero;
         // public google/ink reserves that field. Compression uses pinned classic deflate rather
         // than the host JVM's zlib, whose implementation changes output bytes across machines.
-        // The upstream raw encoder is internal, so use its public gzip API rather than reflection.
-        val encoded = ByteArrayOutputStream().use { out ->
-            inputs.encode(out)
-            out.toByteArray()
-        }
-        val proto = GZIPInputStream(encoded.inputStream()).use { it.readBytes() }
+        val proto = InkInputCodec.encode(inputs)
         return AndroidInkCompression.gzip(withAndroidAnimationPhase(proto))
     }
 
@@ -300,33 +293,40 @@ public object ViveInkCodec {
     }
 
     internal fun decodeInputs(points: ByteArray): StrokeInputBatch {
-        requireWithinLimit(points)
-        return StrokeInputBatch.decode(points)
-    }
-
-    // Cache only one fixed-size scratch array per decoding thread, never a point blob or decoded
-    // batch. The entry is empty while leased, so reentrant validation gets its own array. A lease
-    // returns on failure as well as success; the cache's lifetime ends with its worker thread.
-    private val validationScratch = ThreadLocal<ByteArray?>()
-
-    /** Refuses a blob that decompresses past [MAX_DECOMPRESSED_BYTES], before AndroidX tries to hold all of it. */
-    private fun requireWithinLimit(points: ByteArray) {
-        GZIPInputStream(ByteArrayInputStream(points)).use { gzip ->
-            val buffer = validationScratch.get() ?: ByteArray(1 shl 16)
-            validationScratch.set(null)
-            try {
-                var total = 0L
+        val initial = decodeScratch.get() ?: ByteArray(INITIAL_DECODE_CAPACITY)
+        decodeScratch.set(null)
+        var buffer = initial
+        try {
+            GZIPInputStream(ByteArrayInputStream(points)).use { gzip ->
+                var size = 0
                 while (true) {
-                    val read = gzip.read(buffer)
+                    if (size == buffer.size) {
+                        if (size == MAX_DECOMPRESSED_BYTES) {
+                            // Read through the trailer (and any following member) even at the cap.
+                            if (gzip.read() >= 0) throw expansionLimitFailure()
+                            break
+                        }
+                        buffer = buffer.copyOf(minOf(buffer.size * 2, MAX_DECOMPRESSED_BYTES))
+                    }
+                    val read = gzip.read(buffer, size, buffer.size - size)
                     if (read < 0) break
-                    total += read
-                    if (total > MAX_DECOMPRESSED_BYTES) throw IOException("The ink blob expands past $MAX_DECOMPRESSED_BYTES bytes")
+                    size += read
                 }
-            } finally {
-                validationScratch.set(buffer)
+                return InkInputCodec.decode(buffer, size)
             }
+        } finally {
+            // Keep bounded thread-confined storage only; a large row cannot pin its expanded blob.
+            decodeScratch.set(if (buffer.size <= MAX_RETAINED_DECODE_CAPACITY) buffer else initial)
         }
     }
+
+    private const val INITIAL_DECODE_CAPACITY = 1024
+    private const val MAX_RETAINED_DECODE_CAPACITY = 64 * 1024
+    // Empty while leased, including native parsing; concurrent and reentrant reads are independent.
+    private val decodeScratch = ThreadLocal<ByteArray?>()
+
+    private fun expansionLimitFailure(): IOException =
+        IOException("The ink blob expands past $MAX_DECOMPRESSED_BYTES bytes")
 
     /**
      * [read]'s result, or null if it throws an [Exception]: damaged data, which costs one row. Errors

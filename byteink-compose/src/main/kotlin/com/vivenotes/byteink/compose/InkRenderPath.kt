@@ -10,6 +10,7 @@ import org.jetbrains.skia.Path as SkiaPath
 internal class InkRenderPath(private val snapshot: SkiaPath) : AutoCloseable {
     val path: Path = snapshot.asComposePath()
     val isClosed: Boolean get() = snapshot.isClosed
+    val approximateBytesUsed: Long get() = snapshot.approximateBytesUsed.toLong() * 2L
 
     override fun close() {
         if (snapshot.isClosed) return

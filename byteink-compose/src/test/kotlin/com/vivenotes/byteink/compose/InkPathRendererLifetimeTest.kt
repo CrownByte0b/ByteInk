@@ -22,6 +22,48 @@ import org.jetbrains.skia.Path as SkiaPath
 
 class InkPathRendererLifetimeTest {
     @Test
+    fun byteBudgetClosesEvictedAndOversizedPathsWithoutChangingDrawing() = raster { canvas ->
+        val first = stroke()
+        val probe = InkPathRenderer()
+        probe.draw(canvas, first)
+        val budget = probe.cachedPathBytes
+        assertTrue(budget > 0)
+        probe.clearCache()
+        val renderer = InkPathRenderer(100, budget)
+        renderer.draw(canvas, first)
+        val original = canvas.paths.last()
+        assertEquals(1, renderer.cachedShapeCount)
+        val long = Stroke(first.brush, MutableStrokeInputBatch().apply {
+            repeat(1024) { i -> add(InputToolType.MOUSE, 10f + i % 100, 10f + (i % 30), i * 10L) }
+        }.toImmutable())
+        renderer.draw(canvas, long)
+        assertTrue(canvas.paths.last().isClosed, "oversized paths retire after their draw")
+        assertFalse(original.isClosed, "a useful retained path survives an oversized transient draw")
+        assertEquals(1, renderer.cachedShapeCount)
+        assertTrue(renderer.cachedPathBytes <= budget)
+        renderer.draw(canvas, first)
+        assertSame(original, canvas.paths.last())
+        renderer.draw(canvas, stroke())
+        assertTrue(original.isClosed, "byte eviction closes even with spare entry capacity")
+        assertEquals(1L, renderer.pathEvictionCount)
+        renderer.clearCache()
+        assertEquals(0L, renderer.cachedPathBytes)
+        assertTrue(canvas.paths.all { it.isClosed })
+    }
+
+    @Test
+    fun zeroByteBudgetDisablesRetentionAndLegacyConstructorsRemainCallable() = raster { canvas ->
+        assertEquals(2048, InkPathRenderer::class.java.getConstructor().newInstance().cacheCapacity)
+        assertEquals(3, InkPathRenderer::class.java.getConstructor(Int::class.javaPrimitiveType).newInstance(3).cacheCapacity)
+        val renderer = InkPathRenderer(100, 0)
+        renderer.draw(canvas, stroke())
+        assertTrue(canvas.paths.last().isClosed)
+        assertEquals(0, renderer.cachedShapeCount)
+        assertEquals(0L, renderer.cachedPathBytes)
+        assertFailsWith<IllegalArgumentException> { InkPathRenderer(100, -1) }
+    }
+
+    @Test
     fun finishedEvictionAndClearCloseSnapshotsWhileRecolourReusesThem() = raster { canvas ->
         val renderer = InkPathRenderer(1)
         val first = stroke()

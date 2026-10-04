@@ -12,8 +12,9 @@ MinGW-w64/UCRT, baseline x86-64, optimized code and static libc++/libunwind.
 | 0004 | Use the pinned Android float-magnitude arithmetic for vector lengths, polyline closure and subtraction interpolation. | Local Android fidelity patch; no upstream PR submitted. See [ANGLE-MATH.md](ANGLE-MATH.md). |
 | 0005 | Add one ByteInk JNI entry point using the existing pinned classic zlib to emit Android-identical gzip for notebook input protobufs. | Local codec extension; the 341 upstream JNI functions and engine code stay unchanged. |
 | 0006 | Copy finished/live outlines and triangle partitions into owned JVM arrays in four checked JNI calls. | Local geometry extension; upstream engine, arithmetic and 341 JNI functions stay unchanged. |
+| 0007 | Encode/decode raw input protobufs without intermediate gzip; keep normal input peer ownership. | Local codec extension; upstream storage, engine and 341 JNI functions stay unchanged. |
 
-The Windows branch relies on `JNIEXPORT` for the 341 upstream JNI exports and the five explicitly
+The Windows branch relies on `JNIEXPORT` for the 341 upstream JNI exports and the seven explicitly
 listed ByteInk exports in `upstream/jni/byteink.exports.txt`; static libunwind additionally
 exports its own small API. `:upstream:checkWindowsLibrary` checks the complete allowed surface,
 system-only imports and absence of path-dependent debug entries. The portable upstream C++ subset
@@ -53,6 +54,17 @@ arrays are independent and mutable by their caller. Live reads require the autho
 immutable shape reads are concurrent. Tests run with `-Xcheck:jni`, compare scalar getters and
 partition buffers, and cover owner lifetime, predictions, clear/restart, coats and large partitions.
 See [JNI reference and array guidance](https://developer.android.com/ndk/guides/jni-tips).
+
+The raw input extension ships in loader `1.1.0-alpha06-byteink.3`. Encoding takes a typed
+`StrokeInputBatch` owner and resolves its pinned public `getNativePointer` getter while the JNI
+local reference retains it. Decoding checks the initialized array prefix and the 64 MiB cap before
+using the unchanged `DecodeStrokeInputBatch`. Its allocation runs inside `wrapNative`, retaining
+upstream finalization and allocation/cleanup observation. JNI array leases and local owner
+references do not outlive the call. JVM gzip inflation reads through CRC/trailers and concatenated members once, with a
+leased per-thread buffer capped at 64 KiB retention. Large expanded arrays are discarded; the
+64 MiB expansion cap remains. Encoding retains the private phase insertion and one final pinned
+classic-zlib gzip. Strict Android byte goldens and `-Xcheck:jni` cover both routes. Compressor stream
+reuse is deferred; this patch does not change zlib parameters or flush behavior.
 
 References: [Zig 0.14 driver](https://github.com/ziglang/zig/blob/0.14.0/src/main.zig),
 [LLVM deterministic builds](https://blog.llvm.org/2019/11/deterministic-builds-with-clang-and-lld.html),
