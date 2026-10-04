@@ -3,7 +3,7 @@ package wiki
 import com.vivenotes.byteink.compose.InkPathRenderer
 import com.vivenotes.byteink.testing.NotebookInkImages
 import com.vivenotes.byteink.testing.ViveNotebook
-import com.vivenotes.byteink.vive.ViveInkPage
+import com.vivenotes.byteink.kit.ViveInkPage
 import java.io.File
 
 fun exportInkImages(source: File, outputDirectory: File) {

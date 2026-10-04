@@ -9,7 +9,7 @@ import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
-import com.vivenotes.byteink.vive.ViveBrushes
+import com.vivenotes.byteink.kit.ViveBrushes
 import java.lang.ref.WeakReference
 import org.jetbrains.skia.Surface
 import kotlin.test.Test

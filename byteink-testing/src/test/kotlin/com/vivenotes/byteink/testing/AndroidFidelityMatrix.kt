@@ -10,9 +10,9 @@ import com.vivenotes.byteink.oracle.MatrixCase
 import com.vivenotes.byteink.oracle.OracleProjection
 import com.vivenotes.byteink.oracle.SyntheticFidelityMatrix
 import com.vivenotes.byteink.oracle.geometryJson
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.ViveInkPage
-import com.vivenotes.byteink.vive.automaticColorOr
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.ViveInkPage
+import com.vivenotes.byteink.kit.automaticColorOr
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Locale

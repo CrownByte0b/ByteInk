@@ -2,9 +2,9 @@ package wiki
 
 import com.vivenotes.byteink.core.InkMeshes
 import com.vivenotes.byteink.core.InkRuntime
-import com.vivenotes.byteink.vive.InkPageIndex
-import com.vivenotes.byteink.vive.InkPoint
-import com.vivenotes.byteink.vive.ViveInkCodec
+import com.vivenotes.byteink.kit.InkPageIndex
+import com.vivenotes.byteink.kit.InkPoint
+import com.vivenotes.byteink.kit.ViveInkCodec
 import java.io.File
 
 /** Executable checks of the wiki's examples using synthetic ink only. */

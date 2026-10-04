@@ -4,7 +4,7 @@ import androidx.ink.geometry.ImmutableAffineTransform
 import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.compose.InkAuthoringController
 import com.vivenotes.byteink.compose.InkPointerSample
-import com.vivenotes.byteink.vive.ViveInkTool
+import com.vivenotes.byteink.kit.ViveInkTool
 
 fun pointerStroke(): Stroke = InkAuthoringController().use { controller ->
     val tool = ViveInkTool(sizeDp = 3f)

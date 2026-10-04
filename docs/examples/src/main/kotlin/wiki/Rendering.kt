@@ -7,9 +7,9 @@ import com.vivenotes.byteink.compose.InkPathRenderer
 import com.vivenotes.byteink.compose.InkScene
 import com.vivenotes.byteink.compose.InkSceneRasterCache
 import com.vivenotes.byteink.compose.InkSceneStroke
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.automaticColorOr
-import com.vivenotes.byteink.vive.automaticInkFor
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.automaticColorOr
+import com.vivenotes.byteink.kit.automaticInkFor
 import java.io.File
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Surface

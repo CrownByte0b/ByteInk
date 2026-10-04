@@ -6,7 +6,7 @@ Reference pages list the public ByteInk declarations, constructor/method paramet
 | --- | --- |
 | `com.vivenotes.byteink.core` | [Engine and geometry](core.md) |
 | `com.vivenotes.byteink.compose` | [Input and authoring](authoring.md), [rendering and caches](rendering.md) |
-| `com.vivenotes.byteink.vive` | [Brushes/tools](brushes.md), [storage](storage.md), [operations](operations.md) |
+| `com.vivenotes.byteink.kit` | [Brushes/tools](brushes.md), [storage](storage.md), [operations](operations.md) |
 | `com.vivenotes.byteink.nativeloader` | [Native loading](loader.md) |
 | `com.vivenotes.byteink.testing` | [Notebook/image utilities](testing.md) |
 

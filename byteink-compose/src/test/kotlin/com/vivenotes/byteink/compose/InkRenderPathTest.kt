@@ -11,7 +11,7 @@ import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.core.InkMeshes
-import com.vivenotes.byteink.vive.ViveBrushes
+import com.vivenotes.byteink.kit.ViveBrushes
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.Surface
 import kotlin.math.sin

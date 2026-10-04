@@ -4,9 +4,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asComposeCanvas
 import androidx.ink.geometry.ImmutableAffineTransform
 import com.vivenotes.byteink.compose.InkPathRenderer
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.AUTOMATIC_DARK
-import com.vivenotes.byteink.vive.automaticColorOr
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.AUTOMATIC_DARK
+import com.vivenotes.byteink.kit.automaticColorOr
 import java.io.File
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Surface

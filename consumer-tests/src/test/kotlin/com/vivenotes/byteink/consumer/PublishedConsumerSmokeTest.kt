@@ -67,6 +67,7 @@ class PublishedConsumerSmokeTest {
         }
         val report = Properties().apply { reports.resolve("smoke.properties").inputStream().use { load(it) } }
         assertEquals("passed", report.getProperty("status"))
+        assertEquals("com.vivenotes.byteink.kit", report.getProperty("api.kit.package"))
         assertEquals(runtime, report.getProperty("java.home"), "Consumer must use the selected test runtime")
         assertEquals("BUNDLED", report.getProperty("native.origin"))
         assertEquals(if (System.getProperty("os.name").startsWith("Windows")) "ink.dll" else "libink.so", report.getProperty("native.name"))

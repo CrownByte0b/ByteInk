@@ -3,10 +3,10 @@ package com.vivenotes.byteink.testing
 import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
-import com.vivenotes.byteink.vive.StoredInkStroke
-import com.vivenotes.byteink.vive.InkEraseMode
-import com.vivenotes.byteink.vive.ViveBrushes
-import com.vivenotes.byteink.vive.ViveInkCodec
+import com.vivenotes.byteink.kit.StoredInkStroke
+import com.vivenotes.byteink.kit.InkEraseMode
+import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.ViveInkCodec
 import java.io.File
 import java.sql.DriverManager
 import java.util.zip.ZipEntry

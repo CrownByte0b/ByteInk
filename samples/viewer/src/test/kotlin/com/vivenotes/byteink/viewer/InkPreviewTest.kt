@@ -18,11 +18,11 @@ import androidx.compose.ui.unit.dp
 import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.ViveBrushes
-import com.vivenotes.byteink.vive.ViveInkTool
-import com.vivenotes.byteink.vive.ViveInkCodec
-import com.vivenotes.byteink.vive.AuthoredViveStroke
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.ViveInkTool
+import com.vivenotes.byteink.kit.ViveInkCodec
+import com.vivenotes.byteink.kit.AuthoredViveStroke
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

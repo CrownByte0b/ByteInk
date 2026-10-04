@@ -1,10 +1,10 @@
 package com.vivenotes.byteink.testing
 
 import com.vivenotes.byteink.compose.InkPathRenderer
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.ViveBrushes
-import com.vivenotes.byteink.vive.ViveInkCodec
-import com.vivenotes.byteink.vive.ViveInkPage
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.ViveInkCodec
+import com.vivenotes.byteink.kit.ViveInkPage
 import java.io.File
 import kotlin.math.abs
 import kotlin.test.Test

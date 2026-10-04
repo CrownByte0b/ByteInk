@@ -10,7 +10,7 @@ import com.vivenotes.byteink.compose.InkScene
 import com.vivenotes.byteink.compose.InkSceneRasterCache
 import com.vivenotes.byteink.compose.InkSceneStroke
 import com.vivenotes.byteink.core.InkRuntime
-import com.vivenotes.byteink.vive.ViveBrushes
+import com.vivenotes.byteink.kit.ViveBrushes
 import java.io.File
 import java.security.MessageDigest
 import java.util.Collections

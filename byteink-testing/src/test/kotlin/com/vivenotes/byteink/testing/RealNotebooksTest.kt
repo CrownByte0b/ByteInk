@@ -2,14 +2,14 @@ package com.vivenotes.byteink.testing
 
 import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
-import com.vivenotes.byteink.vive.InkPageIndex
-import com.vivenotes.byteink.vive.InkPoint
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.ViveBrushes
-import com.vivenotes.byteink.vive.ViveInkCodec
-import com.vivenotes.byteink.vive.ViveInkPage
-import com.vivenotes.byteink.vive.selectWithLasso
-import com.vivenotes.byteink.vive.targetsFor
+import com.vivenotes.byteink.kit.InkPageIndex
+import com.vivenotes.byteink.kit.InkPoint
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.ViveInkCodec
+import com.vivenotes.byteink.kit.ViveInkPage
+import com.vivenotes.byteink.kit.selectWithLasso
+import com.vivenotes.byteink.kit.targetsFor
 import java.io.File
 import java.util.concurrent.Executors
 import kotlin.random.Random

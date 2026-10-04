@@ -8,12 +8,12 @@ import com.vivenotes.byteink.compose.InkPointerSample
 import com.vivenotes.byteink.core.InkMeshes
 import com.vivenotes.byteink.core.InkRuntime
 import com.vivenotes.byteink.nativeloader.LoadedInkLibrary
-import com.vivenotes.byteink.vive.InkPageIndex
-import com.vivenotes.byteink.vive.InkPoint
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.StoredInkStroke
-import com.vivenotes.byteink.vive.ViveBrushes
-import com.vivenotes.byteink.vive.ViveInkCodec
+import com.vivenotes.byteink.kit.InkPageIndex
+import com.vivenotes.byteink.kit.InkPoint
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.StoredInkStroke
+import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.ViveInkCodec
 import java.io.File
 import java.util.Properties
 import org.jetbrains.skia.Bitmap
@@ -23,6 +23,8 @@ import org.jetbrains.skia.Surface
 /** A separate application using only public APIs from ByteInk's dependency coordinates. */
 fun main(args: Array<String>) {
     val reportDirectory = File(args.single()).apply { mkdirs() }
+    val kitPackage = StoredInkStroke::class.java.packageName
+    check(kitPackage == "com.vivenotes.byteink.kit") { "Wrong public kit namespace: $kitPackage" }
     val loaded = InkRuntime.load()
     check(loaded.origin == LoadedInkLibrary.Origin.BUNDLED) { "Expected the published native bundle: $loaded" }
     check(loaded.sha256.matches(Regex("[0-9a-f]{64}")))
@@ -75,6 +77,7 @@ fun main(args: Array<String>) {
 
             val report = Properties().apply {
                 setProperty("status", "passed")
+                setProperty("api.kit.package", kitPackage)
                 setProperty("java.home", File(System.getProperty("java.home")).canonicalPath)
                 setProperty("java.version", System.getProperty("java.version"))
                 setProperty("java.vendor", System.getProperty("java.vendor"))

@@ -1,13 +1,13 @@
 package wiki
 
-import com.vivenotes.byteink.vive.InkLassoMove
-import com.vivenotes.byteink.vive.InkPoint
-import com.vivenotes.byteink.vive.PageBounds
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.StoredInkMove
-import com.vivenotes.byteink.vive.ViveInkCodec
-import com.vivenotes.byteink.vive.moveSelected
-import com.vivenotes.byteink.vive.selectInkWithLasso
+import com.vivenotes.byteink.kit.InkLassoMove
+import com.vivenotes.byteink.kit.InkPoint
+import com.vivenotes.byteink.kit.PageBounds
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.StoredInkMove
+import com.vivenotes.byteink.kit.ViveInkCodec
+import com.vivenotes.byteink.kit.moveSelected
+import com.vivenotes.byteink.kit.selectInkWithLasso
 
 fun moveWithLasso(page: List<PageStroke>): Pair<List<PageStroke>, StoredInkMove>? {
     val loop = listOf(

@@ -23,8 +23,8 @@ import androidx.ink.geometry.ImmutableAffineTransform
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import com.vivenotes.byteink.core.InkMeshes
-import com.vivenotes.byteink.vive.ViveBrushes
-import com.vivenotes.byteink.vive.ViveInkCodec
+import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.ViveInkCodec
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Locale

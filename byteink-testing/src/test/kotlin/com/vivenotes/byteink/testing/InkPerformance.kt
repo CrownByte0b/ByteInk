@@ -17,11 +17,11 @@ import com.vivenotes.byteink.compose.InkScene
 import com.vivenotes.byteink.compose.InkSceneStroke
 import com.vivenotes.byteink.compose.InkSceneRasterCache
 import com.vivenotes.byteink.core.InkRuntime
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.StoredInkStroke
-import com.vivenotes.byteink.vive.ViveBrushes
-import com.vivenotes.byteink.vive.ViveInkCodec
-import com.vivenotes.byteink.vive.ViveInkPage
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.StoredInkStroke
+import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.ViveInkCodec
+import com.vivenotes.byteink.kit.ViveInkPage
 import java.io.File
 import java.io.ByteArrayOutputStream
 import java.lang.management.ManagementFactory
@@ -136,8 +136,8 @@ object InkPerformance {
         repeat(9) { i -> add(InputToolType.MOUSE, x + 8f + i * 7f, y + 12f + (i % 3) * 2f, i * 8L) }
     }
 
-    private fun load(rows: List<StoredInkStroke>, erases: List<com.vivenotes.byteink.vive.StoredInkErase> = emptyList(),
-        moves: List<com.vivenotes.byteink.vive.StoredInkMove> = emptyList()): List<PageStroke> {
+    private fun load(rows: List<StoredInkStroke>, erases: List<com.vivenotes.byteink.kit.StoredInkErase> = emptyList(),
+        moves: List<com.vivenotes.byteink.kit.StoredInkMove> = emptyList()): List<PageStroke> {
         val pool = Executors.newFixedThreadPool(minOf(8, Runtime.getRuntime().availableProcessors()))
         return try {
             ViveInkPage.load(rows, erases, moves, executor = pool).also {

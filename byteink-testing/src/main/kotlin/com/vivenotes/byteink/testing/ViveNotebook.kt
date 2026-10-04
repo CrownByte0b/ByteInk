@@ -1,8 +1,8 @@
 package com.vivenotes.byteink.testing
 
-import com.vivenotes.byteink.vive.StoredInkErase
-import com.vivenotes.byteink.vive.StoredInkMove
-import com.vivenotes.byteink.vive.StoredInkStroke
+import com.vivenotes.byteink.kit.StoredInkErase
+import com.vivenotes.byteink.kit.StoredInkMove
+import com.vivenotes.byteink.kit.StoredInkStroke
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption

@@ -8,7 +8,7 @@ import androidx.ink.geometry.ImmutableAffineTransform
 import androidx.ink.geometry.MutableAffineTransform
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
-import com.vivenotes.byteink.vive.ViveBrushes
+import com.vivenotes.byteink.kit.ViveBrushes
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.Surface
 import kotlin.test.Test

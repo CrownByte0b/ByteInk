@@ -4,9 +4,9 @@ import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.core.InkRuntime
-import com.vivenotes.byteink.vive.AuthoredViveStroke
-import com.vivenotes.byteink.vive.ViveBrushes
-import com.vivenotes.byteink.vive.ViveInkTool
+import com.vivenotes.byteink.kit.AuthoredViveStroke
+import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.ViveInkTool
 
 fun firstStroke(): AuthoredViveStroke {
     InkRuntime.load()

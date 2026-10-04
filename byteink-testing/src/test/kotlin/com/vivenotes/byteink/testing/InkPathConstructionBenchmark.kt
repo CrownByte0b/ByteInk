@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asSkiaPath
 import com.vivenotes.byteink.core.InkMeshes
 import com.vivenotes.byteink.core.InkRuntime
-import com.vivenotes.byteink.vive.ViveBrushes
+import com.vivenotes.byteink.kit.ViveBrushes
 import java.io.File
 import java.lang.management.ManagementFactory
 import java.security.MessageDigest

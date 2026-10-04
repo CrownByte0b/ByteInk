@@ -12,9 +12,9 @@ import com.vivenotes.byteink.compose.InkDrawingSurface
 import com.vivenotes.byteink.compose.InkPathRenderer
 import com.vivenotes.byteink.compose.drawInk
 import com.vivenotes.byteink.compose.rememberInkAuthoringController
-import com.vivenotes.byteink.vive.AuthoredViveStroke
-import com.vivenotes.byteink.vive.StoredInkStroke
-import com.vivenotes.byteink.vive.ViveInkTool
+import com.vivenotes.byteink.kit.AuthoredViveStroke
+import com.vivenotes.byteink.kit.StoredInkStroke
+import com.vivenotes.byteink.kit.ViveInkTool
 import java.util.UUID
 
 @Composable

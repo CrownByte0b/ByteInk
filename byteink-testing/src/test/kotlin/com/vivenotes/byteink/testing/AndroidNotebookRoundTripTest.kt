@@ -3,9 +3,9 @@ package com.vivenotes.byteink.testing
 import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
-import com.vivenotes.byteink.vive.ViveBrushes
-import com.vivenotes.byteink.vive.ViveInkCodec
-import com.vivenotes.byteink.vive.ViveInkPage
+import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.ViveInkCodec
+import com.vivenotes.byteink.kit.ViveInkPage
 import java.io.File
 import java.util.Base64
 import kotlinx.serialization.json.Json

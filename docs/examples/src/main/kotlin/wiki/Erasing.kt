@@ -2,12 +2,12 @@ package wiki
 
 import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
-import com.vivenotes.byteink.vive.InkEraseMode
-import com.vivenotes.byteink.vive.InkPageIndex
-import com.vivenotes.byteink.vive.PageStroke
-import com.vivenotes.byteink.vive.StoredInkErase
-import com.vivenotes.byteink.vive.ViveInkCodec
-import com.vivenotes.byteink.vive.subtract
+import com.vivenotes.byteink.kit.InkEraseMode
+import com.vivenotes.byteink.kit.InkPageIndex
+import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.StoredInkErase
+import com.vivenotes.byteink.kit.ViveInkCodec
+import com.vivenotes.byteink.kit.subtract
 
 data class ErasePreview(val operation: StoredInkErase, val projections: List<PageStroke>)
 
