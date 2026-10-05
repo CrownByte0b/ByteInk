@@ -1,4 +1,4 @@
-package com.vivenotes.byteink.kit
+package com.vivenotes.byteink.vive
 
 import androidx.ink.strokes.StrokeInputBatch
 

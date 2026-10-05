@@ -103,8 +103,10 @@ val byteink = if (isLinuxHost) registerDump("oracleByteink", provider { "byteink
 }
 google?.configure {
     val commit = nativeCommit
+    // Google's toolchain links its float math into libink.so (only pow comes from libm); byteink's
+    // builds call the host's, so derivatives may round apart, by an amount set by the host's glibc.
     argumentProviders.add(CommandLineArgumentProvider {
-        listOf("--expected-native-commit", commit.get(), "--library-role", "google-reference")
+        listOf("--expected-native-commit", commit.get(), "--library-role", "google-reference", "--math-library", "bundled")
     })
 }
 

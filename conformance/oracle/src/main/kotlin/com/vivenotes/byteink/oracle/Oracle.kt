@@ -6,7 +6,8 @@ import kotlin.system.exitProcess
 
 private const val USAGE = """Usage:
   oracle dump --out FILE --label LABEL [--fixtures DIR] [--detail PREFIX] [--angle-math PROFILE]
-      [--magnitude-math PROFILE] [--native-metadata FILE --expected-native-commit COMMIT] [--baseline]
+      [--magnitude-math PROFILE] [--math-library NAME]
+      [--native-metadata FILE --expected-native-commit COMMIT] [--baseline]
       Runs every case against the Ink library byteink's loader loads (the one its jar bundles, or
       the one -Dbyteink.ink.library names) and writes the results, headed by that library's
       sha256. With --detail, keeps only the cases whose names start with PREFIX and writes their
@@ -51,6 +52,7 @@ fun oracle(args: Array<String>) {
                 "platform" to platform(),
                 "angle-math" to (options["--angle-math"] ?: "platform"),
                 "magnitude-math" to (options["--magnitude-math"] ?: "platform"),
+                "math-library" to (options["--math-library"] ?: "platform"),
                 "google-ink-commit" to (options["--expected-native-commit"] ?: "unspecified"),
                 "library-role" to (options["--library-role"] ?: "unspecified"),
                 "values" to "${dump.size}",

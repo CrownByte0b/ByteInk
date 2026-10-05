@@ -208,6 +208,27 @@ class ComparisonTest {
     }
 
     @Test
+    fun googlesBundledMathKeepsThePinProofStrictExceptForDerivativeGaps() {
+        val headers = arrayOf("platform" to "linux-x86_64", "angle-math" to "platform", "magnitude-math" to "platform", "google-ink-commit" to "pin")
+        // live-predicted/marker/loop/stylus on glibc 2.39: 1.43e-4 apart, past the 1.23e-4 tolerance.
+        val reference = dump("library" to "google", "library-role" to "google-reference", "math-library" to "bundled", *headers,
+            "case\tlive.step6.c0.p0.derivatives" to Floats.of(2.2850132f).toString(),
+            "case\tdry.bounds" to Floats.of(1f).toString())
+        val baseline = dump("library" to "baseline", "library-role" to "validation-baseline", *headers,
+            "case\tlive.step6.c0.p0.derivatives" to Floats.of(2.2848701f).toString(),
+            "case\tdry.bounds" to Floats.of(1.01f).toString())
+        val comparison = Comparison(reference, baseline)
+        comparison.requirePlatformBaseline()
+        assertFalse(comparison.crossPlatform)
+        assertTrue(comparison.differentMath)
+        assertEquals(listOf("case\tdry.bounds"), comparison.mismatches.map { it.key })
+        assertTrue(comparison.markdown().contains("| Math library | bundled | platform |"))
+        val sameLibrary = Comparison(Dump.Contents(reference.header - "math-library", reference.values), baseline)
+        assertFalse(sameLibrary.differentMath)
+        assertEquals(2, sameLibrary.mismatches.size)
+    }
+
+    @Test
     fun toleranceAdmitsRoundingAndNothingVisible() {
         assertTrue(Tolerance.accepts(1f, 1f + 5e-5f))
         assertTrue(Tolerance.accepts(1000f, 1000.01f)) // relative: 1e-4 + 1e-5 · 1000

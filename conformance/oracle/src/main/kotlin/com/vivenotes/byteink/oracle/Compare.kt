@@ -13,10 +13,15 @@ import kotlin.math.max
  * must match exactly; for inputs, without Google's internal field 10). Everything else must be
  * identical.
  *
- * Dumps from different platforms or angle-math profiles use math implementations that differ in
- * last bits. That stays within tolerance except in antialiasing derivatives: Ink averages them through
- * atan2, sin and cos, and rounding can swing the average where a vertex's triangles point in nearly
- * opposite directions. Across math implementations, derivatives beyond tolerance are informational.
+ * Dumps from different platforms, angle- or magnitude-math profiles, or C math libraries use math
+ * implementations that differ in last bits. That stays within tolerance except in antialiasing
+ * derivatives: Ink averages them through atan2, sin and cos, and rounding can swing the average where
+ * a vertex's triangles point in nearly opposite directions. Across math implementations, derivatives
+ * beyond tolerance are informational.
+ *
+ * Google's binary carries its own float math (it imports only `pow` from libm), so even on the same
+ * host its derivatives round differently from a build that calls the host's C library, by an amount
+ * that depends on that library's version: glibc 2.39 swings one past tolerance, glibc 2.43 none.
  */
 class Comparison(val reference: Dump.Contents, val candidate: Dump.Contents) {
 
@@ -33,10 +38,11 @@ class Comparison(val reference: Dump.Contents, val candidate: Dump.Contents) {
         here != null && there != null && here != there
     }
 
-    /** A scoped Android angle implementation also changes derivative rounding on the same OS. */
+    /** A scoped Android angle implementation or a bundled C math library also changes derivative rounding on the same OS. */
     val differentMath: Boolean = crossPlatform ||
-        (reference.header["angle-math"] ?: "platform") != (candidate.header["angle-math"] ?: "platform") ||
-        (reference.header["magnitude-math"] ?: "platform") != (candidate.header["magnitude-math"] ?: "platform")
+        listOf("angle-math", "magnitude-math", "math-library").any {
+            (reference.header[it] ?: "platform") != (candidate.header[it] ?: "platform")
+        }
 
     /** A Google pin proof must compare the unmodified arithmetic baseline, never the shipped Android adaptations. */
     fun requirePlatformBaseline() {
@@ -141,6 +147,7 @@ class Comparison(val reference: Dump.Contents, val candidate: Dump.Contents) {
         append("| Platform | ${reference.header["platform"] ?: "—"} | ${candidate.header["platform"] ?: "—"} |\n")
         append("| Angle math | ${reference.header["angle-math"] ?: "platform"} | ${candidate.header["angle-math"] ?: "platform"} |\n")
         append("| Magnitude math | ${reference.header["magnitude-math"] ?: "platform"} | ${candidate.header["magnitude-math"] ?: "platform"} |\n")
+        append("| Math library | ${reference.header["math-library"] ?: "platform"} | ${candidate.header["math-library"] ?: "platform"} |\n")
         append("| Library role | ${reference.header["library-role"] ?: "unspecified"} | ${candidate.header["library-role"] ?: "unspecified"} |\n")
         append("| Source pin | ${reference.header["google-ink-commit"] ?: "unspecified"} | ${candidate.header["google-ink-commit"] ?: "unspecified"} |\n")
         append("| Values | ${reference.values.size} | ${candidate.values.size} |\n\n")
