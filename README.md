@@ -22,11 +22,19 @@ and in-progress strokes, affine transforms, viewport culling and bounded geometr
 - **Distribution:** reusable Gradle dependencies, with packaged native binaries and isolated upstream modifications.
 - **Verification:** native/JVM tests, cross-platform geometry comparisons, Android rendering comparisons and save/load tests in both directions.
 
-# Tooling
+# Local builds
+
+## Gui demo
 
 ```bash
 ./gradlew :samples:viewer:run
 
+```
+
+## Publish local package
+
+```bash
+./gradlew publishToMavenLocal
 ```
 
 # getting android-ink from google

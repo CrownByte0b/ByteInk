@@ -51,8 +51,16 @@ class AndroidNotebookRoundTripTest {
                 val e = erase.jsonObject
                 val page = notebook.page(e.getValue("pageId").jsonPrimitive.content)
                 val loaded = ViveInkPage.load(page.strokes, page.erases, page.moves)
-                assertTrue(e.getValue("targetIds").jsonArray.all { it.jsonPrimitive.content in loaded.erasedAway })
+                val targets = e.getValue("targetIds").jsonArray.map { it.jsonPrimitive.content }.toSet()
+                if (e.getValue("mode").jsonPrimitive.content == "Object") {
+                    assertTrue(targets.all { it in loaded.erasedAway })
+                } else {
+                    assertTrue(loaded.strokes.any { it.id in targets })
+                    assertTrue(targets.none { it in loaded.erasedAway })
+                }
             }
+            assertEquals(mapOf("Object" to 2, "Normal" to 3), expectations.getValue("erases").jsonArray
+                .groupingBy { it.jsonObject.getValue("mode").jsonPrimitive.content }.eachCount())
         }
         ViveNotebook.open(File(output, "unknown-enc.vive")).use { notebook ->
             val all = notebook.pageIds.flatMap { notebook.page(it).strokes }

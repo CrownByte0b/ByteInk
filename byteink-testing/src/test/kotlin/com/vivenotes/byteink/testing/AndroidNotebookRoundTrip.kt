@@ -25,6 +25,7 @@ import com.vivenotes.byteink.kit.ViveInkCodec
 import com.vivenotes.byteink.kit.ViveInkPage
 import com.vivenotes.byteink.kit.ViveInkTool
 import com.vivenotes.byteink.kit.automaticColorOr
+import com.vivenotes.byteink.kit.touches
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
@@ -115,9 +116,10 @@ internal object AndroidNotebookRoundTrip {
         }
         // The eraser goes through the same real authoring controller, then its persisted mask is
         // checked against the current projections before writing the operation's target links.
-        val eraseIndices = listOf(0, 18, rows.lastIndex)
+        val eraseCases = listOf(0 to InkEraseMode.Object, 18 to InkEraseMode.Object,
+            1 to InkEraseMode.Normal, 19 to InkEraseMode.Normal, rows.lastIndex to InkEraseMode.Normal)
         val originalMasks = linkedMapOf<String, Stroke>()
-        val erases = eraseIndices.map { index ->
+        val erases = eraseCases.map { (index, mode) ->
             val target = rows[index]
             val decoded = requireNotNull(ViveInkCodec.decode(target))
             val bounds = requireNotNull(decoded.shape.computeBoundingBox())
@@ -127,8 +129,8 @@ internal object AndroidNotebookRoundTrip {
             )
             val mask = authorSamples(ViveBrushes.eraseMask(decoded.inputs, 30f).brush, samples)
             val projected = listOf(requireNotNull(ViveInkPage.decode(target)))
-            val preliminary = ViveInkCodec.encodeErase(mask, uuid("object-erase:$index"), target.pageId,
-                InkEraseMode.Object, 6000L + index, emptyList())
+            val preliminary = ViveInkCodec.encodeErase(mask, uuid("${mode.name.lowercase()}-erase:$index"), target.pageId,
+                mode, 6000L + index, emptyList())
             val persistedMask = requireNotNull(ViveInkCodec.decodeErase(preliminary))
             val targets = InkPageIndex(projected).targetsFor(persistedMask)
             check(targets == listOf(target.id)) { "Authored eraser missed $index" }
@@ -153,7 +155,17 @@ internal object AndroidNotebookRoundTrip {
             erases.forEach { erase ->
                 val page = notebook.page(erase.pageId)
                 val loaded = ViveInkPage.load(page.strokes, page.erases, page.moves)
-                check(erase.targetIds.all { it in loaded.erasedAway }) { "Object erase must remove its target" }
+                if (erase.mode == InkEraseMode.Object.stored) {
+                    check(erase.targetIds.all { it in loaded.erasedAway }) { "Object erase must remove its target" }
+                } else {
+                    val survivors = loaded.strokes.filter { it.id in erase.targetIds }
+                    check(survivors.isNotEmpty()) { "Normal erase must leave ink on both sides" }
+                    val mask = requireNotNull(ViveInkCodec.decodeErase(erase))
+                    check(survivors.none { it.touches(mask) }) { "Normal erase must leave an empty gap" }
+                    val bounds = requireNotNull(mask.shape.computeBoundingBox())
+                    check(survivors.any { requireNotNull(it.pageBounds).left < bounds.xMin } &&
+                        survivors.any { requireNotNull(it.pageBounds).right > bounds.xMax }) { "Normal erase lost an end" }
+                }
             }
         }
         val notebookId = withDatabase(desktop) { db ->
@@ -179,7 +191,7 @@ internal object AndroidNotebookRoundTrip {
             "nativeSha256" to JsonPrimitive(native.sha256), "baseSha256" to JsonPrimitive(MatrixComparison.sha256(base))))
         writeJson(File(root, "source-rows.json"), snapshot(source))
         writeJson(File(root, "desktop-rows.json"), snapshot(desktop))
-        println("Prepared 55 controller-authored strokes, 3 Object erases, 4 independent encoding probes, 95 replay pages and opaque preservation fixtures: $root")
+        println("Prepared 55 controller-authored strokes, 2 Object and 3 Normal erases, 4 independent encoding probes, 95 replay pages and opaque preservation fixtures: $root")
     }
 
     internal fun verify(root: File) {
@@ -227,7 +239,7 @@ internal object AndroidNotebookRoundTrip {
                     if (!identical) issues += "$rowId encoding differs from Android's canonical original-input encoder"
                 }
             }
-            check(encoding.size == 58) { "Missing original Android encoding comparison" }
+            check(encoding.size == authoredIds.size) { "Missing original Android encoding comparison" }
         }
         expected.getValue("encodingProbes").jsonArray.forEach { element ->
             val probe = element.jsonObject
@@ -241,7 +253,9 @@ internal object AndroidNotebookRoundTrip {
                 "androidSha256" to JsonPrimitive(original.inputStream().use { it.sha256() }))
             if (!identical) issues += "$id independent encoder probe differs from Android's actual encoder"
         }
-        check(encoding.size == 62) { "Encoding comparison must include 58 authored rows/masks and four independent probes" }
+        val expectedEncodingCount = expected.getValue("authoredRows").jsonArray.size +
+            expected.getValue("erases").jsonArray.size + expected.getValue("encodingProbes").jsonArray.size
+        check(encoding.size == expectedEncodingCount) { "Missing authored row, mask or independent encoding probe" }
         ViveNotebook.open(android).use { notebook ->
             expected.getValue("pages").jsonArray.forEach { frame ->
                 val id = frame.jsonObject.getValue("id").jsonPrimitive.content
@@ -263,6 +277,9 @@ internal object AndroidNotebookRoundTrip {
             }
         }
         val observed = Json.parseToJsonElement(File(root, "android/observed.json").readText()).jsonObject
+        val eraseCounts = expected.getValue("erases").jsonArray.groupingBy {
+            it.jsonObject.getValue("mode").jsonPrimitive.content
+        }.eachCount()
         check(listOf("unknownEncodingRejectedEmpty", "unknownEncodingRejectedOccupied").all {
             observed.getValue(it).jsonPrimitive.content == "true"
         }) {
@@ -270,7 +287,8 @@ internal object AndroidNotebookRoundTrip {
         }
         val report = obj("schemaVersion" to JsonPrimitive(1), "passed" to JsonPrimitive(issues.isEmpty()),
             "preservedStrokeRows" to JsonPrimitive(897), "authoredStrokeRows" to JsonPrimitive(55),
-            "newObjectErases" to JsonPrimitive(3), "renderedPages" to JsonPrimitive(metrics.size),
+            "newObjectErases" to JsonPrimitive(eraseCounts["Object"] ?: 0),
+            "newNormalErases" to JsonPrimitive(eraseCounts["Normal"] ?: 0), "renderedPages" to JsonPrimitive(metrics.size),
             "integerValues" to JsonPrimitive(integerValues), "floatValues" to JsonPrimitive(floatValues),
             "maximumGeometryGap" to JsonPrimitive(maximumGap), "issues" to JsonArray(issues.take(40).map(::JsonPrimitive)),
             "encoding" to JsonArray(encoding), "pixels" to JsonObject(metrics),
@@ -281,7 +299,7 @@ internal object AndroidNotebookRoundTrip {
             "androidObserved" to observed, "androidCapture" to capture)
         writeJson(File(root, "roundtrip-report.json"), report)
         check(issues.isEmpty()) { "Notebook round-trip differs: ${issues.take(8)}; see $root/roundtrip-report.json" }
-        println("Round trip passed: 897 stroke rows preserved exactly; 55 authored rows; 3 Object erases; ${metrics.size} pages; geometry gap $maximumGap")
+        println("Round trip passed: 897 stroke rows preserved exactly; 55 authored rows; $eraseCounts erases; ${metrics.size} pages; geometry gap $maximumGap")
     }
 
     /** Binds a successful pinned Android run to the exact prepared inputs and captured inventory. */

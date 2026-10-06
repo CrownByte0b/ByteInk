@@ -1,6 +1,7 @@
 androidx-ink/
 memory/
 benchmarks/
+todo.txt
 
 # Gradle, Kotlin and IDE state
 .gradle/
@@ -11,3 +12,4 @@ build/
 .idea/
 *.iml
 local.properties
+

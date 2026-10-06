@@ -13,8 +13,9 @@ the supplied application's working tree remain untouched.
 Preparation starts with the committed Android synthetic matrix: 840 stroke rows and
 existing Normal/Object erases, moves and resizes. It adds an unknown-brush sentinel,
 a tombstone and 55 controller-authored strokes covering every supported family and
-applicable stabilization level, with mouse/stylus inputs and varied colours. Three
-new Object-erase masks remove a marker, calligraphy stroke and highlighter. The
+applicable stabilization level, with mouse/stylus inputs and varied colours. Two
+new Object-erase masks remove a marker and calligraphy stroke. Three new Normal masks
+cut a marker, calligraphy stroke and highlighter, retaining ink on both sides. The
 supported notebook contains 897 stroke rows; 95 affected/operation pages have
 independent desktop geometry and raster expectations.
 
@@ -40,9 +41,9 @@ path renderer omits. Original hardware and software-path images are also retaine
 ### Exact encoding
 
 Fresh encoding is compared from identical canonical inputs and noise seeds before
-quantization. All 55 new strokes, three erase masks and four encoding-only probes
+quantization. All 55 new strokes, five erase masks and four encoding-only probes
 must match Android in both the uncompressed protobuf and complete gzip bytes:
-**62/62 comparisons**, with no transport or private-field exceptions. The independent
+**64/64 comparisons**, with no transport or private-field exceptions. The independent
 probes cover empty input, one sample with a nonzero seed, 8,192 stylus samples with
 all attributes, and 40,000 mouse samples. The large stylus payload crosses compressor
 window/block boundaries. These probes generate no notebook rows or meshes.

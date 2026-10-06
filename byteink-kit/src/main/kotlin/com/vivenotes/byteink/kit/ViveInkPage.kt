@@ -105,6 +105,15 @@ public object ViveInkPage {
         )
     }
 
+    /**
+     * Replays already decoded source strokes and operations without decoding their inputs again.
+     * Supply the original projections before operations, such as [LoadedInkPage.sourceStrokes].
+     * Operations are ordered by their persisted time and id; the supplied lists are not modified.
+     * Like [load], geometric replay belongs on a worker thread.
+     */
+    public fun replay(strokes: List<PageStroke>, operations: List<DecodedInkOperation>): List<PageStroke> =
+        replay(strokes, operations.sortedWith(compareBy(DecodedInkOperation::createdAt, DecodedInkOperation::id)), null)
+
     private fun prepare(operations: List<Operation>, work: InkReplayWork?): List<DecodedInkOperation> =
         operations.mapNotNull { operation ->
             when (operation) {
