@@ -233,6 +233,18 @@ jobs:
           -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }}
           -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
           -Porg.gradle.java.installations.auto-download=false
+      - name: Install offscreen OpenGL test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0
+      - name: Verify mesh shaders on OpenGL
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: >-
+          xvfb-run -a ./gradlew :byteink-compose:meshGpuTest
+          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
+          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
+          -Porg.gradle.java.installations.auto-download=false
       - name: Upload Linux reference geometry and notebook bytes
         if: matrix.runtime == 'zulu27'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

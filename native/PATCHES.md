@@ -13,8 +13,9 @@ MinGW-w64/UCRT, baseline x86-64, optimized code and static libc++/libunwind.
 | 0005 | Add one ByteInk JNI entry point using the existing pinned classic zlib to emit Android-identical gzip for notebook input protobufs. | Local codec extension; the 341 upstream JNI functions and engine code stay unchanged. |
 | 0006 | Copy finished/live outlines and triangle partitions into owned JVM arrays in four checked JNI calls. | Local geometry extension; upstream engine, arithmetic and 341 JNI functions stay unchanged. |
 | 0007 | Encode/decode raw input protobufs without intermediate gzip; keep normal input peer ownership. | Local codec extension; upstream storage, engine and 341 JNI functions stay unchanged. |
+| 0008 | Copy all finished/live rendering attributes into a canonical owned vertex layout, decoding each source mesh's optional packed attributes. | Local rendering bridge; upstream engine, packing and 341 JNI functions stay unchanged. |
 
-The Windows branch relies on `JNIEXPORT` for the 341 upstream JNI exports and the seven explicitly
+The Windows branch relies on `JNIEXPORT` for the 341 upstream JNI exports and the nine explicitly
 listed ByteInk exports in `upstream/jni/byteink.exports.txt`; static libunwind additionally
 exports its own small API. `:upstream:checkWindowsLibrary` checks the complete allowed surface,
 system-only imports and absence of path-dependent debug entries. The portable upstream C++ subset
@@ -69,3 +70,13 @@ reuse is deferred; this patch does not change zlib parameters or flush behavior.
 References: [Zig 0.14 driver](https://github.com/ziglang/zig/blob/0.14.0/src/main.zig),
 [LLVM deterministic builds](https://blog.llvm.org/2019/11/deterministic-builds-with-clang-and-lld.html),
 [Windows verification](WINDOWS.md).
+
+The rendering bridge ships in loader `1.1.0-alpha06-byteink.4`. Its two checked JNI calls return
+`StrokeMesh` snapshots with 15 floats per vertex (position, opacity/HSL shifts, side/forward
+derivatives and labels, surface UV and animation offset), widened triangle indices, and a source
+attribute mask. Finished attributes use the original mesh's `FloatVertexAttribute` decoder; missing
+attributes are zero and incompatible attribute dimensions throw before decoding. Live partitions
+retain their correct, possibly overlapping vertex offsets.
+Like patch 0006, each copy retains the typed Java owner and exposes no native-backed buffer.
+The mesh renderer implements the pinned SkSL vertex math on the CPU and fragment math in Skia
+RuntimeEffects; the native stroke engine and its packed mesh formats are unchanged.

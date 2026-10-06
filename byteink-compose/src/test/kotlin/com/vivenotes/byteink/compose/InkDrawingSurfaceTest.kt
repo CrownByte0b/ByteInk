@@ -43,6 +43,29 @@ class InkDrawingSurfaceTest {
     private val surfaceModifier = Modifier.size(128.dp).testTag("ink")
 
     @Test
+    fun fullMeshRendererDrawsWetAndFinishedInkThroughTheSurface() = runDesktopComposeUiTest(width = 128, height = 128) {
+        val controller = InkAuthoringController()
+        val finished = mutableStateListOf<Stroke>()
+        val renderer = InkMeshRenderer()
+        try {
+            setContent {
+                InkDrawingSurface(controller, marker, surfaceModifier, renderer = renderer, onStrokeFinished = { finished += it }) {
+                    drawRect(Color.White)
+                    finished.forEach { drawInk(renderer, it) }
+                }
+            }
+            val node = onNodeWithTag("ink")
+            node.performMouseInput {
+                updatePointerTo(Offset(12f, 60f)); press(); moveTo(Offset(108f, 60f), delayMillis = 64)
+            }
+            assertEquals(Color.Black, node.captureToImage().toPixelMap()[60, 60])
+            node.performMouseInput { release() }
+            runOnIdle { assertEquals(1, finished.size); assertNull(controller.liveStroke) }
+            assertEquals(Color.Black, node.captureToImage().toPixelMap()[60, 60])
+        } finally { renderer.close() }
+    }
+
+    @Test
     fun mouseDragProducesOneStrokeWithTheSelectedBrushAndEventTimes() = runDesktopComposeUiTest(width = 128, height = 128) {
         val controller = InkAuthoringController()
         val finished = mutableListOf<Stroke>()

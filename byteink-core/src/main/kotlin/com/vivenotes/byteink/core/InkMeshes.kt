@@ -43,6 +43,14 @@ public object InkMeshes {
     /** The triangle meshes of a stroke still being drawn, for brush coat [coat]: one per partition. */
     public fun triangles(stroke: InProgressStroke, coat: Int): List<TriangleMesh> =
         InkGeometryNative.liveTriangles(stroke, coat).asList()
+
+    /** All rendering attributes, decoded from the finished mesh's actual packed format. */
+    public fun rendering(shape: PartitionedMesh, group: Int): List<StrokeMesh> =
+        InkGeometryNative.finishedRendering(shape, group).asList()
+
+    /** All rendering attributes of the current live partitions, copied on the authoring thread. */
+    public fun rendering(stroke: InProgressStroke, coat: Int): List<StrokeMesh> =
+        InkGeometryNative.liveRendering(stroke, coat).asList()
 }
 
 @UsedByNative
@@ -53,4 +61,6 @@ private object InkGeometryNative {
     @UsedByNative external fun liveOutlines(owner: InProgressStroke, coat: Int): Array<FloatArray>
     @UsedByNative external fun finishedTriangles(owner: PartitionedMesh, group: Int): Array<TriangleMesh>
     @UsedByNative external fun liveTriangles(owner: InProgressStroke, coat: Int): Array<TriangleMesh>
+    @UsedByNative external fun finishedRendering(owner: PartitionedMesh, group: Int): Array<StrokeMesh>
+    @UsedByNative external fun liveRendering(owner: InProgressStroke, coat: Int): Array<StrokeMesh>
 }

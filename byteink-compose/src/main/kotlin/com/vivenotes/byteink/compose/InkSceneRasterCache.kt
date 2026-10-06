@@ -69,6 +69,8 @@ public class InkSceneRasterCache(
     private class Raster(val image: Image, val drawn: Int, val bytes: Long)
     private val views = LinkedHashMap<View, Raster>(4, 0.75f, true)
     private var cachedScene: InkScene? = null
+    private var cachedRenderer: InkRenderer? = null
+    private var cachedRenderVersion: Long = 0L
     private var cachedExcludedStrokes: Set<InkSceneStroke> = emptySet()
     private var closed: Boolean = false
 
@@ -81,6 +83,16 @@ public class InkSceneRasterCache(
         canvas: Canvas,
         scene: InkScene,
         renderer: InkPathRenderer,
+        width: Int,
+        height: Int,
+        sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
+    ): Int = draw(canvas, scene, renderer as InkRenderer, width, height, sceneToCanvas)
+
+    /** Draws or reuses a scene view rendered with full mesh effects. */
+    public fun draw(
+        canvas: Canvas,
+        scene: InkScene,
+        renderer: InkRenderer,
         width: Int,
         height: Int,
         sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
@@ -107,6 +119,17 @@ public class InkSceneRasterCache(
         canvas: Canvas,
         scene: InkScene,
         renderer: InkPathRenderer,
+        viewport: Rect,
+        sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
+        rasterScale: Float = 1f,
+        excludedStrokes: Set<InkSceneStroke> = emptySet(),
+    ): Int = draw(canvas, scene, renderer as InkRenderer, viewport, sceneToCanvas, rasterScale, excludedStrokes)
+
+    /** The physical viewport cache also tracks renderer identity, texture changes and animation. */
+    public fun draw(
+        canvas: Canvas,
+        scene: InkScene,
+        renderer: InkRenderer,
         viewport: Rect,
         sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
         rasterScale: Float = 1f,
@@ -143,12 +166,14 @@ public class InkSceneRasterCache(
             viewport.left + width * inverseScale, viewport.top + height * inverseScale)
             .inflate(maxOf(0f, inverseScale - 1f))
         requireFiniteViewportBounds(drawingViewport, canvasToScene)
-        if (cachedScene !== scene ||
+        if (cachedScene !== scene || cachedRenderer !== renderer || cachedRenderVersion != renderer.renderVersion ||
             cachedExcludedStrokes.size != excludedStrokes.size ||
             excludedStrokes.any { it !in cachedExcludedStrokes }) {
             val exclusions = identitySnapshot(excludedStrokes)
             clearCache()
             cachedScene = scene
+            cachedRenderer = renderer
+            cachedRenderVersion = renderer.renderVersion
             cachedExcludedStrokes = exclusions
         }
         val view = View(transform, viewport, rasterScale)
@@ -208,6 +233,7 @@ public class InkSceneRasterCache(
         views.values.forEach { it.image.close() }
         views.clear()
         cachedScene = null
+        cachedRenderer = null
         cachedExcludedStrokes = emptySet()
         retainedPixelBytes = 0L
     }
@@ -301,6 +327,26 @@ public fun DrawScope.drawCachedInkScene(
     cache: InkSceneRasterCache,
     scene: InkScene,
     renderer: InkPathRenderer,
+    viewport: Rect,
+    sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
+    rasterScale: Float = 1f,
+    excludedStrokes: Set<InkSceneStroke> = emptySet(),
+): Int = cache.draw(drawContext.canvas, scene, renderer, viewport, sceneToCanvas, rasterScale, excludedStrokes)
+
+/** Draws a finished scene with full mesh effects through a physical viewport raster. */
+public fun DrawScope.drawCachedInkScene(
+    cache: InkSceneRasterCache,
+    scene: InkScene,
+    renderer: InkRenderer,
+    sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
+): Int = cache.draw(drawContext.canvas, scene, renderer,
+    ceil(size.width.toDouble()).toInt(), ceil(size.height.toDouble()).toInt(), sceneToCanvas)
+
+/** Draws a scrolled scene raster, invalidating it when texture animation advances. */
+public fun DrawScope.drawCachedInkScene(
+    cache: InkSceneRasterCache,
+    scene: InkScene,
+    renderer: InkRenderer,
     viewport: Rect,
     sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
     rasterScale: Float = 1f,

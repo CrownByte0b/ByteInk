@@ -13,7 +13,7 @@ androidx-annotation = "1.8.0"
 # byteink's own modules, and its fork of ink-nativeloader, which is versioned after the release it
 # forks: <androidx-ink>-byteink.<N>.
 byteink-modules = "0.1.0-SNAPSHOT"
-byteink-nativeloader = "1.1.0-alpha06-byteink.3"
+byteink-nativeloader = "1.1.0-alpha06-byteink.4"
 asm = "9.10.1"
 sqlite-jdbc = "3.53.4.0"
 # AndroidX Ink's own test suites (conformance/) run with the libraries AndroidX pinned for them at the

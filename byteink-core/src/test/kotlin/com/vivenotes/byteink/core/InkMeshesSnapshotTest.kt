@@ -124,6 +124,7 @@ class InkMeshesSnapshotTest {
             repeat(3) {
                 InkMeshes.outlines(wet, 0); InkMeshes.triangles(wet, 0)
                 InkMeshes.outlines(dry, 0); InkMeshes.triangles(dry, 0)
+                InkMeshes.rendering(wet, 0); InkMeshes.rendering(dry, 0)
             }
             val field = Class.forName("androidx.ink.strokes.InProgressStrokeExtensions")
                 .getDeclaredField("inProgressStrokesReferencedByBuffers").apply { isAccessible = true }
@@ -169,13 +170,22 @@ class InkMeshesSnapshotTest {
             val meshes = InkMeshes.triangles(wet, 0)
             assertTrue(meshes.first().vertexCount >= 65_535)
             for ((partition, mesh) in meshes.withIndex()) {
+                val rendering = InkMeshes.rendering(wet, 0)[partition]
+                assertEquals(mesh.vertexCount, rendering.vertexCount)
+                assertContentEquals(mesh.triangles, rendering.triangles)
                 val raw = wet.getRawVertexBuffer(0, partition).order(ByteOrder.nativeOrder())
                 // Pinned StrokeVertex::FullMeshFormat begins with two float positions.
                 // Derive its stride from this partition and verify it against the scalar
                 // getter in partition zero before checking the offset-sensitive copies.
                 val stride = raw.remaining() / mesh.vertexCount
                 assertTrue(stride >= 8 && stride % 4 == 0)
+                assertEquals(StrokeMesh.VERTEX_STRIDE * 4, stride)
+                assertEquals(511, rendering.attributeMask)
                 repeat(mesh.vertexCount) { vertex ->
+                    repeat(StrokeMesh.VERTEX_STRIDE) { component ->
+                        assertEquals(raw.getFloat(vertex * stride + component * 4),
+                            rendering.vertices[vertex * StrokeMesh.VERTEX_STRIDE + component])
+                    }
                     assertEquals(raw.getFloat(vertex * stride), mesh.positions[vertex * 2])
                     assertEquals(raw.getFloat(vertex * stride + 4), mesh.positions[vertex * 2 + 1])
                     if (partition == 0) {
@@ -197,6 +207,39 @@ class InkMeshesSnapshotTest {
                 equalMeshes(scalarTriangles(dry, group), InkMeshes.triangles(dry, group))
             }
         } finally { wet.clear() }
+    }
+
+    @Test
+    fun renderingSnapshotsOwnDecodedAttributesAndSurviveUpdatesAndClear() {
+        val wet = InProgressStroke()
+        wet.start(marker)
+        wet.enqueueInputs(inputs(9), inputs(5, 9))
+        wet.updateShape(104L)
+        val snapshot = InkMeshes.rendering(wet, 0)
+        val copies = snapshot.map { it.vertices.clone() }
+        assertTrue(snapshot.all { it.attributeMask == 511 })
+        assertTrue(snapshot.all { it.hasSurfaceUv && it.hasAnimationOffset })
+        wet.finishInput(); wet.updateShape(1000L)
+        val dry = wet.toImmutable()
+        val positions = InkMeshes.triangles(dry.shape, 0)
+        val decoded = InkMeshes.rendering(dry.shape, 0)
+        assertEquals(positions.size, decoded.size)
+        positions.zip(decoded).forEach { (geometry, mesh) ->
+            assertContentEquals(geometry.triangles, mesh.triangles)
+            repeat(mesh.vertexCount) { vertex ->
+                assertEquals(geometry.positions[vertex * 2], mesh.vertices[vertex * StrokeMesh.VERTEX_STRIDE])
+                assertEquals(geometry.positions[vertex * 2 + 1], mesh.vertices[vertex * StrokeMesh.VERTEX_STRIDE + 1])
+            }
+            assertTrue(mesh.vertices.all(Float::isFinite))
+            assertTrue(mesh.attributeMask and 1 != 0)
+        }
+        wet.clear()
+        snapshot.zip(copies).forEach { (mesh, saved) -> assertContentEquals(saved, mesh.vertices) }
+        snapshot.first().vertices.fill(-999f)
+        assertTrue(InkMeshes.rendering(dry.shape, 0).all { it.vertices.none { f -> f == -999f } })
+        assertFailsWith<IllegalArgumentException> { InkMeshes.rendering(wet, 0) }
+        assertFailsWith<IllegalArgumentException> { InkMeshes.rendering(dry.shape, -1) }
+        assertTrue(InkMeshes.rendering(Stroke(marker, MutableStrokeInputBatch()).shape, 0).isEmpty())
     }
 
     private fun scalarOutlines(shape: PartitionedMesh, group: Int): List<FloatArray> {

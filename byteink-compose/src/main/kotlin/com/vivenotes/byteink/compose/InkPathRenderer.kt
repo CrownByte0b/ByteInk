@@ -43,7 +43,7 @@ import java.lang.ref.WeakReference
  * weakly and updated when InProgressStroke's version changes. Call [clearCache] when changing pages
  * to release cached geometry promptly.
  */
-public class InkPathRenderer(public val cacheCapacity: Int, public val cacheByteBudget: Long) {
+public class InkPathRenderer(public val cacheCapacity: Int, public val cacheByteBudget: Long) : InkRenderer {
     public constructor() : this(2048, DEFAULT_CACHE_BYTE_BUDGET)
     public constructor(cacheCapacity: Int = 2048) : this(cacheCapacity, DEFAULT_CACHE_BYTE_BUDGET)
 
@@ -80,10 +80,16 @@ public class InkPathRenderer(public val cacheCapacity: Int, public val cacheByte
         private set
 
     /** Whether every coat has a texture-free ANY or DISCARD paint this renderer supports. */
-    public fun canDraw(stroke: Stroke): Boolean = supported(stroke.brush)
+    override fun canDraw(stroke: Stroke): Boolean = supported(stroke.brush)
 
     /** An unstarted stroke has nothing to draw; otherwise checks all its coats' paints. */
-    public fun canDraw(stroke: InProgressStroke): Boolean = stroke.brush?.let(::supported) ?: true
+    override fun canDraw(stroke: InProgressStroke): Boolean = stroke.brush?.let(::supported) ?: true
+
+    override fun render(canvas: Canvas, stroke: Stroke, strokeToCanvas: AffineTransform, viewport: Rect?, colorArgb: Int?): Boolean =
+        draw(canvas, stroke, strokeToCanvas, viewport, colorArgb)
+
+    override fun render(canvas: Canvas, stroke: InProgressStroke, strokeToCanvas: AffineTransform, viewport: Rect?, colorArgb: Int?): Boolean =
+        draw(canvas, stroke, strokeToCanvas, viewport, colorArgb)
 
     /**
      * Draws [stroke], applying [strokeToCanvas] on top of the canvas's existing transform.
@@ -172,7 +178,7 @@ public class InkPathRenderer(public val cacheCapacity: Int, public val cacheByte
     }
 
     /** Drops both finished and live path caches. */
-    public fun clearCache() {
+    override fun clearCache() {
         shapes.values.forEach { it.paths.forEach(InkRenderPath::close) }
         shapes.clear()
         cachedPathBytes = 0L
@@ -286,7 +292,7 @@ public fun DrawScope.drawInk(
     colorArgb: Int? = null,
 ): Boolean = renderer.draw(drawContext.canvas, stroke, strokeToCanvas, Rect(0f, 0f, size.width, size.height), colorArgb)
 
-private fun AffineTransform.composeMatrix(): Matrix {
+internal fun AffineTransform.composeMatrix(): Matrix {
     require(m00.isFinite() && m10.isFinite() && m20.isFinite() && m01.isFinite() && m11.isFinite() && m21.isFinite()) {
         "strokeToCanvas must be finite"
     }

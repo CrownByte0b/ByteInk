@@ -53,6 +53,23 @@ public fun InkDrawingSurface(
     onStrokeFinished: (Stroke) -> Unit,
     drawContent: DrawScope.() -> Unit = {},
 ) {
+    InkDrawingSurface(controller, brush, modifier, strokeToView, renderer as InkRenderer, enabled, inputSource, onStrokeFinished, drawContent)
+}
+
+/** Authors and draws live Ink with the supplied full mesh or path renderer. */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+public fun InkDrawingSurface(
+    controller: InkAuthoringController,
+    brush: Brush,
+    modifier: Modifier = Modifier,
+    strokeToView: AffineTransform = AffineTransform.IDENTITY,
+    renderer: InkRenderer,
+    enabled: Boolean = true,
+    inputSource: InkInputSource? = null,
+    onStrokeFinished: (Stroke) -> Unit,
+    drawContent: DrawScope.() -> Unit = {},
+) {
     val currentBrush by rememberUpdatedState(brush)
     val currentTransform by rememberUpdatedState(strokeToView)
     val currentCallback by rememberUpdatedState(onStrokeFinished)

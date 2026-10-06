@@ -66,6 +66,14 @@ public class InkScene(strokes: List<InkSceneStroke>) {
         viewport: Rect,
     ): Int = draw(canvas, renderer, sceneToCanvas, viewport, emptySet())
 
+    /** Draws a scene using the full mesh renderer or another InkRenderer implementation. */
+    public fun draw(
+        canvas: Canvas,
+        renderer: InkRenderer,
+        sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
+        viewport: Rect,
+    ): Int = draw(canvas, renderer, sceneToCanvas, viewport, emptySet())
+
     /**
      * Draws visible strokes except [excludedStrokes], preserving their original drawing order.
      * Exclusions are checked only for viewport candidates, so changing them reuses this scene and
@@ -80,6 +88,15 @@ public class InkScene(strokes: List<InkSceneStroke>) {
         sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
         viewport: Rect,
         excludedStrokes: Set<InkSceneStroke>,
+    ): Int = draw(canvas, renderer as InkRenderer, sceneToCanvas, viewport, excludedStrokes)
+
+    /** Draws visible, non-excluded occurrences with either renderer, in stroke order. */
+    public fun draw(
+        canvas: Canvas,
+        renderer: InkRenderer,
+        sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
+        viewport: Rect,
+        excludedStrokes: Set<InkSceneStroke>,
     ): Int {
         val exclusions = if (excludedStrokes.isEmpty()) emptySet() else
             Collections.newSetFromMap(IdentityHashMap<InkSceneStroke, Boolean>(excludedStrokes.size)).apply {
@@ -90,7 +107,7 @@ public class InkScene(strokes: List<InkSceneStroke>) {
         for (item in visibleStrokes(viewport, sceneToCanvas)) {
             if (item in exclusions) continue
             AffineTransform.multiply(sceneToCanvas, item.strokeToScene, transform)
-            if (renderer.draw(canvas, item.stroke, transform, viewport, item.colorArgb)) drawn++
+            if (renderer.render(canvas, item.stroke, transform, viewport, item.colorArgb)) drawn++
         }
         return drawn
     }
@@ -109,6 +126,14 @@ public fun DrawScope.drawInkScene(
     renderer: InkPathRenderer,
     sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
     excludedStrokes: Set<InkSceneStroke>,
+): Int = scene.draw(drawContext.canvas, renderer, sceneToCanvas, Rect(0f, 0f, size.width, size.height), excludedStrokes)
+
+/** Draws a scene with full mesh effects and viewport culling. */
+public fun DrawScope.drawInkScene(
+    scene: InkScene,
+    renderer: InkRenderer,
+    sceneToCanvas: AffineTransform = AffineTransform.IDENTITY,
+    excludedStrokes: Set<InkSceneStroke> = emptySet(),
 ): Int = scene.draw(drawContext.canvas, renderer, sceneToCanvas, Rect(0f, 0f, size.width, size.height), excludedStrokes)
 
 private fun requireFinite(transform: AffineTransform) {
