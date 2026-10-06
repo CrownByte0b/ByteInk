@@ -5,6 +5,106 @@ Use `com.vivenotes.byteink:byteink-compose:0.1.0-SNAPSHOT` for the drawing surfa
 The real Ink engine and packaged native loader arrive transitively. The consuming application
 supplies Compose Desktop's platform runtime and enables JVM native access.
 
+## Native capture and immediate Skia authoring
+
+The `byteink-compose` artifact includes real native capture on Windows x86_64 (`WM_POINTER`) and
+Linux x86_64 (XInput2, including XWayland). It uses the existing pinned Ink engine and native
+libraries. No additional native binary or Java dependency is required. Launch Java 25+ with
+`--enable-native-access=ALL-UNNAMED`, as required for Ink/Skiko and the FFM capture adapters.
+
+Use the dedicated surface for authoring without a Compose frame-clock wait:
+
+```kotlin
+val finished = remember { mutableStateListOf<Stroke>() }
+val renderer = remember { InkMeshRenderer() }
+DisposableEffect(renderer) { onDispose { renderer.clearCache() } }
+
+InkLowLatencySurface(
+    brush = selectedBrush,
+    modifier = Modifier.fillMaxSize(),
+    strokeToView = pageToLocalPixels,
+    renderer = renderer,
+    onStrokeFinished = { pointerId, stroke -> finished.add(stroke) },
+    drawContent = { canvas, _, _ ->
+        finished.forEach { renderer.render(canvas, it, pageToLocalPixels) }
+    },
+)
+```
+
+Add the completed stroke to the finished scene synchronously in the callback to preserve the
+handoff before the next draw. For large pages, supply the existing scene/raster cache through
+`drawContent` instead of traversing every stroke. The surface owns its authoring session and
+native subscription; a supplied renderer is borrowed. It releases its own renderer cache on
+disposal. `InkLowLatencyPanel` provides the same surface directly to Swing hosts.
+
+Native packets retain chronological real history and measured pressure. Projected pen tilt is
+converted into the Ink polar tilt and shaft azimuth; Windows barrel twist is not shaft orientation.
+Native pixels are converted to local coordinates using the current content scale. Each down freezes
+its brush, optional-axis availability, page transform and completion callback. Orientation maps
+through the inverse transform. Missing axes stay absent, or hold the last real value if the gesture
+started with that axis. Physical length is populated only when the host supplies calibrated
+`centimetersPerNativePixel`; logical DPI does not establish physical size. A scalar physical length
+is omitted under anisotropic scaling or shear.
+
+Each pointer has an independent real Ink engine and predictor. The default forecast holds measured
+axes, caps its horizon at 24 ms and displacement at 32 local pixels, and resets on reversals, pauses
+and tool changes. The session targets 12 ms ahead. Replacements and new real observations retract
+the old speculative tail. A stopped-device forecast expires through the surface's timer. Finish
+always removes prediction and reconstructs the canonical stroke from real inputs before encoding.
+`InkAuthoringSession(predictorFactory = null)` disables forecasts; custom predictor factories and
+native sources can supply other models. `InkInputEvent.Batch` carries chronological real inputs and
+a replacement forecast; `Predict` can replace the forecast separately.
+
+For a Compose canvas managed by the host, `InkDrawingSurface` remains available. Its single-controller
+overloads choose the first active pointer and safely ignore other pointers until completion. They
+accept native history, angles and prediction through `inputSource`; their geometry updates follow
+the Compose frame clock. `InkAuthoringSession` supports simultaneous pointers and can also be driven
+directly by a host render loop. Use `advanceNow` and `needsAnimationTick` for timed behavior and
+forecast expiry, or `advance` with an explicit event-clock timestamp.
+
+`NativeInkInputSource(component, windowHandle, ...)` attaches to a live drawing-area HWND/XID after
+`addNotify`. Subscribe and close on AWT EDT; event delivery is serialized there. Linux capture owns
+its X connection and follows dynamically created Skia child windows. Windows capture reads history
+on the native message thread before it expires, then queues owned observations to EDT. Promoted
+pen/touch mouse input is excluded. Disabling/removing the surface, loss of focus, capture loss and
+device changes cancel affected gestures. Closing a subscription prevents queued or retained late
+callbacks. The source does not intercept input from other application windows.
+
+Native Wayland AWT windows cannot be captured through XInput2. Run the host through its X11/XWayland
+AWT toolkit, or supply a host tablet-v2 `InkInputSource`. The built-in backend fails explicitly on
+WLToolkit. This version does not ship a native Wayland tablet-v2 binding.
+
+The dedicated layer coalesces packet bursts into one direct Skia recording/presentation request,
+uses double buffering and disables vsync throttling. This removes the Compose frame-clock wait;
+the desktop compositor still controls scanout. It does not implement Android's front-buffer API
+or establish physical input-to-display latency. `lastInputToRenderNanos` measures software handler
+to Skia recording only. Skia's heavyweight Swing integration also has the usual SwingPanel z-order
+and clipping constraints; use the regular canvas surface when those constraints matter.
+
+Verification:
+
+```sh
+./gradlew :byteink-compose:test
+LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ./gradlew :byteink-compose:desktopPenTest
+# Windows desktop:
+./gradlew.bat :byteink-compose:desktopPenTest --no-daemon
+```
+
+The native-window suite injects XTEST/Win32 mouse input, checks capture cancellation/resubscription,
+and exercises direct mesh rendering, burst coalescing and canonical finished-scene handoff. Its
+Windows-only case uses the OS synthetic pen API to verify actual WM_POINTER pressure and tilt
+retrieval. These tests do not replace a physical tablet and display-latency measurement.
+
+Run the Windows suite in a logged-in desktop session. Windows denies OS pen injection from
+SSH/service session 0; use `--no-daemon` so the test worker inherits the interactive session.
+
+API references: [Windows pen history](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getpointerpeninfohistory),
+[pen axes](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-pointer_pen_info),
+[XInput2 protocol](https://www.x.org/releases/current/doc/inputproto/XI2proto.txt),
+[pinned SkiaLayer](https://github.com/JetBrains/skiko/blob/v0.150.1/skiko/src/awtMain/kotlin/org/jetbrains/skiko/SkiaLayer.awt.kt).
+
+## Compose canvas authoring
+
 ```kotlin
 @Composable
 fun DrawingPage(pageId: String, save: (StoredInkStroke) -> Unit) {
@@ -58,10 +158,10 @@ and prevents reuse, while `cancel()` permits another gesture.
 Compose mouse and touch input omit pressure rather than storing the default synthetic value.
 Stylus input uses reported pressure. Historical observations preserve coordinates and event
 timestamps; since Compose history has no pressure field, they retain the last measured pressure.
-`InkInputSource.subscribe` is the adapter boundary for native pen APIs. Supply it to the surface
-to replace Compose pointer input. Deliver Begin/Move/Finish/Cancel on the UI thread, and release
-device listeners when the returned subscription closes. The first sample sets pressure
-availability and tool type for the gesture. No prediction samples are fabricated.
+`InkInputSource.subscribe` accepts native pen input in place of Compose pointer input. Deliver
+events on the UI thread and release device listeners when the subscription closes. The first
+sample freezes tool type and optional-axis availability. The controller accepts tilt, orientation
+and replaceable prediction batches; this canvas does not generate a forecast automatically.
 
 Ink shape updates are scheduled only when pending inputs or timed behaviors require a frame.
 Completion calls `finishInput` and then rebuilds the immutable stroke from its real inputs through

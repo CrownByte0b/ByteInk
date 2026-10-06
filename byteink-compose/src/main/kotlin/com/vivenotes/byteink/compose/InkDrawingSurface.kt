@@ -77,23 +77,32 @@ public fun InkDrawingSurface(
 
     DisposableEffect(controller, inputSource, enabled) {
         var callback: ((Stroke) -> Unit)? = null
+        var activePointerId: Long? = null
         var attached = true
         val subscription = try {
             if (enabled) inputSource?.subscribe { event ->
                 if (attached) when (event) {
-                    is InkInputEvent.Begin -> {
+                    is InkInputEvent.Begin -> if (activePointerId == null) {
+                        activePointerId = event.pointerId
                         callback = currentCallback
                         controller.begin(currentBrush, event.sample, currentTransform)
                         timing.begin(event.sample.uptimeMillis)
                     }
-                    is InkInputEvent.Move -> controller.append(event.sample)
-                    is InkInputEvent.Finish -> {
+                    is InkInputEvent.Move -> if (event.pointerId == activePointerId) { controller.append(event.sample) }
+                    is InkInputEvent.Batch -> if (event.pointerId == activePointerId) {
+                        event.samples.forEach(controller::append)
+                        event.predictedSamples?.let(controller::setPredictedInputs)
+                    }
+                    is InkInputEvent.Predict -> if (event.pointerId == activePointerId) { controller.setPredictedInputs(event.samples) }
+                    is InkInputEvent.Finish -> if (event.pointerId == activePointerId) {
                         val completed = controller.finish(event.sample)
                         val notify = callback
                         callback = null
+                        activePointerId = null
                         if (completed != null) notify?.invoke(completed)
                     }
-                    InkInputEvent.Cancel -> { controller.cancel(); callback = null }
+                    InkInputEvent.Cancel -> { controller.cancel(); callback = null; activePointerId = null }
+                    is InkInputEvent.CancelPointer -> if (event.pointerId == activePointerId) { controller.cancel(); callback = null; activePointerId = null }
                 }
             } else null
         } catch (failure: Throwable) {

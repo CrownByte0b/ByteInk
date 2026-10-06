@@ -18,10 +18,25 @@ dependencies {
 
 tasks.test {
     exclude("**/InkMeshGpuTest.class")
+    exclude("**/DesktopPenIntegrationTest.class")
     val reports = layout.buildDirectory.dir("reports/performance")
     val report = layout.buildDirectory.file("reports/performance/interaction.json")
     outputs.dir(reports)
     systemProperty("byteink.test.interactionReport", report.get().asFile.absolutePath)
+}
+
+// Requires a real AWT/native window. Linux CI uses its private Xvfb display; Windows uses Win32.
+tasks.register<Test>("desktopPenTest") {
+    group = "verification"
+    description = "Exercises native desktop input capture and immediate Skia authoring. Linux: run under xvfb-run."
+    dependsOn(tasks.testClasses)
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("com.vivenotes.byteink.compose.DesktopPenIntegrationTest")
+    systemProperty("java.awt.headless", "false")
+    systemProperty("byteink.test.nativePen", "true")
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Native input and presentation depend on the current desktop") { true }
 }
 
 // Kept separate from headless tests and their reports. Linux CI supplies a private Xvfb/GLX display.

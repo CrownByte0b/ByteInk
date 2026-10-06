@@ -236,12 +236,12 @@ jobs:
       - name: Install offscreen OpenGL test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libxi6 libxtst6
       - name: Verify mesh shaders on OpenGL
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: >-
-          xvfb-run -a ./gradlew :byteink-compose:meshGpuTest
+          xvfb-run -a ./gradlew :byteink-compose:meshGpuTest :byteink-compose:desktopPenTest
           "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
           -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
           -Porg.gradle.java.installations.auto-download=false
@@ -355,6 +355,12 @@ jobs:
             -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }} \
             -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64 \
             -Porg.gradle.java.installations.auto-download=false
+      - name: Verify native Windows input and immediate Skia authoring
+        run: >-
+          ./gradlew.bat :byteink-compose:desktopPenTest --no-daemon
+          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
+          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
+          -Porg.gradle.java.installations.auto-download=false
       - name: Compare shipped Windows and Linux engine geometry strictly
         run: |
           java=$(cygpath -u "$BYTEINK_TEST_JAVA_HOME")/bin/java.exe

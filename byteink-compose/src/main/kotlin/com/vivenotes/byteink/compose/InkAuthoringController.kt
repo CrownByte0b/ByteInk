@@ -12,13 +12,19 @@ import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.hypot
+import kotlin.math.abs
+import kotlin.math.PI
 
 /**
  * Builds live strokes with the real Ink engine. Use one controller on the Compose UI thread.
  *
- * A gesture freezes its brush, tool type, pressure availability and view transform at [begin].
- * Input is buffered by [append] and enqueued together by [advance], normally once per frame. No
- * prediction is fabricated. The [revision] and [isDrawing] properties are Compose snapshot state,
+ * A gesture freezes its brush, tool type, optional-axis availability and view transform at [begin].
+ * Input is buffered by [append] and enqueued together by [advance], normally once per frame.
+ * Prediction is supplied through [setPredictedInputs]. The [revision] and [isDrawing] properties are Compose snapshot state,
  * so reading [revision] in a draw block invalidates that block when the wet geometry changes.
  *
  * Out-of-order observations and repeated x/y/time triplets are discarded. Pressure is omitted
@@ -47,7 +53,9 @@ public class InkAuthoringController : AutoCloseable {
 
     private var engine: InProgressStroke? = null
     private var incrementalInputs: MutableStrokeInputBatch? = null
-    private var emptyPrediction: MutableStrokeInputBatch? = null
+    private var predictedInputs: MutableStrokeInputBatch? = null
+    private var predictionScratch: MutableStrokeInputBatch? = null
+    private var predictionDirty: Boolean = false
     private var viewToStroke: AffineTransform = AffineTransform.IDENTITY
     private var closed: Boolean = false
     private var startUptime: Long = 0L
@@ -57,6 +65,9 @@ public class InkAuthoringController : AutoCloseable {
     private var lastShapeElapsed: Long = 0L
     private var toolType: InputToolType = InputToolType.MOUSE
     private var reportedPressure: Float? = null
+    private var reportedTilt: Float? = null
+    private var reportedOrientation: Float? = null
+    private var physicalUnitLength: Float = StrokeInput.NO_STROKE_UNIT_LENGTH
     private var lastX: Float = 0f
     private var lastY: Float = 0f
 
@@ -90,6 +101,11 @@ public class InkAuthoringController : AutoCloseable {
         lastShapeElapsed = 0L
         toolType = sample.toolType
         reportedPressure = sample.pressure
+        reportedTilt = sample.tiltRadians
+        reportedOrientation = sample.orientationRadians?.let(::mapOrientation)
+        physicalUnitLength = physicalUnitLength(transform, sample.strokeUnitLengthCm)
+        predictedInputs?.clear()
+        predictionDirty = false
         lastX = x
         lastY = y
         buffer(x, y, 0L)
@@ -111,6 +127,11 @@ public class InkAuthoringController : AutoCloseable {
         val nativeTimeSeconds = elapsed.toFloat() * 0.001f
         if (x == lastX && y == lastY && nativeTimeSeconds == lastNativeTimeSeconds) return false
         if (reportedPressure != null && sample.pressure != null) reportedPressure = sample.pressure
+        if (reportedTilt != null && sample.tiltRadians != null) reportedTilt = sample.tiltRadians
+        if (reportedOrientation != null && sample.orientationRadians != null) reportedOrientation = mapOrientation(sample.orientationRadians)
+        // A new observation invalidates the previous speculative tail, even without a new forecast.
+        predictedInputs?.clear()
+        predictionDirty = true
         buffer(x, y, elapsed)
         lastX = x
         lastY = y
@@ -118,6 +139,40 @@ public class InkAuthoringController : AutoCloseable {
         lastInputElapsed = elapsed
         lastNativeTimeSeconds = nativeTimeSeconds
         return true
+    }
+
+    /**
+     * Replaces the speculative tail. Invalid ordering, tools and duplicate native triplets are
+     * ignored. Optional attributes follow the real gesture's availability; missing values hold
+     * its last real observation. Predictions never change the real-input state or saved inputs.
+     */
+    public fun setPredictedInputs(samples: List<InkPointerSample>) {
+        if (!isDrawing) return
+        val replacement = predictionScratch ?: MutableStrokeInputBatch().also { predictionScratch = it }
+        replacement.clear()
+        var previousTime = lastNativeTimeSeconds
+        var previousX = lastX
+        var previousY = lastY
+        samples.forEach { sample ->
+            if (sample.toolType != toolType || sample.uptimeMillis <= lastUptime) return@forEach
+            val elapsed = sample.uptimeMillis - startUptime
+            val nativeTime = elapsed.toFloat() * 0.001f
+            val x = mapX(viewToStroke, sample)
+            val y = mapY(viewToStroke, sample)
+            if (nativeTime < previousTime || (nativeTime == previousTime && x == previousX && y == previousY)) return@forEach
+            replacement.add(toolType, x, y, elapsed, physicalUnitLength,
+                if (reportedPressure != null) sample.pressure ?: requireNotNull(reportedPressure) else StrokeInput.NO_PRESSURE,
+                if (reportedTilt != null) sample.tiltRadians ?: requireNotNull(reportedTilt) else StrokeInput.NO_TILT,
+                if (reportedOrientation != null) sample.orientationRadians?.let(::mapOrientation) ?: requireNotNull(reportedOrientation) else StrokeInput.NO_ORIENTATION)
+            previousTime = nativeTime
+            previousX = x
+            previousY = y
+        }
+        val prediction = predictedInputs ?: MutableStrokeInputBatch().also { predictedInputs = it }
+        prediction.clear()
+        prediction.add(replacement)
+        predictionDirty = true
+        hasPendingInputs = true
     }
 
     /** Whether a frame must consume buffered observations or advance timed brush behavior. */
@@ -153,6 +208,7 @@ public class InkAuthoringController : AutoCloseable {
         if (!isDrawing) return null
         if (sample != null) append(sample)
         val stroke = requireNotNull(engine)
+        setPredictedInputs(emptyList())
         enqueuePending(stroke)
         stroke.finishInput()
         // Consume the last inputs and complete timed behavior before taking the real input batch.
@@ -164,6 +220,8 @@ public class InkAuthoringController : AutoCloseable {
         val finished = Stroke(requireNotNull(stroke.brush), inputs)
         stroke.clear()
         incrementalInputs?.clear()
+        predictedInputs?.clear()
+        predictionDirty = false
         hasPendingInputs = false
         isDrawing = false
         reportedPressure = null
@@ -176,6 +234,8 @@ public class InkAuthoringController : AutoCloseable {
         if (!isDrawing) return
         engine?.clear()
         incrementalInputs?.clear()
+        predictedInputs?.clear()
+        predictionDirty = false
         hasPendingInputs = false
         isDrawing = false
         reportedPressure = null
@@ -187,23 +247,49 @@ public class InkAuthoringController : AutoCloseable {
         cancel()
         engine = null
         incrementalInputs = null
-        emptyPrediction = null
+        predictedInputs = null
+        predictionScratch = null
         closed = true
     }
 
     private fun buffer(x: Float, y: Float, elapsed: Long) {
         val inputs = incrementalInputs ?: MutableStrokeInputBatch().also { incrementalInputs = it }
-        inputs.add(toolType, x, y, elapsed, pressure = reportedPressure ?: StrokeInput.NO_PRESSURE)
+        inputs.add(toolType, x, y, elapsed, physicalUnitLength,
+            reportedPressure ?: StrokeInput.NO_PRESSURE,
+            reportedTilt ?: StrokeInput.NO_TILT,
+            reportedOrientation ?: StrokeInput.NO_ORIENTATION)
         hasPendingInputs = true
     }
 
     private fun enqueuePending(stroke: InProgressStroke) {
-        if (!hasPendingInputs) return
+        if (!hasPendingInputs && !predictionDirty) return
         val inputs = requireNotNull(incrementalInputs)
-        val prediction = emptyPrediction ?: MutableStrokeInputBatch().also { emptyPrediction = it }
+        val prediction = predictedInputs ?: MutableStrokeInputBatch().also { predictedInputs = it }
         stroke.enqueueInputs(inputs, prediction)
         inputs.clear()
         hasPendingInputs = false
+        predictionDirty = false
+    }
+
+    private fun mapOrientation(angle: Float): Float {
+        val x = cos(angle)
+        val y = sin(angle)
+        val result = atan2(viewToStroke.m01 * x + viewToStroke.m11 * y,
+            viewToStroke.m00 * x + viewToStroke.m10 * y)
+        val turn = (2 * PI).toFloat()
+        return ((result + turn) % turn)
+    }
+
+    private fun physicalUnitLength(transform: AffineTransform, centimeters: Float?): Float {
+        if (centimeters == null) return StrokeInput.NO_STROKE_UNIT_LENGTH
+        val a = transform.m00.toDouble(); val b = transform.m10.toDouble()
+        val d = transform.m01.toDouble(); val e = transform.m11.toDouble()
+        val xScale = hypot(a, d); val yScale = hypot(b, e)
+        // A single physical scale has no meaning under anisotropic scaling or shear.
+        if (abs(xScale - yScale) > maxOf(xScale, yScale) * 1e-6 || abs(a * b + d * e) > xScale * yScale * 1e-6) {
+            return StrokeInput.NO_STROKE_UNIT_LENGTH
+        }
+        return (centimeters * xScale).toFloat().also { require(it.isFinite() && it > 0f) }
     }
 
     private fun mapX(transform: AffineTransform, sample: InkPointerSample): Float =
