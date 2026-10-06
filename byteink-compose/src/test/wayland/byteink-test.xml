@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="byteink_test">
+  <interface name="byteink_test" version="1">
+    <request name="send">
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="tool" type="uint"/>
+      <arg name="phase" type="int"/>
+      <arg name="x" type="fixed"/><arg name="y" type="fixed"/>
+      <arg name="pressure" type="int"/>
+      <arg name="tilt_x" type="fixed"/><arg name="tilt_y" type="fixed"/>
+      <arg name="time" type="uint"/>
+    </request>
+    <request name="destroy" type="destructor"/>
+  </interface>
+</protocol>

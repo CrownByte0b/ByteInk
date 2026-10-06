@@ -16,16 +16,21 @@ import org.jetbrains.skiko.FrameBuffering
 import org.jetbrains.skiko.SkiaLayer
 import org.jetbrains.skiko.SkiaLayerProperties
 import org.jetbrains.skiko.SkikoRenderDelegate
+import org.jetbrains.skiko.ExperimentalSkikoApi
+import org.jetbrains.skiko.GraphicsApi
+import org.jetbrains.skiko.swing.SkiaSwingLayer
 import java.awt.BorderLayout
 import java.awt.EventQueue
+import java.awt.event.HierarchyEvent
 import javax.swing.JPanel
 import javax.swing.Timer
 
 /**
  * Dedicated desktop Ink surface. Native packets enqueue real history and one immediate Skia redraw
  * on the AWT event queue, without a Compose frame-clock wait. The layer disables vsync throttling
- * and requests two buffers rather than a third queued frame. The compositor still controls scanout;
- * this is the desktop presentation path, not Android's front-buffer API.
+ * and requests two buffers on Windows/X11. Native Wayland uses immediate software Skia painting
+ * through JBR's Swing support. The compositor still controls scanout; this is the desktop
+ * presentation path, not Android's front-buffer API.
  *
  * Construct, update and close on the AWT event thread. [drawContent] draws the finished scene first,
  * in local pixels, then all wet strokes are drawn with the full mesh renderer by default. Add a
@@ -33,6 +38,7 @@ import javax.swing.Timer
  * Brush, transform and completion callback are frozen independently at each pointer down.
  * [inputSource] overrides built-in native capture for a host protocol or a test harness.
  */
+@OptIn(ExperimentalSkikoApi::class)
 public class InkLowLatencyPanel(
     public var brush: Brush,
     public var onStrokeFinished: (Long, Stroke) -> Unit,
@@ -53,19 +59,24 @@ public class InkLowLatencyPanel(
         private set
     public var processedPacketCount: Long = 0L
         private set
-    /** Live HWND/XID, available only while the panel is attached to an AWT window. */
-    public val nativeWindowHandle: Long get() { check(isDisplayable); return layer.windowHandle }
+    /** Live HWND/XID, or JBR's top-level wl_surface on Wayland (available after window configuration). */
+    public val nativeWindowHandle: Long get() {
+        checkUiThread(); check(isDisplayable)
+        return layer?.windowHandle ?: WaylandRuntime.windowSurface(this).surface
+    }
     private val ownsRenderer = renderer == null
     private var closed = false
     private var subscription: AutoCloseable? = null
     private var renderQueued = false
     private var pendingInputNanos: Long? = null
-    private val layer = SkiaLayer(properties = SkiaLayerProperties(
-        isVsyncEnabled = false,
-        isVsyncFramelimitFallbackEnabled = false,
-        frameBuffering = FrameBuffering.DOUBLE,
-    ))
+    private val wayland = WaylandRuntime.isWayland()
+    private var layer: SkiaLayer? = null
+    private var swingLayer: SkiaSwingLayer? = null
+    private val contentScale: Float get() = layer?.contentScale ?: graphicsConfiguration.defaultTransform.scaleX.toFloat()
     private val timer = Timer(4) { requestInkRender() }.also { it.isRepeats = true }
+    private val connectTimer = Timer(10) {
+        if (isShowing && authoringEnabled && !closed) connect() else disconnect()
+    }.also { it.isRepeats = true }
 
     public var authoringEnabled: Boolean = true
         set(value) {
@@ -78,12 +89,11 @@ public class InkLowLatencyPanel(
 
     init {
         checkUiThread()
-        add(layer, BorderLayout.CENTER)
-        layer.renderDelegate = SkikoRenderDelegate { canvas, width, height, nanoTime ->
+        val delegate = SkikoRenderDelegate { canvas, width, height, nanoTime ->
             if (!closed) {
                 session.advanceNow(nanoTime)
                 canvas.clear(clearColorArgb)
-                val scale = layer.contentScale
+                val scale = contentScale
                 canvas.save()
                 try {
                     canvas.scale(scale, scale)
@@ -100,13 +110,34 @@ public class InkLowLatencyPanel(
                 if (session.needsAnimationTick()) timer.start() else timer.stop()
             }
         }
+        val properties = SkiaLayerProperties(
+            isVsyncEnabled = false, isVsyncFramelimitFallbackEnabled = false,
+            frameBuffering = FrameBuffering.DOUBLE,
+            renderApi = if (wayland) GraphicsApi.SOFTWARE_COMPAT else SkiaLayerProperties().renderApi,
+        )
+        if (wayland) {
+            swingLayer = SkiaSwingLayer(delegate, properties = properties).also {
+                it.isDoubleBuffered = false
+                add(it, BorderLayout.CENTER)
+            }
+            // JBR registers the surface after asynchronous configuration and destroys it on hide.
+            addHierarchyListener { event ->
+                if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) {
+                    if (!isShowing) disconnect() else EventQueue.invokeLater {
+                        if (isShowing && authoringEnabled && !closed) { connect(); requestInkRender() }
+                    }
+                }
+            }
+        } else {
+            layer = SkiaLayer(properties = properties).also { it.renderDelegate = delegate; add(it, BorderLayout.CENTER) }
+        }
     }
 
     override public fun addNotify() {
         checkUiThread()
         check(!closed) { "InkLowLatencyPanel is closed" }
         super.addNotify()
-        try { if (authoringEnabled) connect() }
+        try { if (authoringEnabled && !wayland) connect() }
         catch (failure: Throwable) { disconnect(); throw failure }
     }
 
@@ -122,7 +153,9 @@ public class InkLowLatencyPanel(
         renderQueued = true
         EventQueue.invokeLater {
             renderQueued = false
-            if (!closed && isDisplayable) layer.renderImmediately()
+            if (!closed && isDisplayable) {
+                layer?.renderImmediately() ?: swingLayer?.let { if (isShowing) it.paintImmediately(0, 0, it.width, it.height) }
+            }
         }
     }
 
@@ -132,14 +165,22 @@ public class InkLowLatencyPanel(
         disconnect()
         closed = true
         session.close()
-        layer.dispose()
+        layer?.dispose()
+        swingLayer?.dispose()
         if (ownsRenderer) this.renderer.clearCache()
     }
 
     private fun connect() {
-        if (subscription != null) return
+        if (subscription != null || wayland && !isShowing) return
+        connectTimer.stop()
+        val handle = if (wayland && inputSource == null) {
+            val surface = WaylandRuntime.findWindowSurface(this)
+            if (surface == null) { connectTimer.start(); return }
+            surface.surface
+        } else 0L
         var attached = true
-        val source = inputSource ?: NativeInkInputSource(layer.canvas, layer.windowHandle, { layer.contentScale }, centimetersPerNativePixel)
+        val component = layer?.canvas ?: swingLayer!!
+        val source = inputSource ?: NativeInkInputSource(component, if (wayland) handle else nativeWindowHandle, { contentScale }, centimetersPerNativePixel)
         try {
             val acquired = source.subscribe { event ->
                 if (attached && authoringEnabled && !closed) {
@@ -164,6 +205,7 @@ public class InkLowLatencyPanel(
     private fun disconnect() {
         checkUiThread()
         timer.stop()
+        connectTimer.stop()
         val old = subscription
         subscription = null
         try { old?.close() } finally { session.cancelAll(); pendingInputNanos = null }

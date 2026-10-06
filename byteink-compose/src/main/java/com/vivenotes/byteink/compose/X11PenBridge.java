@@ -17,7 +17,7 @@ final class X11PenBridge implements NativePenBridge {
     private volatile boolean stopped;
     private int opcode;
     private final long window;
-    private MemorySegment eventMasks;
+    private MemorySegment eventMasks, pointerMasks;
     private final Map<Long, int[]> windowOffsets = new HashMap<>();
     private static final class Axis {
         final int number; final double min, max; double value;
@@ -49,8 +49,7 @@ final class X11PenBridge implements NativePenBridge {
             if (api.integer("XIQueryVersion", display, major, minor) != 0 || major.get(JAVA_INT, 0) < 2)
                 throw new UnsupportedOperationException("XInput2 2.0 or newer is required");
             MemorySegment bits = arena.allocate(4);
-            for (int event : new int[]{1, 4, 5, 6, 18, 19, 20}) {
-                if (event >= 18 && minor.get(JAVA_INT, 0) < 2) continue;
+            for (int event : new int[]{1, 4, 5, 6}) {
                 int offset = event / 8;
                 bits.set(JAVA_BYTE, offset, (byte) (bits.get(JAVA_BYTE, offset) | (1 << (event % 8))));
             }
@@ -61,7 +60,15 @@ final class X11PenBridge implements NativePenBridge {
             hierarchy.set(JAVA_BYTE, 1, (byte) 8);
             mask.set(JAVA_INT, 16, 0); // XIAllDevices is required for hierarchy events.
             mask.set(JAVA_INT, 20, 2); mask.set(ADDRESS, 24, hierarchy);
-            eventMasks = mask;
+            pointerMasks = mask;
+            MemorySegment touchBits = arena.allocate(4);
+            MemorySegment touchMasks = arena.allocate(32, 8);
+            MemorySegment.copy(bits, 0, touchBits, 0, 4);
+            MemorySegment.copy(mask, 0, touchMasks, 0, 32);
+            if (minor.get(JAVA_INT, 0) >= 2)
+                touchBits.set(JAVA_BYTE, 2, (byte) (touchBits.get(JAVA_BYTE, 2) | 0x1c));
+            touchMasks.set(ADDRESS, 8, touchBits);
+            eventMasks = touchMasks;
             refreshWindows();
             api.integer("XFlush", display);
             worker = new Thread(this::read, "byteink-xinput2");
@@ -162,8 +169,11 @@ final class X11PenBridge implements NativePenBridge {
     private void selectTree(long target, int depth) {
         if (depth > 32 || windowOffsets.size() > 1024) throw new IllegalStateException("Drawing window hierarchy is too large");
         try (Arena scratch = Arena.ofConfined()) {
-            if (api.integer("XISelectEvents", display, target, eventMasks, 2) != 0)
+            // XI touch selection is exclusive per window. JBR already owns touch on its AWT
+            // windows; keep a valid pointer selection even if the optional touch request conflicts.
+            if (api.integer("XISelectEvents", display, target, pointerMasks, 2) != 0)
                 throw new IllegalStateException("XISelectEvents failed");
+            api.integer("XISelectEvents", display, target, eventMasks, 2);
             api.integer("XSelectInput", display, target, 1L << 19); // SubstructureNotifyMask
             MemorySegment x = scratch.allocate(JAVA_INT), y = scratch.allocate(JAVA_INT), child = scratch.allocate(JAVA_LONG);
             api.integer("XTranslateCoordinates", display, target, window, 0, 0, x, y, child);

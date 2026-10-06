@@ -19,10 +19,26 @@ dependencies {
 tasks.test {
     exclude("**/InkMeshGpuTest.class")
     exclude("**/DesktopPenIntegrationTest.class")
+    exclude("**/WaylandPenIntegrationTest.class")
     val reports = layout.buildDirectory.dir("reports/performance")
     val report = layout.buildDirectory.file("reports/performance/interaction.json")
     outputs.dir(reports)
     systemProperty("byteink.test.interactionReport", report.get().asFile.absolutePath)
+}
+
+// Run through src/test/wayland/run.sh: a private compositor and JBR's native Wayland toolkit.
+tasks.register<Test>("waylandPenTest") {
+    group = "verification"
+    description = "Verifies tablet-v2, touch, surface lifecycle and immediate Skia rendering on native Wayland."
+    dependsOn(tasks.testClasses)
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("com.vivenotes.byteink.compose.WaylandPenIntegrationTest")
+    systemProperty("java.awt.headless", "false")
+    systemProperty("awt.toolkit.name", "WLToolkit")
+    jvmArgs("--add-opens=java.desktop/sun.awt.wl=ALL-UNNAMED")
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Wayland verification depends on the current compositor and runtime") { true }
 }
 
 // Requires a real AWT/native window. Linux CI uses its private Xvfb display; Windows uses Win32.

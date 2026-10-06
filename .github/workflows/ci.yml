@@ -245,6 +245,18 @@ jobs:
           "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
           -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
           -Porg.gradle.java.installations.auto-download=false
+      - name: Install native Wayland test dependencies
+        if: matrix.runtime == 'jbr25'
+        run: sudo apt-get install -y weston libwayland-dev libweston-13-dev build-essential pkg-config
+      - name: Verify native Wayland tablet and immediate authoring
+        if: matrix.runtime == 'jbr25'
+        run: |
+          for scale in 1 2; do
+            BYTEINK_WAYLAND_TEST_SCALE="$scale" bash byteink-compose/src/test/wayland/run.sh \
+              "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME" \
+              -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64 \
+              -Porg.gradle.java.installations.auto-download=false
+          done
       - name: Upload Linux reference geometry and notebook bytes
         if: matrix.runtime == 'zulu27'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -274,6 +286,8 @@ jobs:
             byteink-testing/build/reports/performance/
             byteink-testing/build/reports/android-matrix*/
             consumer-tests/build/reports/consumer/
+            build/wayland-pen/fixture/*.xml
+            build/wayland-pen/fixture/*.log
           if-no-files-found: error
 
   jvm-windows:

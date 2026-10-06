@@ -8,8 +8,8 @@ supplies Compose Desktop's platform runtime and enables JVM native access.
 ## Native capture and immediate Skia authoring
 
 The `byteink-compose` artifact includes real native capture on Windows x86_64 (`WM_POINTER`) and
-Linux x86_64 (XInput2, including XWayland). It uses the existing pinned Ink engine and native
-libraries. No additional native binary or Java dependency is required. Launch Java 25+ with
+Linux x86_64 (XInput2 for X11/XWayland, tablet-v2 for native Wayland on JBR). It uses the existing
+pinned Ink engine and native libraries. No additional native binary or Java dependency is required. Launch Java 25+ with
 `--enable-native-access=ALL-UNNAMED`, as required for Ink/Skiko and the FFM capture adapters.
 
 Use the dedicated surface for authoring without a Compose frame-clock wait:
@@ -69,13 +69,39 @@ on the native message thread before it expires, then queues owned observations t
 pen/touch mouse input is excluded. Disabling/removing the surface, loss of focus, capture loss and
 device changes cancel affected gestures. Closing a subscription prevents queued or retained late
 callbacks. The source does not intercept input from other application windows.
+XInput2 touch selection is exclusive per window; where the toolkit already owns it, the adapter
+preserves pen/mouse selection and captures touch on drawing child windows where selection is available.
 
-Native Wayland AWT windows cannot be captured through XInput2. Run the host through its X11/XWayland
-AWT toolkit, or supply a host tablet-v2 `InkInputSource`. The built-in backend fails explicitly on
-WLToolkit. This version does not ship a native Wayland tablet-v2 binding.
+For native Wayland, use JBR 25 with its Wayland toolkit and launch with:
+
+```text
+-Dawt.toolkit.name=WLToolkit
+--add-opens=java.desktop/sun.awt.wl=ALL-UNNAMED
+--enable-native-access=ALL-UNNAMED
+```
+
+The built-in source reports `LINUX_WAYLAND_TABLET` and binds tablet-v2 and `wl_touch` on a private
+event queue of JBR's existing display connection. It borrows the connection and window surface;
+closing an adapter releases only its own proxies, queue, reader and callbacks. The compositor must
+advertise tablet-v2 for pen capture. Primary mouse input comes from AWT without synthetic pressure.
+Tablet frames preserve measured pressure and projected tilt; barrel rotation stays separate from
+shaft azimuth. Multiple tools and touch contacts have independent lifetimes. Pad buttons, rings
+and strips are accepted by the protocol binding but do not select brushes or author strokes.
+
+Wayland coordinates are surface-local units, mapped on EDT through the current JBR peer scale and
+the component's offset. Down outside the drawing component is ignored; an accepted stroke keeps
+its captured pointer when it moves outside. For a directly constructed `NativeInkInputSource`,
+pass the live top-level `wl_surface`, after JBR configures the visible window, as `windowHandle`.
+Hiding and showing a window replaces that surface: recreate a direct source. The built-in panel
+waits for configuration and automatically reconnects. It also cancels on proximity loss, device
+removal, focus loss and disable/disposal. Hosts using another Wayland runtime can supply their own
+`InkInputSource`.
 
 The dedicated layer coalesces packet bursts into one direct Skia recording/presentation request,
-uses double buffering and disables vsync throttling. This removes the Compose frame-clock wait;
+uses double buffering and disables vsync throttling on Windows/X11. Native Wayland uses Skiko's
+`SkiaSwingLayer` with software rasterization and immediate EDT painting, because the pinned
+heavyweight `SkiaLayer` requires X11 on Linux. Both paths use the same mesh renderer, authoring
+session and predictions. This removes the Compose frame-clock wait;
 the desktop compositor still controls scanout. It does not implement Android's front-buffer API
 or establish physical input-to-display latency. `lastInputToRenderNanos` measures software handler
 to Skia recording only. Skia's heavyweight Swing integration also has the usual SwingPanel z-order
@@ -86,6 +112,11 @@ Verification:
 ```sh
 ./gradlew :byteink-compose:test
 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ./gradlew :byteink-compose:desktopPenTest
+# Native Wayland: install Weston, matching libweston development headers, wayland-scanner,
+# a C compiler, pkg-config and Python 3. The script creates and stops a private headless compositor.
+bash byteink-compose/src/test/wayland/run.sh -PbyteinkTestJavaHome=/absolute/path/to/jbr25
+# Repeat at 2x compositor scaling:
+BYTEINK_WAYLAND_TEST_SCALE=2 bash byteink-compose/src/test/wayland/run.sh -PbyteinkTestJavaHome=/absolute/path/to/jbr25
 # Windows desktop:
 ./gradlew.bat :byteink-compose:desktopPenTest --no-daemon
 ```
@@ -93,7 +124,16 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ./gradlew :byteink-compose:desktopPenTest
 The native-window suite injects XTEST/Win32 mouse input, checks capture cancellation/resubscription,
 and exercises direct mesh rendering, burst coalescing and canonical finished-scene handoff. Its
 Windows-only case uses the OS synthetic pen API to verify actual WM_POINTER pressure and tilt
-retrieval. These tests do not replace a physical tablet and display-latency measurement.
+retrieval. The Wayland suite uses C-generated protocol metadata to send real tablet-v2/touch wire
+events to JBR windows, verifies pressure, tilt, history, prediction removal, pad child bindings,
+simultaneous contacts, bounds filtering, device removal, hide/show, independent windows, repeated
+hotplug during detach, visible wet/dry pixels and immediate Skia handoff. Real `wl_pointer` mouse events are delivered
+through JBR and AWT. These tests do not replace a physical tablet and display-latency measurement.
+
+The vendored tablet-v2 XML retains its MIT license and is pinned by SHA-256 in `WaylandProtocol`
+and `src/test/wayland/generate.py`. To update it, review upstream protocol changes, update both pins,
+run the generator and repeat the native suite. `generate.py --check` rejects stale Java metadata;
+the test server is generated independently by `wayland-scanner` from the same XML.
 
 Run the Windows suite in a logged-in desktop session. Windows denies OS pen injection from
 SSH/service session 0; use `--no-daemon` so the test worker inherits the interactive session.
@@ -101,7 +141,10 @@ SSH/service session 0; use `--no-daemon` so the test worker inherits the interac
 API references: [Windows pen history](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getpointerpeninfohistory),
 [pen axes](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-pointer_pen_info),
 [XInput2 protocol](https://www.x.org/releases/current/doc/inputproto/XI2proto.txt),
-[pinned SkiaLayer](https://github.com/JetBrains/skiko/blob/v0.150.1/skiko/src/awtMain/kotlin/org/jetbrains/skiko/SkiaLayer.awt.kt).
+[pinned SkiaLayer](https://github.com/JetBrains/skiko/blob/v0.150.1/skiko/src/awtMain/kotlin/org/jetbrains/skiko/SkiaLayer.awt.kt),
+[tablet-v2 protocol](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/stable/tablet/tablet-v2.xml),
+[Wayland queue ownership and reading](https://wayland.freedesktop.org/docs/html/apb.html),
+[JBR Wayland display](https://github.com/JetBrains/JetBrainsRuntime/blob/jbr25/src/java.desktop/unix/classes/sun/awt/wl/WLDisplay.java).
 
 ## Compose canvas authoring
 
