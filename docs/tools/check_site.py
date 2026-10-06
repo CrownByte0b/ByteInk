@@ -60,7 +60,10 @@ def main():
                     for query, expected in [("encodeErase", "reference/storage/"),
                                             ("pixelBudgetBytes", "reference/rendering/"),
                                             ("colorFollowsTheme", "reference/"),
-                                            ("onPartial", "reference/storage/")]:
+                                            ("onPartial", "reference/storage/"),
+                                            ("InkMeshRenderer", "reference/rendering/"),
+                                            ("animationTimeMillis", "reference/rendering/"),
+                                            ("ViveInkPage.replay", "reference/storage/")]:
                         page.goto(url, wait_until="networkidle")
                         if width < 600:
                             page.locator('label.md-header__button[for="__search"]').click()

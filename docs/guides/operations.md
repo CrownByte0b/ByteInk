@@ -12,7 +12,18 @@ Build an eraser mask in page coordinates. Round-trip it before hit testing so th
 
 The example returns the stored erase plus preview projections. Persist the erase row and target links together. Keep the original stroke rows. On reload, pass the original rows and erase operations to `ViveInkPage.load`.
 
-This library API is implemented; the ViveNotes desktop app still needs the interactive partial-eraser tool wired to it.
+The ViveNotes desktop app now implements this workflow: Normal gestures collect real current/historical pointer samples in page dp, preview the decoded round mask, persist immutable mask/target rows and share ink undo/redo history. Its Object UI mode retains whole-row erasing; the library's `eraseObjects` API instead removes touched disconnected components.
+
+For your own application:
+
+1. Model masks and subtract/replay geometry on a worker thread. An empty-space gesture should create no operation.
+2. Persist one immutable erase row and its exact same-page targets in a transaction. Keep original stroke and unknown-data bytes.
+3. Undo by setting the erase's `deletedAt`; redo by clearing it on the same row with the same mask and targets. Allocate operation clocks monotonically, including inactive operations.
+4. Rebuild from original source projections and active decoded operations with `ViveInkPage.replay`; use `load` after database reopen. Keep source draw order and earlier moves/erases.
+
+Cancel unfinished gestures when page, tool, mode or coordinate transforms change. If gestures overlap worker completion, serialize completions and rebase previews onto earlier completed masks; reject results from replaced page snapshots. A Normal preview rebuilds affected geometry and does not inherit whole-row erase's bounded cache work.
+
+Linux and Windows app interaction, persistence, undo/redo and reload checks pass. The extended Android round trip covers three newly authored Normal masks (marker, calligraphy and highlighter), two Object masks and 55 strokes: 64/64 exact fresh encoding comparisons and zero replay geometry/software-pixel differences. See the [round-trip contract](https://github.com/CrownByte0b/ByteInk/blob/master/conformance/android/ROUNDTRIP.md).
 
 ## Object erase and whole-row erase
 

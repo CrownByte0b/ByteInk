@@ -16,7 +16,7 @@ The example renders page dp at device density, serializes each completed stroke,
 | `brush` | Native brush captured at pointer down |
 | `modifier` | Layout size, background and other Compose modifiers |
 | `strokeToView` | Page-to-local-pixel transform; include density and zoom |
-| `renderer` | Reuse across frames; owner clears its paths on disposal |
+| `renderer` | Defaults to path rendering; pass `rememberInkMeshRenderer()` for mesh effects, textures and prediction shading |
 | `enabled` | `false` cancels and disables authoring |
 | `inputSource` | Optional native adapter; default Compose input when `null` |
 | `onStrokeFinished` | Captured completion callback; retain/store its `Stroke` |

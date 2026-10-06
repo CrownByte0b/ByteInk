@@ -262,10 +262,34 @@ public fun InkDrawingSurface( controller: InkAuthoringController, brush: Brush, 
 | `brush` | `Brush` | `Required` | Native brush captured at gesture start; keep stored metadata consistent with it. |
 | `modifier` | `Modifier` | `Modifier` | Compose layout, sizing and drawing modifiers. |
 | `strokeToView` | `AffineTransform` | `AffineTransform.IDENTITY` | Finite invertible stroke/page-to-surface-pixel transform, snapshotted at begin. |
-| `renderer` | `InkPathRenderer` | `remember { InkPathRenderer() }` | Reusable drawing-thread path renderer; clear its cache when its owner is disposed. |
+| `renderer` | `InkPathRenderer` | `remember { InkPathRenderer() }` | Reusable drawing-thread renderer; clear path caches or close owned mesh renderers on disposal. |
 | `enabled` | `Boolean` | `true` | Whether to accept input; false cancels the active gesture. |
 | `inputSource` | `InkInputSource?` | `null` | Optional native adapter; null uses Compose primary-pointer gestures. |
 | `onStrokeFinished` | `(Stroke) -> Unit` | `Required` | Completion callback captured at pointer down; retain/store the returned stroke. |
 | `drawContent` | `DrawScope.() -> Unit` | `{}` | DrawScope block drawn before live ink, usually for finished ink and paper. |
 
 [Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkDrawingSurface.kt#L45)
+
+### `InkDrawingSurface`
+
+Captures brush, transform and callback at pointer down. Disabling/removal cancels; the owner must close the controller and clear the renderer.
+
+Composable: call within a Compose composition.
+
+```kotlin
+public fun InkDrawingSurface( controller: InkAuthoringController, brush: Brush, modifier: Modifier = Modifier, strokeToView: AffineTransform = AffineTransform.IDENTITY, renderer: InkRenderer, enabled: Boolean = true, inputSource: InkInputSource? = null, onStrokeFinished: (Stroke) -> Unit, drawContent: DrawScope.() -> Unit = {}, )
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `controller` | `InkAuthoringController` | `Required` | UI-thread authoring controller; attach to one surface at a time. |
+| `brush` | `Brush` | `Required` | Native brush captured at gesture start; keep stored metadata consistent with it. |
+| `modifier` | `Modifier` | `Modifier` | Compose layout, sizing and drawing modifiers. |
+| `strokeToView` | `AffineTransform` | `AffineTransform.IDENTITY` | Finite invertible stroke/page-to-surface-pixel transform, snapshotted at begin. |
+| `renderer` | `InkRenderer` | `Required` | Reusable drawing-thread renderer; clear path caches or close owned mesh renderers on disposal. |
+| `enabled` | `Boolean` | `true` | Whether to accept input; false cancels the active gesture. |
+| `inputSource` | `InkInputSource?` | `null` | Optional native adapter; null uses Compose primary-pointer gestures. |
+| `onStrokeFinished` | `(Stroke) -> Unit` | `Required` | Completion callback captured at pointer down; retain/store the returned stroke. |
+| `drawContent` | `DrawScope.() -> Unit` | `{}` | DrawScope block drawn before live ink, usually for finished ink and paper. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkDrawingSurface.kt#L62)

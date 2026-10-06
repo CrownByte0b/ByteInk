@@ -16,7 +16,10 @@
 | Raster blurs under parent zoom | Use physical viewport sizing and the ancestor's uniform zoom as `rasterScale`. |
 | Partial erase differs after reload | Round-trip mask geometry before preview/target collection; persist the erase and exact target links together. |
 | Unknown/malformed row vanishes visually | Inspect `unreadable`; preserve the original row and bytes. Nullable decoding does not mean deletion. |
-| Unsupported paint exception | Call `canDraw`; the path renderer requires a texture-free ANY/DISCARD choice per coat. |
+| Unsupported paint exception | Call `canDraw`; path rendering requires texture-free ANY/DISCARD paints. Mesh rendering needs compatible attributes and every selected paint's images in `InkTextureStore`; missing images try the next paint preference. |
+| Texture replacement still shows the old image | Call `InkMeshRenderer.clearCache()` after replacing an image under the same client ID; this also invalidates retained view rasters. |
+| Texture atlas stays on one frame | Advance the mesh renderer's nonnegative `animationTimeMillis`; live shape effects separately require `InProgressStroke.updateShape`. |
+| Decoded replay cuts or moves ink twice | Supply `LoadedInkPage.sourceStrokes` and active decoded operations to `ViveInkPage.replay`, rather than already replayed `strokes`. |
 
 ## Inspect native provenance
 

@@ -14,7 +14,9 @@ Most constructor parameters declared `val` are also read-only properties. Standa
 
 Extensions show their receiver before the method name, for example `List<PageStroke>.subtract`. Import the extension from its package. Companion factories such as `SpatialIndex.of` and `ViveNotebook.open` are called on their class.
 
-Rendering/controller state exposed as `var` has private setters. Read it for redraws or diagnostics; mutate through the documented methods. Threading and disposal rules are described in the guides.
+Rendering/controller diagnostics exposed as `var` have private setters where noted. `InkMeshRenderer.animationTimeMillis` has a public setter for advancing texture atlases. Read other state for redraws or diagnostics and mutate through documented methods. Threading and disposal rules are described in the guides.
+
+Parameter tables report defaults declared on that source signature. Kotlin overrides also inherit interface defaults: `InkMeshRenderer.render` and `InkPathRenderer.render` inherit `strokeToCanvas = AffineTransform.IDENTITY`, `viewport = null` and `colorArgb = null` from `InkRenderer.render`.
 
 ## AndroidX types
 

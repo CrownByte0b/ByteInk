@@ -39,6 +39,19 @@ Allocate IDs and `seq` in the database transaction. Supply family/stabilization 
 
 Run large loads away from the UI thread. `executor` is an optional caller-owned decode pool; loading still blocks until completion. At most four 512-row jobs are queued. `onPartial` receives cumulative, ordered snapshots on the load caller's thread; marshal them to the UI yourself. Partial publication runs only when there are no live move rows, because moves need global bounds/clamping.
 
+## Replay decoded ink
+
+Use `ViveInkPage.replay` when you already hold native source strokes and decoded operations, for example after changing the active undo/redo operation set:
+
+```kotlin
+val display = ViveInkPage.replay(
+    strokes = loaded.sourceStrokes,
+    operations = activeOperations,
+)
+```
+
+`activeOperations` contains the currently enabled `DecodedInkOperation` objects from loading. Replay sorts them by persisted `createdAt` then ID, preserves source drawing order and does not modify either supplied list. It blocks and belongs on a worker thread. Supply **original pre-operation** projections; replaying `loaded.strokes` would apply cuts and moves twice. Keep decoded operations for redo, and use `load` when fresh stored rows need decoding.
+
 ## Row fields
 
 [The storage reference](../reference/storage.md) lists **every constructor field**, including required fields after defaulted parameters. Map your repository entities to these values without changing unknown fields or bytes.

@@ -5,6 +5,7 @@ import com.vivenotes.byteink.core.InkRuntime
 import com.vivenotes.byteink.kit.InkPageIndex
 import com.vivenotes.byteink.kit.InkPoint
 import com.vivenotes.byteink.kit.ViveInkCodec
+import com.vivenotes.byteink.kit.ViveInkPage
 import java.io.File
 
 /** Executable checks of the wiki's examples using synthetic ink only. */
@@ -19,11 +20,18 @@ fun main(args: Array<String>) {
     check(gesture.inputs.size == 3 && gesture.inputs[0].x == 10f)
     val triangles = InkMeshes.triangles(authored.canonicalStroke.shape, group = 0)
     check(triangles.sumOf { it.triangleCount } > 0)
+    val meshes = InkMeshes.rendering(authored.canonicalStroke.shape, group = 0)
+    check(meshes.sumOf { it.vertexCount } > 0)
+    check(meshes.sumOf { it.triangleCount } == triangles.sumOf { it.triangleCount })
 
     val erase = partialErase(original.strokes)
     val replayed = loadPage(listOf(authored.row), listOf(erase.operation), emptyList())
     check(replayed.strokes.size == 2)
     check(erase.projections.map { it.pageBounds } == replayed.strokes.map { it.pageBounds })
+    val decodedReplay = ViveInkPage.replay(replayed.sourceStrokes, replayed.operations)
+    check(decodedReplay.map { it.pageBounds } == replayed.strokes.map { it.pageBounds })
+    val undone = ViveInkPage.replay(replayed.sourceStrokes, emptyList())
+    check(undone.map { it.pageBounds } == original.strokes.map { it.pageBounds })
     val erasedIndex = InkPageIndex(replayed.strokes)
     check(erasedIndex.at(InkPoint(50f, 50f), reach = 1f).isEmpty())
     check(erasedIndex.at(InkPoint(20f, 50f), reach = 1f).isNotEmpty())
@@ -34,7 +42,7 @@ fun main(args: Array<String>) {
     val png = File(output, "partial-erase.png")
     check(renderInk(replayed.strokes, png) == 2)
     check(png.length() > 0L)
-    println("ByteInk wiki examples passed: authoring, codec, partial erase/replay, lasso, geometry, PNG")
+    println("ByteInk wiki examples passed: authoring, codec, partial erase/decoded replay/undo, lasso, mesh attributes, mesh PNG")
     println("Native: ${InkRuntime.load()}")
     println("PNG: ${png.absolutePath}")
 }

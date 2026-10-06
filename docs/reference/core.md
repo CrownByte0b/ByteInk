@@ -121,6 +121,98 @@ public fun triangles(stroke: InProgressStroke, coat: Int): List<TriangleMesh>
 
 [Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-core/src/main/kotlin/com/vivenotes/byteink/core/InkMeshes.kt#L44)
 
+### `InkMeshes.rendering`
+
+```kotlin
+public fun rendering(shape: PartitionedMesh, group: Int): List<StrokeMesh>
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `shape` | `PartitionedMesh` | `Required` | Finished native mesh; retain its owner while reading. |
+| `group` | `Int` | `Required` | Zero-based render-group index; less than shape.getRenderGroupCount(). |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-core/src/main/kotlin/com/vivenotes/byteink/core/InkMeshes.kt#L48)
+
+### `InkMeshes.rendering`
+
+```kotlin
+public fun rendering(stroke: InProgressStroke, coat: Int): List<StrokeMesh>
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `stroke` | `InProgressStroke` | `Required` | Native finished or live stroke, as specified by the type. |
+| `coat` | `Int` | `Required` | Zero-based brush-coat index; less than brush.family.coats.size. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-core/src/main/kotlin/com/vivenotes/byteink/core/InkMeshes.kt#L52)
+
+## StrokeMesh
+
+### `StrokeMesh`
+
+Owned rendering snapshot. Vertex floats: position XY (0–1), opacity shift (2), HSL shift (3–5), side derivative XY/label (6–8), forward derivative XY/label (9–11), surface UV (12–13), animation offset (14). Missing attributes are zero; indices are unsigned native values widened to Int. Constructor retains supplied arrays.
+
+```kotlin
+public class StrokeMesh @UsedByNative constructor( public val vertices: FloatArray, public val triangles: IntArray, public val attributeMask: Int, )
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `vertices` | `FloatArray` | `Required` | Canonical rendering attributes in stroke coordinates; 15 floats per vertex, in StrokeMesh.VERTEX_STRIDE order. |
+| `triangles` | `IntArray` | `Required` | Copied vertex indices; three indices per triangle. |
+| `attributeMask` | `Int` | `Required` | Bits 0–8 identify present position, opacity, HSL, side derivative/label, forward derivative/label, surface UV and animation offset attributes; missing values are zero. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-core/src/main/kotlin/com/vivenotes/byteink/core/StrokeMesh.kt#L13)
+
+### `StrokeMesh.VERTEX_STRIDE`
+
+```kotlin
+public const val VERTEX_STRIDE: Int = 15
+```
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-core/src/main/kotlin/com/vivenotes/byteink/core/StrokeMesh.kt#L19)
+
+### `StrokeMesh.vertexCount`
+
+```kotlin
+public val vertexCount: Int
+```
+
+Number of canonical vertices: vertices.size / VERTEX_STRIDE.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-core/src/main/kotlin/com/vivenotes/byteink/core/StrokeMesh.kt#L22)
+
+### `StrokeMesh.triangleCount`
+
+```kotlin
+public val triangleCount: Int
+```
+
+Number of copied index triples.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-core/src/main/kotlin/com/vivenotes/byteink/core/StrokeMesh.kt#L23)
+
+### `StrokeMesh.hasSurfaceUv`
+
+```kotlin
+public val hasSurfaceUv: Boolean
+```
+
+Whether attributeMask bit 7 is set.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-core/src/main/kotlin/com/vivenotes/byteink/core/StrokeMesh.kt#L24)
+
+### `StrokeMesh.hasAnimationOffset`
+
+```kotlin
+public val hasAnimationOffset: Boolean
+```
+
+Whether attributeMask bit 8 is set.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-core/src/main/kotlin/com/vivenotes/byteink/core/StrokeMesh.kt#L25)
+
 ## SpatialIndex
 
 ### `SpatialIndex`

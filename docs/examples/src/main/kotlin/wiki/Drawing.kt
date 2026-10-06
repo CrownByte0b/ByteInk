@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.ink.geometry.ImmutableAffineTransform
 import com.vivenotes.byteink.compose.InkDrawingSurface
-import com.vivenotes.byteink.compose.InkPathRenderer
+import com.vivenotes.byteink.compose.rememberInkMeshRenderer
 import com.vivenotes.byteink.compose.drawInk
 import com.vivenotes.byteink.compose.rememberInkAuthoringController
 import com.vivenotes.byteink.kit.AuthoredViveStroke
@@ -21,14 +21,14 @@ import java.util.UUID
 fun DrawingExample(onRowReady: (StoredInkStroke) -> Unit) {
     val tool = remember { ViveInkTool(sizeDp = 3f) }
     val controller = rememberInkAuthoringController()
-    val renderer = remember { InkPathRenderer() }
+    val renderer = rememberInkMeshRenderer()
     val completed = remember { mutableStateListOf<AuthoredViveStroke>() }
     val density = LocalDensity.current.density
     val pageToPixels = remember(density) {
         ImmutableAffineTransform(density, 0f, 0f, 0f, density, 0f)
     }
-    DisposableEffect(controller, renderer) {
-        onDispose { controller.close(); renderer.clearCache() }
+    DisposableEffect(controller) {
+        onDispose { controller.close() }
     }
     InkDrawingSurface(
         controller = controller,

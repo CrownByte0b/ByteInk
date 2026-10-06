@@ -369,7 +369,7 @@ public constructor(strokes: List<PageStroke>, erasedAway: List<String>, unreadab
 
 ### `ViveInkPage`
 
-Filter tombstones; sort strokes by seq/ID and operations by createdAt/ID. load blocks, decodes in 512-row chunks with at most four queued jobs, and leaves storage untouched.
+load filters tombstones, sorts strokes by seq/ID and operations by createdAt/ID, and decodes in 512-row chunks with at most four queued jobs. replay reuses original sourceStrokes and decoded active operations without decoding again. Both block, belong on a worker thread and leave storage untouched.
 
 ```kotlin
 public object ViveInkPage
@@ -404,6 +404,19 @@ public fun decode(row: StoredInkStroke): PageStroke?
 | `row` | `StoredInkStroke` | `Required` | Original stored row; nullable decoders return null for unsupported or damaged data. |
 
 [Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkPage.kt#L96)
+
+### `ViveInkPage.replay`
+
+```kotlin
+public fun replay(strokes: List<PageStroke>, operations: List<DecodedInkOperation>): List<PageStroke>
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `strokes` | `List<PageStroke>` | `Required` | Original pre-operation projections, such as LoadedInkPage.sourceStrokes; never supply already cut/moved display projections. Their draw order is preserved. |
+| `operations` | `List<DecodedInkOperation>` | `Required` | Already decoded active erase/move operations; replay sorts by createdAt then ID without modifying the supplied list. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkPage.kt#L114)
 
 ## DecodedInkOperation
 

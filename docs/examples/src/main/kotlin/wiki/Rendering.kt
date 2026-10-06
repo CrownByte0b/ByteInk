@@ -3,7 +3,7 @@ package wiki
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asComposeCanvas
 import androidx.ink.geometry.AffineTransform
-import com.vivenotes.byteink.compose.InkPathRenderer
+import com.vivenotes.byteink.compose.InkMeshRenderer
 import com.vivenotes.byteink.compose.InkScene
 import com.vivenotes.byteink.compose.InkSceneRasterCache
 import com.vivenotes.byteink.compose.InkSceneStroke
@@ -26,7 +26,7 @@ fun renderInk(page: List<PageStroke>, output: File): Int {
             ),
         )
     })
-    val renderer = InkPathRenderer()
+    val renderer = InkMeshRenderer()
     try {
         InkSceneRasterCache(cacheCapacity = 3, pixelBudgetBytes = 64L * 1024 * 1024).use { cache ->
             Surface.makeRasterN32Premul(256, 256).use { surface ->
@@ -49,6 +49,6 @@ fun renderInk(page: List<PageStroke>, output: File): Int {
             }
         }
     } finally {
-        renderer.clearCache()
+        renderer.close()
     }
 }

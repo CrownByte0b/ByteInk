@@ -13,9 +13,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 GROUPS = {
-    "core": ("Engine and geometry", "byteink-core", ["InkRuntime", "InkMeshes", "SpatialIndex"]),
+    "core": ("Engine and geometry", "byteink-core", ["InkRuntime", "InkMeshes", "StrokeMesh", "SpatialIndex"]),
     "authoring": ("Input and authoring", "byteink-compose", ["InkPointerSample", "InkAuthoringController", "InkDrawingSurface"]),
-    "rendering": ("Rendering and caches", "byteink-compose", ["InkPathRenderer", "InkScene", "InkSceneRasterCache"]),
+    "rendering": ("Rendering and caches", "byteink-compose", ["InkRenderer", "InkMeshRenderer", "InkTextureStore", "InkPathRenderer", "InkScene", "InkSceneRasterCache"]),
     "brushes": ("Brushes and tools", "byteink-kit", ["ViveBrushes", "ViveInkTool", "InkColors"]),
     "storage": ("Stored rows and codecs", "byteink-kit", ["StoredInk", "ViveInkCodec", "ViveInkPage", "DecodedInkOperation"]),
     "operations": ("Page operations and selection", "byteink-kit", ["InkGeometry", "PageStroke", "Lasso", "InkPageIndex", "PageBounds"]),
@@ -26,6 +26,8 @@ GROUPS = {
 PARAMETERS = {
     "positions": "Copied x/y pairs in stroke coordinates; two floats per vertex.",
     "triangles": "Copied vertex indices; three indices per triangle.",
+    "vertices": "Canonical rendering attributes in stroke coordinates; 15 floats per vertex, in StrokeMesh.VERTEX_STRIDE order.",
+    "attributeMask": "Bits 0–8 identify present position, opacity, HSL, side derivative/label, forward derivative/label, surface UV and animation offset attributes; missing values are zero.",
     "shape": "Finished native mesh; retain its owner while reading.",
     "group": "Zero-based render-group index; less than shape.getRenderGroupCount().",
     "coat": "Zero-based brush-coat index; less than brush.family.coats.size.",
@@ -48,13 +50,16 @@ PARAMETERS = {
     "strokeToView": "Finite invertible stroke/page-to-surface-pixel transform, snapshotted at begin.",
     "controller": "UI-thread authoring controller; attach to one surface at a time.",
     "modifier": "Compose layout, sizing and drawing modifiers.",
-    "renderer": "Reusable drawing-thread path renderer; clear its cache when its owner is disposed.",
+    "renderer": "Reusable drawing-thread renderer; clear path caches or close owned mesh renderers on disposal.",
+    "textureStore": "Optional preloaded client-texture-ID lookup; images are borrowed and missing images make that paint unavailable.",
+    "clientTextureId": "BrushPaint client texture ID; return its decoded Skia Image, or null if unavailable.",
+    "textureCacheCapacity": "Positive maximum number of retained texture shader entries; provider-owned images are outside this limit.",
     "enabled": "Whether to accept input; false cancels the active gesture.",
     "inputSource": "Optional native adapter; null uses Compose primary-pointer gestures.",
     "onStrokeFinished": "Completion callback captured at pointer down; retain/store the returned stroke.",
     "drawContent": "DrawScope block drawn before live ink, usually for finished ink and paper.",
     "cacheCapacity": "Nonnegative retained-entry limit; zero disables retention.",
-    "cacheByteBudget": "Nonnegative approximate retained finished-path byte ceiling; excludes live paths and meshes.",
+    "cacheByteBudget": "Nonnegative retained finished-path or mesh-geometry byte ceiling, as specified by the renderer; excludes live geometry and provider images.",
     "pixelBudgetBytes": "Nonnegative retained N32 raster-byte ceiling; excludes paths, scenes and wrappers.",
     "canvas": "Compose Canvas on the drawing thread; use asComposeCanvas() for a Skia canvas.",
     "strokeToCanvas": "Finite stroke-to-local-canvas transform, composed with the canvas's existing transform.",
@@ -104,6 +109,7 @@ PARAMETERS = {
     "path": "Page-space lasso vertices; codec requires at least three finite points.",
     "erases": "Stored erase operations with their target links; tombstones are retained as input data.",
     "moves": "Stored move/resize operations with their target links.",
+    "operations": "Already decoded active erase/move operations; replay sorts by createdAt then ID without modifying the supplied list.",
     "executor": "Optional caller-owned decode executor; load waits for jobs and never shuts it down.",
     "onPartial": "Cumulative draw-order snapshots on the load caller's thread; enabled only when no live move rows exist.",
     "erasedAway": "Decoded stroke-row IDs whose last geometry was removed by replay.",
@@ -147,6 +153,7 @@ PARAMETERS = {
 NOTES = {
     "InkRuntime": "load() verifies that ByteInk's loader supplies the native engine; call before importing ink.",
     "TriangleMesh": "Geometry exports return independent snapshots; this constructor retains supplied arrays without copying or layout validation. vertexCount = positions.size / 2; triangleCount = triangles.size / 3.",
+    "StrokeMesh": "Owned rendering snapshot. Vertex floats: position XY (0–1), opacity shift (2), HSL shift (3–5), side derivative XY/label (6–8), forward derivative XY/label (9–11), surface UV (12–13), animation offset (14). Missing attributes are zero; indices are unsigned native values widened to Int. Constructor retains supplied arrays.",
     "InkMeshes": "Read live strokes on their authoring thread. Returned geometry survives later updates/clear.",
     "SpatialIndex": "Factory construction only. Queries include touching bounds, preserve list order and require exact hit tests afterward.",
     "InkPointerSample": "Coordinates must be finite, uptime nonnegative, measured pressure finite within [0, 1].",
@@ -155,6 +162,10 @@ NOTES = {
     "InkAuthoringController": "begin draws the first dot; append buffers; advance processes a frame; finish returns canonical finished geometry or null when idle. close is terminal.",
     "InkDrawingSurface": "Captures brush, transform and callback at pointer down. Disabling/removal cancels; the owner must close the controller and clear the renderer.",
     "InkPathRenderer": "InkPathRenderer() uses 2048 finished entries and 64 MiB. InkPathRenderer(cacheCapacity) keeps the same byte ceiling. Supports texture-free ANY/DISCARD; clearCache releases paths.",
+    "InkRenderer": "Shared finished/live drawing contract for path and mesh renderers. renderVersion invalidates retained view rasters when settings or textures change; the default is 0.",
+    "InkMeshRenderer": "Full pinned Ink mesh/shader rendering: vertex HSL/opacity, prediction fade, derivative AA, textures and atlas animation. ANY/ACCUMULATE use meshes; DISCARD uses a uniform outline with tiling textures. Single drawing thread; close is terminal and releases shaders/effects. Missing textures try the next compatible paint before failing without partial coat drawing.",
+    "rememberInkMeshRenderer": "Remembers the renderer by textureStore identity and closes it on disposal. Omit the store for texture-free brushes.",
+    "InkTextureStore": "Supplies preloaded Skia Images by client texture ID. Renderer borrows images and never closes them; cached shaders retain native references. Call renderer.clearCache() after changing an image under the same ID.",
     "InkSceneStroke": "One occurrence; the same native stroke may occur several times with distinct transforms/colors.",
     "InkScene": "Snapshots transforms and indexes bounds. visibleStrokes gives conservative candidates; draw returns the actual drawn count.",
     "InkSceneRasterCache": "InkSceneRasterCache() retains one exact view within 64 MiB. Reuse identical scene/view keys; new views rasterize in full. close is terminal.",
@@ -167,7 +178,7 @@ NOTES = {
     "InkEraseMode": "Case-sensitive stored names: Normal and Object. of returns null for unknown strings.",
     "ViveInkCodec": "Nullable decoders isolate unreadable rows. Input decompression is capped at 64 MiB across gzip members; writes use pinned Android-compatible protobuf/gzip.",
     "LoadedInkPage": "strokes is replayed display geometry; sourceStrokes is pre-replay native geometry; operations contains validated erase/move objects. Do not persist projections as replacement rows.",
-    "ViveInkPage": "Filter tombstones; sort strokes by seq/ID and operations by createdAt/ID. load blocks, decodes in 512-row chunks with at most four queued jobs, and leaves storage untouched.",
+    "ViveInkPage": "load filters tombstones, sorts strokes by seq/ID and operations by createdAt/ID, and decodes in 512-row chunks with at most four queued jobs. replay reuses original sourceStrokes and decoded active operations without decoding again. Both block, belong on a worker thread and leave storage untouched.",
     "DecodedInkOperation": "Returned by page loading; Erase/Move constructors are internal. Inspect their public properties, retaining original stored rows for persistence.",
     "InkPoint": "A value in page dp. Pointer observations use a separate pixel-based type.",
     "InkBounds": "Axis-aligned page rectangle; contains includes edges. unionBounds returns null for an empty list.",
@@ -187,6 +198,9 @@ NOTES = {
 
 PROPERTIES = {
     "vertexCount": "Number of copied x/y vertex pairs.",
+    "StrokeMesh.vertexCount": "Number of canonical vertices: vertices.size / VERTEX_STRIDE.",
+    "hasSurfaceUv": "Whether attributeMask bit 7 is set.",
+    "hasAnimationOffset": "Whether attributeMask bit 8 is set.",
     "triangleCount": "Number of copied index triples.",
     "SpatialIndex.size": "Total item count, including items with no queryable bounds.",
     "revision": "Compose snapshot state, initially 0; changes after processed geometry/lifecycle updates.",
@@ -196,6 +210,12 @@ PROPERTIES = {
     "strokeToView": "Captured stroke-to-surface transform; initially identity.",
     "pathBuildCount": "Cumulative finished/live path builds, retained across clearCache calls.",
     "cachedShapeCount": "Number of retained finished shapes; excludes live paths.",
+    "InkMeshRenderer.cachedShapeCount": "Number of retained finished mesh shapes; excludes weakly owned live geometry.",
+    "renderVersion": "Renderer revision used by viewport raster keys; mesh animation-time changes and clearCache increment it.",
+    "animationTimeMillis": "Writable nonnegative elapsed millisecond clock for texture atlases; changing it invalidates Compose drawing and view rasters. Live shape effects also need updateShape.",
+    "meshBuildCount": "Cumulative coat mesh preparations, retained across clears.",
+    "cachedTextureCount": "Number of retained texture shaders, bounded by textureCacheCapacity.",
+    "cachedGeometryBytes": "Retained finished mesh/prepared-vertex/path bytes, bounded by cacheByteBudget; excludes live geometry, JVM headers, GPU uploads and provider images.",
     "cachedPathBytes": "Estimated retained finished-path geometry bytes; bounded by cacheByteBudget.",
     "pathEvictionCount": "Cumulative finished-shape retirements caused by capacity/byte limits.",
     "rasterBuildCount": "Cumulative viewport raster builds, retained across clears.",
@@ -283,7 +303,7 @@ def split_parameters(text: str) -> list[tuple[str, str, str, bool]]:
     return result
 
 
-DECL = re.compile(r"^[ \t]*(?P<mods>(?:(?:public|private|internal|protected|data|sealed|abstract|const|override|open|final|suspend|inline|operator|companion|enum)\s+)*)(?P<kind>class|object|interface|fun|constructor|val|var)\b", re.M)
+DECL = re.compile(r"^[ \t]*(?P<mods>(?:(?:public|private|internal|protected|data|sealed|abstract|const|override|open|final|suspend|inline|operator|companion|enum|fun(?=\s+interface))\s+)*)(?P<kind>class|object|interface|fun|constructor|val|var)\b", re.M)
 
 
 def declarations(path: Path) -> list[dict]:
@@ -372,6 +392,8 @@ def declarations(path: Path) -> list[dict]:
 
 
 def meaning(name: str, param: str) -> str:
+    if name == "ViveInkPage.replay" and param == "strokes":
+        return "Original pre-operation projections, such as LoadedInkPage.sourceStrokes; never supply already cut/moved display projections. Their draw order is preserved."
     if name == "LoadedInkLibrary" and param == "path":
         return "Absolute path to the native file loaded by this JVM."
     if param == "id":
@@ -428,7 +450,12 @@ def render(title: str, module: str, files: list[str]) -> tuple[str, int]:
             if entry["kind"] in ("val", "var"):
                 description = PROPERTIES.get(name, PROPERTIES.get(name.rsplit(".", 1)[-1]))
                 if description:
-                    result += [description + (" Private setter." if entry["kind"] == "var" else ""), ""]
+                    following = "\n".join(source_lines[entry["line"]:])
+                    next_declaration = DECL.search(following)
+                    if next_declaration:
+                        following = following[:next_declaration.start()]
+                    private_setter = entry["kind"] == "var" and re.search(r"\bprivate\s+set\b", following)
+                    result += [description + (" Private setter." if private_setter else ""), ""]
             result += [table(name, entry["parameters"]), table(name, entry["fields"], properties=True)]
             result += [f"[Source](https://github.com/CrownByte0b/ByteInk/blob/master/{relative}#L{entry['line']})", ""]
     return re.sub(r"\n{3,}", "\n\n", "\n".join(result).rstrip()) + "\n", count

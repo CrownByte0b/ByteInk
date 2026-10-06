@@ -53,7 +53,7 @@ The wiki includes the **actual Kotlin source files** from `docs/examples/src/mai
 ./gradlew -p docs/examples check run --max-workers=1
 ```
 
-This standalone consumer compiles all examples, then checks authoring, stored round trips, partial erase/replay, selection, geometry, and offscreen rendering. It uses `includeBuild` to consume the current checkout. It needs no personal notebook.
+This standalone consumer compiles all examples, including the textured Compose surface, then checks authoring, stored round trips, partial erase/decoded replay/undo, selection, rendering attributes and offscreen mesh rendering. It uses `includeBuild` to consume the current checkout. It needs no personal notebook.
 
 ## Update API pages
 

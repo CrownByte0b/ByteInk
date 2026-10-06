@@ -134,7 +134,7 @@ public fun writePng( strokes: List<PageStroke>, file: File, maxDimension: Int = 
 | `strokes` | `List<PageStroke>` | `Required` | Stroke entries or stored rows, as specified by the type; preserve their order. |
 | `file` | `File` | `Required` | Input .vive archive or output PNG path, as specified by the operation. |
 | `maxDimension` | `Int` | `2048` | Maximum image dimension in pixels; must exceed 32; includes 16-pixel padding per side. |
-| `renderer` | `InkPathRenderer` | `InkPathRenderer()` | Reusable drawing-thread path renderer; clear its cache when its owner is disposed. |
+| `renderer` | `InkPathRenderer` | `InkPathRenderer()` | Reusable drawing-thread renderer; clear path caches or close owned mesh renderers on disposal. |
 
 [Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-testing/src/main/kotlin/com/vivenotes/byteink/testing/NotebookInkImages.kt#L37)
 
