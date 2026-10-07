@@ -1,6 +1,10 @@
 androidx-ink/
 memory/
-benchmarks/
+benchmarks/*
+!benchmarks/run_pen.py
+!benchmarks/pen/
+benchmarks/pen/*
+!benchmarks/pen/*.java
 todo.txt
 
 # Gradle, Kotlin and IDE state

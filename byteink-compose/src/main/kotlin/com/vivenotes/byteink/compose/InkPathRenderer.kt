@@ -187,6 +187,10 @@ public class InkPathRenderer(public val cacheCapacity: Int, public val cacheByte
         releaseCollectedPaths()
     }
 
+    override fun releaseLiveStroke(stroke: InProgressStroke) {
+        live.remove(StrokeReference(stroke))?.paths?.forEach(InkRenderPath::close)
+    }
+
     private fun supported(brush: Brush): Boolean = brush.family.coats.all { coat ->
         coat.paintPreferences.any(::supportedPaint)
     }

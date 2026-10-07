@@ -68,12 +68,19 @@ public class InkLowLatencyPanel(
     private var closed = false
     private var subscription: AutoCloseable? = null
     private var renderQueued = false
+    private var queuedRenderNeedsAdvance = false
+    private var skipSessionAdvance = false
     private var pendingInputNanos: Long? = null
     private val wayland = WaylandRuntime.isWayland()
     private var layer: SkiaLayer? = null
     private var swingLayer: SkiaSwingLayer? = null
     private val contentScale: Float get() = layer?.contentScale ?: graphicsConfiguration.defaultTransform.scaleX.toFloat()
-    private val timer = Timer(4) { requestInkRender() }.also { it.isRepeats = true }
+    private val timer = Timer(4) {
+        if (!closed && isDisplayable) {
+            if (session.advanceNow()) requestInkRender(advanceSession = false)
+            scheduleAnimationTick()
+        }
+    }.also { it.isRepeats = false }
     private val connectTimer = Timer(10) {
         if (isShowing && authoringEnabled && !closed) connect() else disconnect()
     }.also { it.isRepeats = true }
@@ -89,9 +96,10 @@ public class InkLowLatencyPanel(
 
     init {
         checkUiThread()
+        session.onLiveStrokeRetired = this.renderer::releaseLiveStroke
         val delegate = SkikoRenderDelegate { canvas, width, height, nanoTime ->
             if (!closed) {
-                session.advanceNow(nanoTime)
+                if (!skipSessionAdvance) session.advanceNow(nanoTime)
                 canvas.clear(clearColorArgb)
                 val scale = contentScale
                 canvas.save()
@@ -107,7 +115,7 @@ public class InkLowLatencyPanel(
                 renderedFrameCount++
                 pendingInputNanos?.let { lastInputToRenderNanos = (System.nanoTime() - it).coerceAtLeast(0L) }
                 pendingInputNanos = null
-                if (session.needsAnimationTick()) timer.start() else timer.stop()
+                scheduleAnimationTick()
             }
         }
         val properties = SkiaLayerProperties(
@@ -148,14 +156,35 @@ public class InkLowLatencyPanel(
 
     /** Requests a direct render after updating a finished scene or view; multiple requests coalesce. */
     public fun requestInkRender() {
+        requestInkRender(advanceSession = true)
+    }
+
+    private fun requestInkRender(advanceSession: Boolean) {
         checkUiThread()
-        if (closed || !isDisplayable || renderQueued) return
+        if (closed || !isDisplayable) return
+        queuedRenderNeedsAdvance = queuedRenderNeedsAdvance || advanceSession
+        if (renderQueued) return
         renderQueued = true
         EventQueue.invokeLater {
             renderQueued = false
+            val advance = queuedRenderNeedsAdvance
+            queuedRenderNeedsAdvance = false
             if (!closed && isDisplayable) {
-                layer?.renderImmediately() ?: swingLayer?.let { if (isShowing) it.paintImmediately(0, 0, it.width, it.height) }
+                // Both pinned Skiko presentation paths record synchronously on EDT. A timer has
+                // already advanced geometry, while new input or an external redraw still needs it.
+                skipSessionAdvance = !advance
+                try {
+                    layer?.renderImmediately() ?: swingLayer?.let { if (isShowing) it.paintImmediately(0, 0, it.width, it.height) }
+                } finally { skipSessionAdvance = false }
             }
+        }
+    }
+
+    private fun scheduleAnimationTick() {
+        val delay = if (closed || !isDisplayable) null else session.nextAnimationDelayMillisNow()
+        if (delay == null) timer.stop() else {
+            timer.initialDelay = delay
+            timer.restart()
         }
     }
 
@@ -167,7 +196,7 @@ public class InkLowLatencyPanel(
         session.close()
         layer?.dispose()
         swingLayer?.dispose()
-        if (ownsRenderer) this.renderer.clearCache()
+        if (ownsRenderer) (this.renderer as InkMeshRenderer).close()
     }
 
     private fun connect() {

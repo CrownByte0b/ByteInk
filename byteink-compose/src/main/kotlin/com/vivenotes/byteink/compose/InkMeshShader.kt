@@ -33,6 +33,12 @@ internal fun prepareMesh(mesh: StrokeMesh, transform: MeshLinearTransform, color
     val varying = FloatArray(mesh.vertexCount * VARYING_STRIDE)
     val v = mesh.vertices
     val det = abs(transform.a * transform.e - transform.b * transform.d)
+    val hasHsl = mesh.attributeMask and (1 shl 2) != 0
+    val baseY = if (hasHsl) color.r * .299f + color.g * .587f + color.b * .114f else 0f
+    val baseI = if (hasHsl) color.r * .596f - color.g * .275f - color.b * .321f else 0f
+    val baseQ = if (hasHsl) color.r * .212f - color.g * .523f + color.b * .311f else 0f
+    val baseHue = if (!hasHsl || color.r == 0f && color.g == 0f && color.b == 0f) 0f else atan2(baseQ, baseI)
+    val baseChroma = if (hasHsl) sqrt(baseI * baseI + baseQ * baseQ) else 0f
     fun clamp(x: Float): Float = x.coerceIn(0f, 1f)
     fun distance(dx: Float, dy: Float): Float {
         val rx = -transform.a * dy + transform.b * dx
@@ -63,25 +69,31 @@ internal fun prepareMesh(mesh: StrokeMesh, transform: MeshLinearTransform, color
         val py = v[i + 1] + soy + (1f - common) * foy
         positions[vertex * 2] = px; positions[vertex * 2 + 1] = py
 
-        var y = color.r * .299f + color.g * .587f + color.b * .114f
-        val yi = color.r * .596f - color.g * .275f - color.b * .321f
-        val yq = color.r * .212f - color.g * .523f + color.b * .311f
-        val hue = (if (color.r == 0f && color.g == 0f && color.b == 0f) 0f else atan2(yq, yi)) - v[i + 3] * (2f * Math.PI.toFloat())
-        val chroma = sqrt(yi * yi + yq * yq) * (v[i + 4] + 1f)
-        y += v[i + 5]
-        val shiftedI = chroma * cos(hue); val shiftedQ = chroma * sin(hue)
         val alpha = clamp((v[i + 2] + 1f) * color.a)
-        val hasHsl = mesh.attributeMask and (1 shl 2) != 0
-        varying[o] = (if (hasHsl) y + .956f * shiftedI + .621f * shiftedQ else color.r) * alpha
-        varying[o + 1] = (if (hasHsl) y - .272f * shiftedI - .647f * shiftedQ else color.g) * alpha
-        varying[o + 2] = (if (hasHsl) y - 1.107f * shiftedI + 1.704f * shiftedQ else color.b) * alpha
+        if (hasHsl) {
+            val hue = baseHue - v[i + 3] * (2f * Math.PI.toFloat())
+            val chroma = baseChroma * (v[i + 4] + 1f)
+            val y = baseY + v[i + 5]
+            val shiftedI = chroma * cos(hue); val shiftedQ = chroma * sin(hue)
+            varying[o] = (y + .956f * shiftedI + .621f * shiftedQ) * alpha
+            varying[o + 1] = (y - .272f * shiftedI - .647f * shiftedQ) * alpha
+            varying[o + 2] = (y - 1.107f * shiftedI + 1.704f * shiftedQ) * alpha
+        } else {
+            varying[o] = color.r * alpha
+            varying[o + 1] = color.g * alpha
+            varying[o + 2] = color.b * alpha
+        }
         varying[o + 3] = alpha
         varying[o + 4] = sidePixels; varying[o + 5] = forwardPixels
-        val edges = floatArrayOf(if (sl > -.005f) 1f else 0f, if (sl < .005f) 1f else 0f,
-            if (fl > -.005f) 1f else 0f, if (fl < .005f) 1f else 0f)
         repeat(4) { edge ->
-            varying[o + 6 + edge] = edges[edge]
-            varying[o + 10 + edge] = target * (1f - edges[edge]) *
+            val flag = when (edge) {
+                0 -> if (sl > -.005f) 1f else 0f
+                1 -> if (sl < .005f) 1f else 0f
+                2 -> if (fl > -.005f) 1f else 0f
+                else -> if (fl < .005f) 1f else 0f
+            }
+            varying[o + 6 + edge] = flag
+            varying[o + 10 + edge] = target * (1f - flag) *
                 (if (edge < 2) sideOutset / sideTarget else forwardOutset / forwardTarget)
         }
         if (stamp == null) {

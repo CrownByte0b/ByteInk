@@ -188,7 +188,7 @@ final class WaylandPenBridge implements NativePenBridge {
             case "pressure" -> { tool.pressure = Math.min(65535L, Integer.toUnsignedLong(number(args, 0))) / 65535f; tool.axes |= tool.capabilities & PRESSURE; tool.changed = true; }
             case "tilt" -> { tool.tiltX = (float) fixed(args, 0); tool.tiltY = (float) fixed(args, 1); tool.axes |= tool.capabilities & TILT; tool.changed = true; }
             case "frame" -> {
-                if (tool.surface == target) {
+                if (tool.surface == target && (tool.active || !tool.transitions.isEmpty())) {
                     Point point = new Point(tool.x, tool.y, Integer.toUnsignedLong(number(args, 0)), tool.pressure, tool.tiltX, tool.tiltY, tool.kind == PEN ? tool.axes : 0);
                     boolean transitioned = !tool.transitions.isEmpty();
                     for (int phase : List.copyOf(tool.transitions)) {
@@ -257,6 +257,7 @@ final class WaylandPenBridge implements NativePenBridge {
         if (closed) return;
         running = false;
         if (reader.isAlive()) {
+            wire.wakeReader();
             try { reader.join(3000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException("Wayland shutdown interrupted", e); }
             if (reader.isAlive()) throw new IllegalStateException("Wayland ink reader did not stop; its callbacks remain allocated");
         }
@@ -277,8 +278,11 @@ final class WaylandPenBridge implements NativePenBridge {
             // prepare_read_queue can succeed on a terminal display too; pair every successful call.
             if (prepared) wire.procedure("wl_display_cancel_read", display);
             wire.procedure("wl_event_queue_destroy", queue);
-            if (healthy && released) wire.close();
-            else synchronized (FAILED_DISPLAYS) { FAILED_DISPLAYS.add(wire); }
+            try { wire.closeWakeup(); }
+            finally {
+                if (healthy && released) wire.close();
+                else synchronized (FAILED_DISPLAYS) { FAILED_DISPLAYS.add(wire); }
+            }
         }
     }
 }

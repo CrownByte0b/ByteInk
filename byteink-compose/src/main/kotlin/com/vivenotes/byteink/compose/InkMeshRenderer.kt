@@ -76,20 +76,27 @@ public class InkMeshRenderer(
         private set
     public var meshBuildCount: Long = 0L
         private set
+    internal var meshSnapshotCount: Long = 0L
+        private set
     public val cachedShapeCount: Int get() = shapes.size
     public val cachedTextureCount: Int get() = textures.size
+    /** Active wet caches, separate from the finished geometry budget. */
+    public val cachedLiveShapeCount: Int get() = live.size
+    public val cachedLiveGeometryBytes: Long get() = live.values.sumOf { it.geometry.bytes }
     public var cachedGeometryBytes: Long = 0L
         private set
 
     private data class PreparedKey(val transform: MeshLinearTransform, val color: MeshColor, val stamp: StampAnimation?)
-    private class CoatGeometry(val meshes: List<StrokeMesh>, var path: InkRenderPath? = null) {
+    private class CoatGeometry {
+        var meshes: List<StrokeMesh>? = null
+        var path: InkRenderPath? = null
         var key: PreparedKey? = null
         var chunks: List<MeshChunk> = emptyList()
-        val bytes: Long get() = meshes.sumOf { it.vertices.size * 4L + it.triangles.size * 4L } +
+        val bytes: Long get() = (meshes?.sumOf { it.vertices.size * 4L + it.triangles.size * 4L } ?: 0L) +
             chunks.sumOf { it.varyings.size * 4L + it.vertices.positions.size * 4L +
                 it.vertices.textureCoordinates.size * 4L + it.vertices.colors.size * 4L + it.vertices.indices.size * 2L } +
             (path?.approximateBytesUsed ?: 0L)
-        fun close() { path?.close(); path = null; chunks = emptyList() }
+        fun close() { path?.close(); path = null; meshes = null; chunks = emptyList() }
     }
     private class Geometry(val coats: List<CoatGeometry>) {
         val bytes: Long get() = coats.sumOf { it.bytes }
@@ -140,14 +147,17 @@ public class InkMeshRenderer(
             requireNotNull(choosePaint(stroke.brush, coat, stroke.shape.renderGroupFormat(coat))) { "No drawable paint for Ink coat $coat (check textures and mesh format)" }
         }
         val cached = shapes[stroke.shape]
-        val geometry = cached ?: Geometry(paints.indices.map { CoatGeometry(InkMeshes.rendering(stroke.shape, it)) })
+        val geometry = cached ?: Geometry(paints.indices.map { CoatGeometry() })
+        val snapshots = { coat: Int -> renderingMeshes(geometry.coats[coat]) { InkMeshes.rendering(stroke.shape, coat) } }
         stroke.inputs.populate(0, first); stroke.inputs.populate(stroke.inputs.size - 1, last)
         var retained = cached != null
         try {
             canvas.save()
             try {
                 canvas.concat(matrix)
-                drawCoats(canvas, geometry, stroke.brush, paints, colorArgb) { coat -> finishedPath(stroke.shape, coat, geometry.coats[coat].meshes) }
+                drawCoats(canvas, geometry, stroke.brush, paints, colorArgb, snapshots) { coat ->
+                    finishedPath(stroke.shape, coat) { snapshots(coat) }
+                }
             } finally { canvas.restore() }
             if (!retained && cacheCapacity > 0 && geometry.bytes <= cacheByteBudget) {
                 shapes[stroke.shape] = geometry
@@ -193,7 +203,7 @@ public class InkMeshRenderer(
         }
         val cached = live[key]
         val geometry = if (cached?.version == stroke.shapeVersion()) cached.geometry else {
-            Geometry(paints.indices.map { CoatGeometry(InkMeshes.rendering(stroke, it)) }).also {
+            Geometry(paints.indices.map { CoatGeometry() }).also {
                 live[if (cached == null) StrokeReference(stroke, queue) else key] = LiveGeometry(stroke.shapeVersion(), it)
                 cached?.geometry?.close()
             }
@@ -202,7 +212,10 @@ public class InkMeshRenderer(
         canvas.save()
         try {
             canvas.concat(matrix)
-            drawCoats(canvas, geometry, brush, paints, colorArgb) { coat -> outlineInkPath(InkMeshes.outlines(stroke, coat)) }
+            drawCoats(canvas, geometry, brush, paints, colorArgb,
+                { coat -> renderingMeshes(geometry.coats[coat]) { InkMeshes.rendering(stroke, coat) } }) { coat ->
+                outlineInkPath(InkMeshes.outlines(stroke, coat))
+            }
         } finally { canvas.restore() }
         return true
     }
@@ -220,6 +233,13 @@ public class InkMeshRenderer(
         releaseCollected()
         renderVersion++
     }
+
+    override fun releaseLiveStroke(stroke: InProgressStroke) {
+        live.remove(StrokeReference(stroke))?.geometry?.close()
+    }
+
+    private fun renderingMeshes(coat: CoatGeometry, load: () -> List<StrokeMesh>): List<StrokeMesh> =
+        coat.meshes ?: load().also { coat.meshes = it; meshSnapshotCount++ }
 
     override fun close() {
         if (closed) return
@@ -304,7 +324,8 @@ public class InkMeshRenderer(
         } catch (failure: Throwable) { result?.let { if (!it.isClosed) it.close() }; throw failure }
     }
 
-    private fun drawCoats(canvas: Canvas, geometry: Geometry, brush: Brush, paints: List<BrushPaint>, colorArgb: Int?, buildPath: (Int) -> InkRenderPath) {
+    private fun drawCoats(canvas: Canvas, geometry: Geometry, brush: Brush, paints: List<BrushPaint>, colorArgb: Int?,
+        meshes: (Int) -> List<StrokeMesh>, buildPath: (Int) -> InkRenderPath) {
         val m = canvas.skiaCanvas.localToDeviceAsMatrix33.mat
         require(m.all(Float::isFinite) && m[6] == 0f && m[7] == 0f && m[8] == 1f) { "Ink mesh rendering requires a finite affine canvas transform" }
         val linear = MeshLinearTransform(m[0], m[1], m[3], m[4])
@@ -337,7 +358,7 @@ public class InkMeshRenderer(
                     val stamp = (value.textureLayers.firstOrNull() as? BrushPaint.StampingTexture)?.let(::stampAnimation)
                     val key = PreparedKey(linear, MeshColor(color.red, color.green, color.blue, color.alpha), stamp)
                     if (key != coat.key) {
-                        coat.chunks = coat.meshes.flatMap { prepareMesh(it, linear, key.color, stamp) }
+                        coat.chunks = meshes(index).flatMap { prepareMesh(it, linear, key.color, stamp) }
                         coat.key = key
                         meshBuildCount++
                     }
@@ -371,11 +392,11 @@ public class InkMeshRenderer(
         return StampAnimation(progress, layer.animationFrames, layer.animationRows, layer.animationColumns)
     }
 
-    private fun finishedPath(shape: PartitionedMesh, coat: Int, meshes: List<StrokeMesh>): InkRenderPath {
+    private fun finishedPath(shape: PartitionedMesh, coat: Int, meshes: () -> List<StrokeMesh>): InkRenderPath {
         val outlines = InkMeshes.outlines(shape, coat)
         if (outlines.any { it.isNotEmpty() }) return outlineInkPath(outlines)
         return buildInkPath {
-            meshes.forEach { mesh ->
+            meshes().forEach { mesh ->
                 val p = mesh.vertices
                 for (t in mesh.triangles.indices step 3) {
                     val a = mesh.triangles[t] * StrokeMesh.VERTEX_STRIDE

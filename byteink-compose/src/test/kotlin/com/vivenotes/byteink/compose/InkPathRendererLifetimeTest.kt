@@ -134,6 +134,29 @@ class InkPathRendererLifetimeTest {
     }
 
     @Test
+    fun explicitLiveRetirementClosesItsPathWhileTheEngineAndFinishedCacheStayAlive() = raster { canvas ->
+        val renderer = InkPathRenderer()
+        val finished = stroke()
+        renderer.draw(canvas, finished)
+        val dry = canvas.paths.last()
+        val live = InProgressStroke()
+        try {
+            live.start(finished.brush)
+            live.enqueueInputs(inputs(), MutableStrokeInputBatch())
+            live.updateShape(100L)
+            renderer.draw(canvas, live)
+            val wet = canvas.paths.last()
+            renderer.releaseLiveStroke(live)
+            renderer.releaseLiveStroke(live)
+            assertTrue(wet.isClosed)
+            assertFalse(dry.isClosed)
+            assertEquals(1, renderer.cachedShapeCount)
+            renderer.draw(canvas, finished)
+            assertSame(dry, canvas.paths.last())
+        } finally { live.clear(); renderer.clearCache() }
+    }
+
+    @Test
     fun aCollectedLiveOwnerReleasesItsSnapshotOnTheNextDraw() = raster { canvas ->
         val renderer = InkPathRenderer()
         val owner = drawTemporaryLive(renderer, canvas)

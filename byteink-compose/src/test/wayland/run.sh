@@ -3,7 +3,7 @@ set -euo pipefail
 unset WAYLAND_SOCKET
 task_root=$(cd "$(dirname "$0")/../../../.." && pwd)
 fixture="$task_root/byteink-compose/src/test/wayland"
-output="$task_root/build/wayland-pen/fixture"
+output="${BYTEINK_WAYLAND_TEST_OUTPUT:-$task_root/build/wayland-pen/fixture}"
 mkdir -p "$output"
 python3 "$fixture/generate.py" --check
 wayland-scanner server-header "$fixture/tablet-v2.xml" "$output/tablet-server.h"
@@ -22,7 +22,9 @@ cc -shared -fPIC -Wall -Wextra -Wno-unused-parameter -Wl,-Bsymbolic \
     "${weston_flags[@]}" -I"$output" "$fixture/tablet-fixture.c" \
     "$output/tablet-protocol.c" "$output/byteink-test-protocol.c" "${dependency_flags[@]}" \
     -o "$output/tablet-fixture.so"
-runtime=$(mktemp -d "$output/runtime.XXXXXX")
+# Keep the socket path short even when the evidence directory has a long name.
+# Unix-domain socket addresses (including Wayland's) have a 108-byte limit.
+runtime=$(mktemp -d "${TMPDIR:-/tmp}/byteink-wayland.XXXXXX")
 chmod 700 "$runtime"
 weston_pid=
 cleanup() {
@@ -52,8 +54,8 @@ import xml.etree.ElementTree as ET
 results, output, scale = sys.argv[1:]
 xml = Path(results) / 'TEST-com.vivenotes.byteink.compose.WaylandPenIntegrationTest.xml'
 root = ET.parse(xml).getroot()
-if int(root.get('tests', 0)) < 7 or any(int(root.get(key, 0)) for key in ['skipped', 'failures', 'errors']):
-    raise SystemExit('All seven native Wayland cases must finish without errors or skips (toolkit termination is not a pass).')
+if int(root.get('tests', 0)) < 9 or any(int(root.get(key, 0)) for key in ['skipped', 'failures', 'errors']):
+    raise SystemExit('All nine native Wayland cases must finish without errors or skips (toolkit termination is not a pass).')
 Path(output, f'wayland-scale-{scale}.xml').write_bytes(xml.read_bytes())
 print(f'Native Wayland: {root.get("tests")} cases passed at {scale}x scaling, no skips.')
 PY

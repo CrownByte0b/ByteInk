@@ -27,6 +27,8 @@ public interface InkRenderer {
         viewport: Rect? = null,
         colorArgb: Int? = null,
     ): Boolean
+    /** Retires a gesture's wet geometry without evicting finished strokes or other live pointers. */
+    public fun releaseLiveStroke(stroke: InProgressStroke) {}
     public fun clearCache()
 }
 

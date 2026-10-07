@@ -69,6 +69,7 @@ public class NativeInkInputSource(
             if (wayland == null) return frame
             if (frame.phase() == NativePenBridge.CANCEL_ALL) { accepted.clear(); mouseDown = false; return frame }
             if (frame.phase() == NativePenBridge.CANCEL) { accepted.remove(frame.pointerId()); return frame }
+            if (frame.phase() != NativePenBridge.BEGIN && frame.pointerId() !in accepted) return null
             val scale = pixelsPerLocalUnit().also { require(it.isFinite() && it > 0f) }
             val offset = SwingUtilities.convertPoint(component, 0, 0, wayland.window)
             val units = wayland.surfaceUnitsPerLocalUnit()
@@ -87,57 +88,30 @@ public class NativeInkInputSource(
                     if (hit !== component && (hit == null || !SwingUtilities.isDescendingFrom(hit, component))) return null
                 }
                 accepted.add(frame.pointerId())
-            } else if (frame.pointerId() !in accepted) return null
+            }
             if (frame.phase() == NativePenBridge.FINISH) accepted.remove(frame.pointerId())
             return NativePenBridge.Frame(frame.pointerId(), frame.phase(), frame.tool(), points)
         }
-        val queue = ArrayDeque<Any>()
         var attached = true
-        var scheduled = false
         var bridge: NativePenBridge? = null
         lateinit var subscription: AutoCloseable
-        fun drain() {
+        val queue = NativeInkPacketQueue(consume = { packet ->
             check(EventQueue.isDispatchThread())
-            val packets = synchronized(queue) {
-                scheduled = false
-                queue.toList().also { queue.clear() }
-            }
-            if (!attached) return
-            try {
-                var i = 0
-                while (i < packets.size && attached) {
-                    val packet = packets[i++]
-                    if (packet is Throwable) {
-                        normalizer.clear()
-                        try { listener(InkInputEvent.Cancel) } finally { subscription.close() }
-                        onFailure(packet)
-                        return
-                    }
-                    if (packet is InkInputEvent) { listener(packet); continue }
-                    var frame = packet as NativePenBridge.Frame
-                    if (frame.phase() == NativePenBridge.MOVE) {
-                        val points = frame.points().toMutableList()
-                        while (i < packets.size) {
-                            val next = packets[i] as? NativePenBridge.Frame ?: break
-                            if (next.phase() != NativePenBridge.MOVE || next.pointerId() != frame.pointerId() || next.tool() != frame.tool()) break
-                            points.addAll(next.points()); i++
-                        }
-                        frame = NativePenBridge.Frame(frame.pointerId(), frame.phase(), frame.tool(), points)
-                    }
-                    localFrame(frame)?.let { local -> normalizer.events(local).forEach { if (attached) listener(it) } }
+            if (attached) try {
+                if (packet is Throwable) {
+                    normalizer.clear()
+                    try { listener(InkInputEvent.Cancel) } finally { subscription.close() }
+                    onFailure(packet)
+                } else if (packet is InkInputEvent) listener(packet)
+                else localFrame(packet as NativePenBridge.Frame)?.let { local ->
+                    normalizer.events(local).forEach { if (attached) listener(it) }
                 }
             } catch (failure: Throwable) {
                 try { subscription.close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
                 throw failure
             }
-        }
-        fun enqueue(packet: Any) {
-            synchronized(queue) {
-                if (!attached) return
-                queue.addLast(packet)
-                if (!scheduled) { scheduled = true; EventQueue.invokeLater(::drain) }
-            }
-        }
+        })
+        fun enqueue(packet: Any) = queue.enqueue(packet)
         val mouse = object : MouseAdapter() {
             fun sample(event: MouseEvent): InkPointerSample {
                 val age = (System.currentTimeMillis() - event.`when`).coerceAtLeast(0L)
@@ -176,7 +150,8 @@ public class NativeInkInputSource(
         subscription = AutoCloseable {
             check(EventQueue.isDispatchThread()) { "Close native input on the AWT event thread" }
             if (attached) {
-                synchronized(queue) { attached = false; queue.clear() }
+                attached = false
+                queue.close()
                 component.removeFocusListener(focus)
                 component.removeHierarchyListener(hierarchy)
                 component.removeMouseListener(mouse)
@@ -240,6 +215,7 @@ internal class NativePenNormalizer(
             active.remove(id)
             return listOf(InkInputEvent.CancelPointer(id))
         }
+        if ((frame.phase() == NativePenBridge.MOVE || frame.phase() == NativePenBridge.FINISH) && id !in active) return emptyList()
         val points = frame.points()
         if (points.isEmpty()) return emptyList()
         // Anchor at the newest observation, so the first historical packet remains in the past.

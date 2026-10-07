@@ -96,6 +96,123 @@ class InkMeshRendererTest {
     }
 
     @Test
+    fun outlinedDiscardCoatsSkipRenderingSnapshotsForLiveAndFinishedStrokes() {
+        val batch = inputs(20f to 20f, 100f to 100f, 20f to 100f, 100f to 20f)
+        val stroke = Stroke(ViveBrushes.highlighter(0x805070c0.toInt(), 12f), batch)
+        InkMeshRenderer().use { renderer ->
+            raster { renderer.draw(it, stroke) }.use { actual ->
+                val paths = InkPathRenderer()
+                try {
+                    raster { paths.draw(it, stroke) }.use { expected -> assertEquals(pixels(expected), pixels(actual)) }
+                } finally { paths.clearCache() }
+            }
+            val live = InProgressStroke()
+            try {
+                live.start(stroke.brush)
+                live.enqueueInputs(batch, MutableStrokeInputBatch())
+                live.updateShape(300L)
+                raster { renderer.draw(it, live) }.close()
+                assertEquals(0L, renderer.meshSnapshotCount, "An outlined DISCARD coat only needs its path")
+                assertEquals(1, renderer.cachedLiveShapeCount)
+                renderer.releaseLiveStroke(live)
+                assertEquals(0, renderer.cachedLiveShapeCount)
+                assertEquals(0L, renderer.cachedLiveGeometryBytes)
+                assertEquals(1, renderer.cachedShapeCount)
+            } finally { live.clear() }
+        }
+    }
+
+    @Test
+    fun discardSplitFallbackLoadsTrianglesOnlyWhenOutlinesAreAbsent() {
+        val stroke = Stroke(ViveBrushes.brush(ViveBrushes.MARKER, 0, 0x805070c0.toInt(), 12f), inputs(10f to 60f, 110f to 60f))
+        val mask = ViveBrushes.eraseMask(inputs(60f to 20f, 60f to 100f), 20f)
+        val discard = brush(BrushFamily(paint = BrushPaint(selfOverlap = SelfOverlap.DISCARD)), 0x805070c0.toInt())
+        // A deserialized no-outline shape can select a DISCARD paint. Native highlighter
+        // subtraction itself preserves outlines, so construct this fallback case explicitly.
+        val pieces = listOf(PageStroke("cut", stroke)).subtract(mask, listOf("cut")).map {
+            assertEquals(0, it.stroke.shape.getOutlineCount(0))
+            Stroke(discard, it.stroke.inputs, it.stroke.shape)
+        }
+        assertTrue(pieces.isNotEmpty())
+        InkMeshRenderer().use { renderer ->
+            raster { canvas -> pieces.forEach { renderer.draw(canvas, it) } }.use { image ->
+                assertEquals(0, image.getColor(60, 60))
+                assertTrue(image.getColor(25, 60) ushr 24 > 0)
+                assertTrue(image.getColor(95, 60) ushr 24 > 0)
+            }
+            assertTrue(renderer.meshSnapshotCount > 0, "Split DISCARD strokes need a triangles fallback")
+            val snapshots = renderer.meshSnapshotCount
+            raster { canvas -> pieces.forEach { renderer.draw(canvas, it) } }.close()
+            assertEquals(snapshots, renderer.meshSnapshotCount)
+        }
+    }
+
+    @Test
+    fun aNewlyAvailableMeshPaintLoadsSnapshotsFromAnExistingPathOnlyCache() {
+        texture(0xffff0000.toInt()).use { image ->
+            var available = false
+            val family = BrushFamily(listOf(BrushCoat(BrushTip(), listOf(
+                BrushPaint(listOf(BrushPaint.TilingTexture("later", 20f, 20f))),
+                BrushPaint(selfOverlap = SelfOverlap.DISCARD),
+            ))))
+            val stroke = Stroke(brush(family, 0xffffffff.toInt()), inputs(20f to 60f, 100f to 60f))
+            var pathBytes = 0L
+            InkMeshRenderer(InkTextureStore { if (available) image else null }).use { renderer ->
+                raster { renderer.draw(it, stroke) }.use { assertEquals(0xffffffff.toInt(), it.getColor(60, 60)) }
+                assertEquals(0L, renderer.meshSnapshotCount)
+                pathBytes = renderer.cachedGeometryBytes
+                assertTrue(pathBytes > 0)
+                available = true
+                raster { renderer.draw(it, stroke) }.use { assertEquals(0xffff0000.toInt(), it.getColor(60, 60)) }
+                assertEquals(1L, renderer.meshSnapshotCount)
+                assertEquals(1, renderer.cachedShapeCount)
+            }
+            available = false
+            InkMeshRenderer(InkTextureStore { if (available) image else null }, cacheByteBudget = pathBytes).use { renderer ->
+                raster { renderer.draw(it, stroke) }.close()
+                assertEquals(1, renderer.cachedShapeCount)
+                available = true
+                raster { renderer.draw(it, stroke) }.use { assertEquals(0xffff0000.toInt(), it.getColor(60, 60)) }
+                assertEquals(0, renderer.cachedShapeCount, "Lazy mesh growth must obey the finished-cache byte budget")
+                assertEquals(0L, renderer.cachedGeometryBytes)
+            }
+        }
+    }
+
+    @Test
+    fun retiringStronglyHeldWetEnginesPreservesOtherPointersAndFinishedGeometry() {
+        val stroke = Stroke(brush(BrushFamily()), inputs(20f to 60f, 100f to 60f))
+        InkMeshRenderer().use { renderer ->
+            val first = InProgressStroke()
+            val second = InProgressStroke()
+            try {
+                for (live in listOf(first, second)) {
+                    live.start(stroke.brush)
+                    live.enqueueInputs(stroke.inputs, MutableStrokeInputBatch())
+                    live.updateShape(100L)
+                    raster { renderer.draw(it, live) }.close()
+                }
+                raster { renderer.draw(it, stroke) }.close()
+                assertEquals(2, renderer.cachedLiveShapeCount)
+                val wetBytes = renderer.cachedLiveGeometryBytes
+                val dryBytes = renderer.cachedGeometryBytes
+                assertTrue(wetBytes > 0 && dryBytes > 0)
+                renderer.releaseLiveStroke(first)
+                renderer.releaseLiveStroke(first)
+                assertEquals(1, renderer.cachedLiveShapeCount)
+                assertTrue(renderer.cachedLiveGeometryBytes in 1 until wetBytes)
+                val builds = renderer.meshBuildCount
+                raster { renderer.draw(it, second) }.close()
+                assertEquals(builds, renderer.meshBuildCount)
+                renderer.releaseLiveStroke(second)
+                assertEquals(0L, renderer.cachedLiveGeometryBytes)
+                assertEquals(1, renderer.cachedShapeCount)
+                assertEquals(dryBytes, renderer.cachedGeometryBytes)
+            } finally { first.clear(); second.clear() }
+        }
+    }
+
+    @Test
     fun tilingTexturesRenderWithTheMeshAndDiscardPath() {
         texture(0xffff0000.toInt(), 0xff00ff00.toInt()).use { image ->
             for (overlap in listOf(SelfOverlap.ANY, SelfOverlap.DISCARD)) {

@@ -1,8 +1,12 @@
 package com.vivenotes.byteink.compose
 
 import androidx.ink.brush.Brush
+import androidx.ink.brush.BrushBehavior
 import androidx.ink.brush.BrushFamily
+import androidx.ink.brush.BrushTip
 import androidx.ink.brush.InputToolType
+import androidx.ink.brush.behavior.SourceNode
+import androidx.ink.brush.behavior.TargetNode
 import androidx.ink.geometry.ImmutableAffineTransform
 import androidx.ink.strokes.StrokeInput
 import com.vivenotes.byteink.kit.ViveBrushes
@@ -198,6 +202,144 @@ class InkPenPipelineTest {
             session.advance(1035)
             assertEquals(0, session.liveStrokes.single().stroke.getPredictedInputCount())
             assertFalse(session.needsAnimationTick())
+        }
+    }
+
+    @Test fun emptyAndEntirelyRejectedPredictionsDoNotScheduleStaticGeometryWork() {
+        InkAuthoringController().use { controller ->
+            controller.begin(brush, pen(10f, 1000))
+            val initialRevision = controller.revision
+            repeat(8) { controller.setPredictedInputs(emptyList()) }
+            controller.setPredictedInputs(listOf(pen(50f, 999)))
+            assertFalse(controller.hasPendingInputs)
+            assertFalse(controller.advance(1001))
+            assertEquals(initialRevision, controller.revision)
+
+            controller.setPredictedInputs(listOf(pen(50f, 1010)))
+            assertTrue(controller.advance(1001))
+            assertEquals(1, assertNotNull(controller.liveStroke).getPredictedInputCount())
+            controller.setPredictedInputs(emptyList())
+            controller.setPredictedInputs(emptyList())
+            assertTrue(controller.advance(1002), "the first empty replacement still retracts the native tail")
+            assertEquals(0, assertNotNull(controller.liveStroke).getPredictedInputCount())
+            val retractedRevision = controller.revision
+            controller.setPredictedInputs(emptyList())
+            assertFalse(controller.advance(1003))
+            assertEquals(retractedRevision, controller.revision)
+        }
+    }
+
+    @Test fun staticForecastSchedulingWaitsForItsDeadlineAndRetractionHappensOnce() {
+        InkAuthoringSession().use { session ->
+            fun send(event: InkInputEvent) = session.handle(event, brush, onStrokeFinished = { _, _ -> })
+            send(InkInputEvent.Begin(pen(10f, 1000), 1))
+            assertNull(session.nextAnimationDelayMillis(1000))
+            send(InkInputEvent.Move(pen(20f, 1010), 1))
+            assertEquals(4, session.nextAnimationDelayMillis(1010), "buffered observations need immediate processing")
+            assertTrue(session.advance(1010))
+            val renderedRevision = session.revision
+            assertEquals(12, session.nextAnimationDelayMillis(1010))
+            assertEquals(7, session.nextAnimationDelayMillis(1015))
+            assertFalse(session.advance(1015), "a waiting forecast does not change static geometry")
+            assertEquals(renderedRevision, session.revision)
+            assertEquals(1, session.nextAnimationDelayMillis(1022))
+            assertTrue(session.advance(1022))
+            assertEquals(renderedRevision + 1, session.revision)
+            assertNull(session.nextAnimationDelayMillis(1022))
+            assertFalse(session.advance(1030))
+            assertEquals(renderedRevision + 1, session.revision)
+        }
+    }
+
+    @Test fun timedInkBehaviorRetainsIntermediateTicksWithoutDeviceMotion() {
+        val timedBrush = Brush.createWithColorIntArgb(BrushFamily(BrushTip(behaviors = listOf(
+            BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 1f, 2f,
+                SourceNode(SourceNode.Source.TIME_SINCE_INPUT_IN_SECONDS, 0f, 1f))),
+        ))), 0xff000000.toInt(), 8f, .25f)
+        InkAuthoringSession(predictorFactory = null).use { session ->
+            session.handle(InkInputEvent.Begin(pen(10f, 1000)), timedBrush, onStrokeFinished = { _, _ -> })
+            assertEquals(4, session.nextAnimationDelayMillis(1000))
+            val before = session.revision
+            assertTrue(session.advance(1250))
+            assertTrue(session.revision > before)
+            assertEquals(4, session.nextAnimationDelayMillis(1250))
+            session.advance(2100)
+            assertNull(session.nextAnimationDelayMillis(2100))
+        }
+    }
+
+    @Test fun predictionFactoryStillRunsAtPacketDeliveryBeforeAnyFrameAdvance() {
+        val calls = mutableListOf<String>()
+        val predictor = object : InkInputPredictor {
+            override fun record(sample: InkPointerSample) { calls.add("record:${sample.uptimeMillis}") }
+            override fun predict(targetUptimeMillis: Long): List<InkPointerSample> {
+                calls.add("predict:$targetUptimeMillis")
+                return emptyList()
+            }
+            override fun reset() { calls.add("reset") }
+        }
+        InkAuthoringSession(predictorFactory = { predictor }).use { session ->
+            fun send(event: InkInputEvent) = session.handle(event, brush, onStrokeFinished = { _, _ -> })
+            send(InkInputEvent.Begin(pen(10f, 1000)))
+            send(InkInputEvent.Move(pen(20f, 1010)))
+            send(InkInputEvent.Batch(listOf(pen(30f, 1020), pen(40f, 1030))))
+            assertEquals(listOf("record:1000", "record:1010", "predict:1022", "record:1020", "record:1030", "predict:1042"), calls)
+        }
+    }
+
+    @Test fun liveGeometryRetiresBeforeFinishAndExactlyOnceForEachReusedOrCancelledGesture() {
+        val retired = mutableListOf<androidx.ink.strokes.InProgressStroke>()
+        val callbacks = mutableListOf<String>()
+        val session = InkAuthoringSession(predictorFactory = null)
+        try {
+            session.onLiveStrokeRetired = { stroke ->
+                assertNotNull(stroke.brush, "retirement happens while the engine still owns the gesture")
+                assertTrue(stroke.getRealInputCount() > 0)
+                retired.add(stroke)
+                callbacks.add("retire")
+            }
+            fun send(event: InkInputEvent) = session.handle(event, brush, onStrokeFinished = { _, _ -> callbacks.add("finish") })
+            send(InkInputEvent.Begin(pen(10f, 1000), 1))
+            val engine = session.liveStrokes.single().stroke
+            send(InkInputEvent.Finish(pointerId = 1))
+            assertEquals(listOf("retire", "finish"), callbacks)
+            assertEquals(0, engine.getInputCount())
+            send(InkInputEvent.Begin(pen(20f, 2000), 2))
+            assertSame(engine, session.liveStrokes.single().stroke)
+            assertEquals(1, retired.size, "acquiring an already idle engine does not retire it again")
+            send(InkInputEvent.Begin(pen(30f, 3000), 2))
+            assertEquals(2, retired.size, "replacing an active pointer retires its preceding gesture")
+            session.cancel(2)
+            session.cancel(2)
+            assertEquals(3, retired.size)
+            send(InkInputEvent.Begin(pen(40f, 4000), 3))
+            send(InkInputEvent.Begin(pen(50f, 4000), 4))
+            session.cancelAll()
+            assertEquals(5, retired.size)
+            send(InkInputEvent.Begin(pen(60f, 5000), 5))
+            session.close()
+            assertEquals(6, retired.size)
+            assertNull(session.onLiveStrokeRetired)
+        } finally { session.close() }
+        assertEquals(6, retired.size)
+    }
+
+    @Test fun retirementFailureStillClearsTheEngineAndAllOtherActiveGestures() {
+        InkAuthoringSession(predictorFactory = null).use { session ->
+            var retirements = 0
+            session.onLiveStrokeRetired = { retirements++; throw IllegalStateException("retirement failure") }
+            fun send(event: InkInputEvent) = session.handle(event, brush, onStrokeFinished = { _, _ -> fail("failed gesture was published") })
+            send(InkInputEvent.Begin(pen(10f, 1000), 1))
+            val engine = session.liveStrokes.single().stroke
+            assertFailsWith<IllegalStateException> { send(InkInputEvent.Finish(pointerId = 1)) }
+            assertEquals(1, retirements)
+            assertTrue(session.activePointerIds.isEmpty())
+            assertEquals(0, engine.getInputCount())
+            send(InkInputEvent.Begin(pen(20f, 2000), 2))
+            send(InkInputEvent.Begin(pen(30f, 2000), 3))
+            assertFailsWith<IllegalStateException> { session.cancelAll() }
+            assertEquals(3, retirements)
+            assertTrue(session.activePointerIds.isEmpty())
         }
     }
 }

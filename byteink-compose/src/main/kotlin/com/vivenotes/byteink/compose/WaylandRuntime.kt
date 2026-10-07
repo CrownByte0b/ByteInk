@@ -11,11 +11,11 @@ internal object WaylandRuntime {
     fun isWayland(): Boolean = Toolkit.getDefaultToolkit().javaClass.name == "sun.awt.wl.WLToolkit"
 
     class WindowSurface(val display: Long, val surface: Long, val window: Window, private val peer: Any) {
+        private val unitsMethod = peer.javaClass.getMethod("javaUnitsToSurfaceUnits", Int::class.javaPrimitiveType)
+            .also { it.isAccessible = true }
         fun surfaceUnitsPerLocalUnit(): Double {
             check(EventQueue.isDispatchThread())
-            val method = peer.javaClass.getMethod("javaUnitsToSurfaceUnits", Int::class.javaPrimitiveType)
-            method.isAccessible = true
-            return (method.invoke(peer, 65536) as Int) / 65536.0
+            return (unitsMethod.invoke(peer, 65536) as Int) / 65536.0
         }
     }
 

@@ -27,6 +27,7 @@ public class InkAuthoringSession(
     init { require(predictionMillis in 0L..100L) }
     public var revision: Long by mutableLongStateOf(0L)
         private set
+    internal var onLiveStrokeRetired: ((InProgressStroke) -> Unit)? = null
     public val activePointerIds: Set<Long> get() = active.keys.toSet()
     public val liveStrokes: List<InkLiveStroke> get() = active.map { (id, gesture) ->
         InkLiveStroke(id, requireNotNull(gesture.controller.liveStroke), gesture.controller.strokeToView)
@@ -39,6 +40,7 @@ public class InkAuthoringSession(
         val startNanos: Long,
         var lastUptime: Long,
         var predictionExpiry: Long? = null,
+        var retired: Boolean = false,
     )
     private val active = linkedMapOf<Long, Gesture>()
     private val idle = ArrayDeque<InkAuthoringController>()
@@ -84,6 +86,7 @@ public class InkAuthoringSession(
             is InkInputEvent.Finish -> {
                 val gesture = active.remove(event.pointerId) ?: return
                 try {
+                    retire(gesture)
                     val stroke = gesture.controller.finish(event.sample)
                     revision++
                     if (stroke != null) gesture.callback(event.pointerId, stroke)
@@ -109,8 +112,7 @@ public class InkAuthoringSession(
     public fun advanceNow(nanoTime: Long = System.nanoTime()): Boolean {
         var changed = false
         active.values.forEach { gesture ->
-            val elapsed = ((nanoTime - gesture.startNanos) / 1_000_000L).coerceAtLeast(0L)
-            val uptime = maxOf(gesture.lastUptime, gesture.startUptime + elapsed)
+            val uptime = gesture.uptimeAt(nanoTime)
             // Retire forecasts after their bounded horizon, including when a device stops moving.
             expireForecast(gesture, uptime)
             if (gesture.controller.advance(uptime)) changed = true
@@ -124,21 +126,59 @@ public class InkAuthoringSession(
     /** Includes a pending forecast expiry, so a stopped device cannot leave a speculative tail. */
     public fun needsAnimationTick(): Boolean = isUpdateNeeded() || active.values.any { it.predictionExpiry != null }
 
+    /** Static forecasts need only an expiry wake-up; timed Ink behavior retains the 4 ms cadence. */
+    internal fun nextAnimationDelayMillis(uptimeMillis: Long): Int? {
+        var delay: Int? = null
+        active.values.forEach { gesture ->
+            animationDelay(gesture, uptimeMillis)?.let { delay = minOf(delay ?: it, it) }
+        }
+        return delay
+    }
+
+    internal fun nextAnimationDelayMillisNow(nanoTime: Long = System.nanoTime()): Int? {
+        var delay: Int? = null
+        active.values.forEach { gesture ->
+            animationDelay(gesture, gesture.uptimeAt(nanoTime))?.let { delay = minOf(delay ?: it, it) }
+        }
+        return delay
+    }
+
+    private fun animationDelay(gesture: Gesture, uptimeMillis: Long): Int? {
+        if (gesture.controller.isUpdateNeeded()) return 4
+        val expiry = gesture.predictionExpiry ?: return null
+        return (expiry - uptimeMillis).coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+    }
+
+    private fun Gesture.uptimeAt(nanoTime: Long): Long {
+        val elapsed = ((nanoTime - startNanos) / 1_000_000L).coerceAtLeast(0L)
+        return maxOf(lastUptime, startUptime + elapsed)
+    }
+
     public fun cancel(pointerId: Long) {
-        active.remove(pointerId)?.let { recycle(it); revision++ }
+        active.remove(pointerId)?.let { try { recycle(it) } finally { revision++ } }
     }
 
     public fun cancelAll() {
-        active.values.forEach(::recycle)
-        if (active.isNotEmpty()) revision++
+        if (active.isEmpty()) return
+        val gestures = active.values.toList()
         active.clear()
+        revision++
+        var failure: Throwable? = null
+        gestures.forEach { gesture ->
+            try { recycle(gesture) } catch (caught: Throwable) {
+                if (failure == null) failure = caught else if (failure !== caught) failure.addSuppressed(caught)
+            }
+        }
+        failure?.let { throw it }
     }
 
     override public fun close() {
-        cancelAll()
-        idle.forEach(InkAuthoringController::close)
-        idle.clear()
-        closed = true
+        try { cancelAll() } finally {
+            idle.forEach(InkAuthoringController::close)
+            idle.clear()
+            onLiveStrokeRetired = null
+            closed = true
+        }
     }
 
     private fun record(gesture: Gesture, sample: InkPointerSample) {
@@ -160,9 +200,16 @@ public class InkAuthoringSession(
         gesture.predictionExpiry = samples.lastOrNull()?.uptimeMillis
     }
     private fun recycle(gesture: Gesture) {
-        gesture.controller.cancel()
-        gesture.predictor?.reset()
-        // Bound retained native engines when a device supplies many transient contact IDs.
-        if (idle.size < 16) idle.addLast(gesture.controller) else gesture.controller.close()
+        try { retire(gesture) } finally {
+            gesture.controller.cancel()
+            gesture.predictor?.reset()
+            // Bound retained native engines when a device supplies many transient contact IDs.
+            if (idle.size < 16) idle.addLast(gesture.controller) else gesture.controller.close()
+        }
+    }
+    private fun retire(gesture: Gesture) {
+        if (gesture.retired) return
+        gesture.retired = true
+        gesture.controller.liveStroke?.let { onLiveStrokeRetired?.invoke(it) }
     }
 }

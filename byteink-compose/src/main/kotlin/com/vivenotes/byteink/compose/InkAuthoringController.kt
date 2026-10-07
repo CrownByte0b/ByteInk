@@ -55,6 +55,7 @@ public class InkAuthoringController : AutoCloseable {
     private var incrementalInputs: MutableStrokeInputBatch? = null
     private var predictedInputs: MutableStrokeInputBatch? = null
     private var predictionScratch: MutableStrokeInputBatch? = null
+    private var predictionHasInputs: Boolean = false
     private var predictionDirty: Boolean = false
     private var viewToStroke: AffineTransform = AffineTransform.IDENTITY
     private var closed: Boolean = false
@@ -105,6 +106,7 @@ public class InkAuthoringController : AutoCloseable {
         reportedOrientation = sample.orientationRadians?.let(::mapOrientation)
         physicalUnitLength = physicalUnitLength(transform, sample.strokeUnitLengthCm)
         predictedInputs?.clear()
+        predictionHasInputs = false
         predictionDirty = false
         lastX = x
         lastY = y
@@ -130,8 +132,7 @@ public class InkAuthoringController : AutoCloseable {
         if (reportedTilt != null && sample.tiltRadians != null) reportedTilt = sample.tiltRadians
         if (reportedOrientation != null && sample.orientationRadians != null) reportedOrientation = mapOrientation(sample.orientationRadians)
         // A new observation invalidates the previous speculative tail, even without a new forecast.
-        predictedInputs?.clear()
-        predictionDirty = true
+        clearPrediction()
         buffer(x, y, elapsed)
         lastX = x
         lastY = y
@@ -148,8 +149,13 @@ public class InkAuthoringController : AutoCloseable {
      */
     public fun setPredictedInputs(samples: List<InkPointerSample>) {
         if (!isDrawing) return
+        if (samples.isEmpty()) {
+            if (clearPrediction()) hasPendingInputs = true
+            return
+        }
         val replacement = predictionScratch ?: MutableStrokeInputBatch().also { predictionScratch = it }
         replacement.clear()
+        var accepted = 0
         var previousTime = lastNativeTimeSeconds
         var previousX = lastX
         var previousY = lastY
@@ -164,13 +170,19 @@ public class InkAuthoringController : AutoCloseable {
                 if (reportedPressure != null) sample.pressure ?: requireNotNull(reportedPressure) else StrokeInput.NO_PRESSURE,
                 if (reportedTilt != null) sample.tiltRadians ?: requireNotNull(reportedTilt) else StrokeInput.NO_TILT,
                 if (reportedOrientation != null) sample.orientationRadians?.let(::mapOrientation) ?: requireNotNull(reportedOrientation) else StrokeInput.NO_ORIENTATION)
+            accepted++
             previousTime = nativeTime
             previousX = x
             previousY = y
         }
+        if (accepted == 0) {
+            if (clearPrediction()) hasPendingInputs = true
+            return
+        }
         val prediction = predictedInputs ?: MutableStrokeInputBatch().also { predictedInputs = it }
         prediction.clear()
         prediction.add(replacement)
+        predictionHasInputs = true
         predictionDirty = true
         hasPendingInputs = true
     }
@@ -221,6 +233,7 @@ public class InkAuthoringController : AutoCloseable {
         stroke.clear()
         incrementalInputs?.clear()
         predictedInputs?.clear()
+        predictionHasInputs = false
         predictionDirty = false
         hasPendingInputs = false
         isDrawing = false
@@ -235,6 +248,7 @@ public class InkAuthoringController : AutoCloseable {
         engine?.clear()
         incrementalInputs?.clear()
         predictedInputs?.clear()
+        predictionHasInputs = false
         predictionDirty = false
         hasPendingInputs = false
         isDrawing = false
@@ -259,6 +273,14 @@ public class InkAuthoringController : AutoCloseable {
             reportedTilt ?: StrokeInput.NO_TILT,
             reportedOrientation ?: StrokeInput.NO_ORIENTATION)
         hasPendingInputs = true
+    }
+
+    private fun clearPrediction(): Boolean {
+        if (!predictionHasInputs) return false
+        requireNotNull(predictedInputs).clear()
+        predictionHasInputs = false
+        predictionDirty = true
+        return true
     }
 
     private fun enqueuePending(stroke: InProgressStroke) {

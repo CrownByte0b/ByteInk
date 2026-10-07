@@ -6,7 +6,17 @@ import com.vivenotes.byteink.kit.ViveBrushes
 import java.awt.Dimension
 import java.awt.EventQueue
 import java.awt.image.BufferedImage
+import java.lang.foreign.Arena
+import java.lang.foreign.Linker
+import java.lang.foreign.MemoryLayout
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
+import java.lang.invoke.MethodHandle
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.FutureTask
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.BorderFactory
 import javax.swing.JFrame
 import javax.swing.JPanel
@@ -231,5 +241,87 @@ class WaylandPenIntegrationTest {
             }
         } finally { ui { window.close() } }
         assertFalse(Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-wayland-pen" })
+    }
+
+    @Test fun idleNativeQueueWaitsWithoutTimeoutWakeupsAndExplicitShutdownCancelsItsRead() {
+        val wire = WaylandWire { throw AssertionError(it) }
+        val display = wire.pointer("wl_display_connect", MemorySegment.NULL)
+        assertNotEquals(0L, display.address(), "connect to the isolated test compositor")
+        val queue = wire.pointer("wl_display_create_queue", display)
+        assertNotEquals(0L, queue.address())
+        val running = AtomicBoolean(true)
+        val failure = AtomicReference<Throwable>()
+        val reader = Thread({
+            try { wire.readLoop(display, queue) { running.get() } }
+            catch (error: Throwable) { failure.set(error) }
+        }, "byteink-wayland-idle-test").also { it.isDaemon = true }
+        try {
+            // This owned test connection has no proxies or requests that can generate events.
+            reader.start()
+            val deadline = System.nanoTime() + 3_000_000_000L
+            while (wire.readPollCount == 0L && reader.isAlive && System.nanoTime() < deadline) Thread.sleep(2)
+            assertEquals(1L, wire.readPollCount, "reader entered its first native poll")
+            Thread.sleep(150)
+            assertTrue(reader.isAlive)
+            assertEquals(1L, wire.readPollCount, "an idle queue has no periodic polling wakeups")
+            running.set(false)
+            wire.wakeReader()
+            reader.join(3000)
+            assertFalse(reader.isAlive, "the owned eventfd interrupts an indefinite native poll")
+            failure.get()?.let { throw AssertionError("native queue reader failed", it) }
+            // A roundtrip includes another prepare/read sequence. It would remain blocked if
+            // shutdown left the prior reader registered on this display.
+            val roundtripFailure = AtomicReference<Throwable>()
+            val roundtrip = Thread({
+                try { assertTrue(wire.integer("wl_display_roundtrip_queue", display, queue) >= 0) }
+                catch (error: Throwable) { roundtripFailure.set(error) }
+            }, "byteink-wayland-read-pair-test").also { it.isDaemon = true }
+            roundtrip.start()
+            roundtrip.join(3000)
+            assertFalse(roundtrip.isAlive, "shutdown paired its preparation with cancel_read")
+            roundtripFailure.get()?.let { throw AssertionError("display failed after shutdown", it) }
+        } finally {
+            running.set(false)
+            wire.wakeReader()
+            reader.join(3000)
+            // Keep memory alive if a broken native reader is still using it.
+            if (!reader.isAlive && Thread.getAllStackTraces().keys.none { it.isAlive && it.name == "byteink-wayland-read-pair-test" }) {
+                wire.procedure("wl_event_queue_destroy", queue)
+                wire.procedure("wl_display_disconnect", display)
+                wire.close()
+            }
+        }
+    }
+
+    @Test fun capturedErrnoAndOwnedWakeupReleaseDoNotRequireRetiringNativeMetadata() {
+        fun eventDescriptors(): Long = Files.list(Path.of("/proc/self/fd")).use { descriptors ->
+            descriptors.filter { descriptor ->
+                try { Files.readSymbolicLink(descriptor).toString() == "anon_inode:[eventfd]" }
+                catch (_: java.io.IOException) { false }
+            }.count()
+        }
+        val before = eventDescriptors()
+        repeat(16) {
+            WaylandWire { throw AssertionError(it) }.use { wire ->
+                Arena.ofConfined().use { local ->
+                    val layout = Linker.Option.captureStateLayout()
+                    val state = local.allocate(layout)
+                    val pollField = WaylandWire::class.java.getDeclaredField("poll").also { it.isAccessible = true }
+                    val poll = pollField.get(wire) as MethodHandle
+                    // A deliberately impossible nfds count makes the real libc poll return EINVAL.
+                    assertEquals(-1, poll.invokeWithArguments(state, MemorySegment.NULL, -1L, 0))
+                    val errno = layout.byteOffset(MemoryLayout.PathElement.groupElement("errno"))
+                    assertEquals(22, state.get(ValueLayout.JAVA_INT, errno), "errno was captured with the failing call")
+                }
+                if (it % 2 == 0) {
+                    wire.closeWakeup()
+                    wire.closeWakeup()
+                    // A terminal borrowed display retains protocol metadata while its owned
+                    // wake descriptor can already be released.
+                    assertNotEquals(0L, wire.protocol.type("zwp_tablet_tool_v2").address())
+                }
+            }
+        }
+        assertEquals(before, eventDescriptors(), "all owned wake descriptors were released")
     }
 }
