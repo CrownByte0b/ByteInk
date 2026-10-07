@@ -1,8 +1,11 @@
 package com.vivenotes.byteink.compose
 
 import androidx.ink.brush.InputToolType
+import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import com.vivenotes.byteink.kit.PageStroke
 import com.vivenotes.byteink.kit.ViveBrushes
+import com.vivenotes.byteink.kit.subtract
 import java.awt.Dimension
 import java.awt.EventQueue
 import java.awt.image.BufferedImage
@@ -38,14 +41,14 @@ class WaylandPenIntegrationTest {
     private class Window(val frame: JFrame, val panel: InkLowLatencyPanel, val finished: MutableList<Stroke>) : AutoCloseable {
         override fun close() { panel.close(); frame.dispose() }
     }
-    private fun window(): Window {
+    private fun window(predictorFactory: (() -> InkInputPredictor)? = { InkLinearPredictor() }): Window {
         assertTrue(ui { WaylandRuntime.isWayland() }, "Tests must use JBR's native Wayland toolkit")
         val readers = Thread.getAllStackTraces().keys.count { it.isAlive && it.name == "byteink-wayland-pen" }
         val window = ui {
             val finished = mutableListOf<Stroke>()
             val frame = JFrame("Isolated Wayland pen verification").also { it.isUndecorated = true }
             val panel = InkLowLatencyPanel(ViveBrushes.brush(ViveBrushes.MARKER, 0, 0xff000000.toInt(), 8f),
-                { _, stroke -> finished.add(stroke) })
+                { _, stroke -> finished.add(stroke) }, predictorFactory = predictorFactory)
             panel.preferredSize = Dimension(192, 128)
             val host = JPanel(java.awt.BorderLayout()).also {
                 it.border = BorderFactory.createEmptyBorder(8, 12, 4, 6); it.add(panel)
@@ -74,6 +77,144 @@ class WaylandPenIntegrationTest {
         val graphics = image.createGraphics()
         try { window.panel.paintAll(graphics) } finally { graphics.dispose() }
         image.getRGB(60, 60).also { assertEquals(255, it ushr 24, "the actual painter filled the panel") }
+    }
+
+    private fun painterPixels(window: Window, directlyPaintLayer: Boolean = false): IntArray = ui {
+        val image = BufferedImage(window.panel.width, window.panel.height, BufferedImage.TYPE_INT_ARGB)
+        val graphics = image.createGraphics()
+        try {
+            if (directlyPaintLayer) window.panel.components.single().paint(graphics) else window.panel.paintAll(graphics)
+        } finally { graphics.dispose() }
+        image.getRGB(0, 0, image.width, image.height, null, 0, image.width)
+    }
+
+    private fun assertActualPainterMatchesFullRedraw(window: Window, label: String) = ui {
+        val retained = painterPixels(window)
+        val budget = window.panel.retainedPixelBudgetBytes
+        try {
+            window.panel.retainedPixelBudgetBytes = 0L
+            val full = painterPixels(window)
+            if (!retained.contentEquals(full)) {
+                val at = full.indices.first { full[it] != retained[it] }
+                fail("$label: actual retained/full painters differ at (${at % window.panel.width}, " +
+                    "${at / window.panel.width}): ${retained[at].toUInt().toString(16)} / ${full[at].toUInt().toString(16)}")
+            }
+        } finally {
+            window.panel.retainedPixelBudgetBytes = budget
+            painterPixels(window)
+        }
+    }
+
+    @Test fun nativeDirtyFramesRetainFinishedContentAndMatchFullPainterThroughEraseAndReconnect() {
+        val window = window(predictorFactory = null)
+        var contentCalls = 0
+        try {
+            ui {
+                window.panel.brush = ViveBrushes.brush(ViveBrushes.MARKER, 0, 0x80000000.toInt(), 12f)
+                window.panel.drawContent = { canvas, _, _ ->
+                    contentCalls++
+                    window.finished.forEach { window.panel.renderer.render(canvas, it) }
+                }
+                window.panel.requestInkRender()
+            }
+            await("initial retained finished raster") { contentCalls > 0 && window.panel.retainedPixelBytes > 0L }
+            injector(window).use { input ->
+                val initialCalls = ui { contentCalls }
+                send(window, input, 0)
+                await("translucent native contact") { window.panel.session.liveStrokes.size == 1 }
+                val beforeMove = ui { window.panel.renderedFrameCount }
+                send(window, input, 1, 100.0, time = 1010)
+                await("retained native move reached the renderer") {
+                    window.panel.session.liveStrokes.single().stroke.getRealInputCount() == 2 &&
+                        window.panel.renderedFrameCount > beforeMove
+                }
+                ui {
+                    assertEquals(initialCalls, contentCalls, "native contact frames reuse the finished raster")
+                    assertTrue(window.panel.retainedDirtyRedrawCount > 0L)
+                    val scale = window.panel.graphicsConfiguration.defaultTransform.scaleX
+                    val physicalPixels = (window.panel.width * scale).toLong() * (window.panel.height * scale).toLong()
+                    assertTrue(window.panel.retainedLastRedrawnPixelCount in 1L until physicalPixels,
+                        "native motion repaints a proper subregion at the current scale")
+                }
+                val wetPixel = inkPixel(window)
+                assertTrue((wetPixel and 255) in 120..135, "one translucent native stroke applies its alpha once")
+                assertActualPainterMatchesFullRedraw(window, "native wet stroke")
+                val beforeCancel = ui { contentCalls to window.panel.renderedFrameCount }
+                send(window, input, 3, time = 1011)
+                await("canceled wet pixels repainted") {
+                    window.panel.session.liveStrokes.isEmpty() && window.panel.renderedFrameCount > beforeCancel.second
+                }
+                assertEquals(0xffffffff.toInt(), inkPixel(window), "cancel restores the finished background")
+                ui { assertEquals(beforeCancel.first, contentCalls) }
+                send(window, input, 0, time = 1020)
+                send(window, input, 1, 100.0, time = 1030)
+                val beforeFinishCalls = ui { contentCalls }
+                send(window, input, 2, 140.0, time = 1040)
+                await("finished background rebuilt after synchronous handoff") {
+                    window.finished.size == 1 && window.panel.session.liveStrokes.isEmpty() && contentCalls > beforeFinishCalls
+                }
+                assertEquals(wetPixel, inkPixel(window), "finished handoff retains the original alpha")
+                assertActualPainterMatchesFullRedraw(window, "native finished handoff")
+                ui {
+                    val batch = MutableStrokeInputBatch().apply {
+                        add(InputToolType.STYLUS, 60f, 20f, 0L)
+                        add(InputToolType.STYLUS, 60f, 100f, 10L)
+                    }
+                    val mask = ViveBrushes.eraseMask(batch, 24f)
+                    val pieces = listOf(PageStroke("native-cut", window.finished.single())).subtract(mask, listOf("native-cut"))
+                    window.finished.clear()
+                    window.finished.addAll(pieces.map { it.stroke })
+                    window.panel.requestInkRender()
+                }
+                await("partial erase refreshed finished pixels") { inkPixel(window) == 0xffffffff.toInt() }
+                assertActualPainterMatchesFullRedraw(window, "native partial erase")
+            }
+            val configuredBudget = ui { window.panel.retainedPixelBudgetBytes }
+            ui {
+                val enabledPixels = painterPixels(window)
+                window.panel.authoringEnabled = false
+                assertEquals(0L, window.panel.retainedPixelBytes, "disable releases both retained rasters")
+                val before = window.panel.renderedFrameCount
+                val disabledPixels = painterPixels(window, directlyPaintLayer = true)
+                assertTrue(window.panel.renderedFrameCount > before, "the disabled explicit paint reached the actual delegate")
+                assertTrue(enabledPixels.contentEquals(disabledPixels), "disabled authoring still paints finished content exactly")
+                assertEquals(0L, window.panel.retainedPixelBytes, "explicit disabled paint cannot recreate retained rasters")
+                assertEquals(configuredBudget, window.panel.retainedPixelBudgetBytes, "disable preserves the configured budget")
+                assertTrue(window.panel.retainedLastRedrawnPixelCount > 0L, "fallback still reports its raster work")
+            }
+            ui {
+                assertEquals(0L, window.panel.retainedPixelBytes, "the queued disabled paint also leaves retained bytes at zero")
+                window.panel.authoringEnabled = true
+            }
+            await("reenabling authoring restores retained buffers and native capture") {
+                window.panel.retainedPixelBytes > 0L &&
+                    Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-wayland-pen" }
+            }
+            injector(window).use { input ->
+                val before = ui { window.finished.size }
+                send(window, input, 6, 160.0, time = 2000)
+                await("native input still finishes after reenabling authoring") {
+                    window.finished.size == before + 1 && window.panel.session.liveStrokes.isEmpty()
+                }
+            }
+            ui {
+                val visiblePixels = painterPixels(window)
+                window.frame.isVisible = false
+                assertEquals(0L, window.panel.retainedPixelBytes)
+                val before = window.panel.renderedFrameCount
+                val hiddenPixels = painterPixels(window, directlyPaintLayer = true)
+                assertTrue(window.panel.renderedFrameCount > before, "the hidden explicit paint reached the actual delegate")
+                assertTrue(visiblePixels.contentEquals(hiddenPixels), "hidden explicit painting retains the full redraw result")
+                assertEquals(0L, window.panel.retainedPixelBytes, "hidden paint cannot recreate retained rasters")
+                assertEquals(configuredBudget, window.panel.retainedPixelBudgetBytes, "hide preserves the configured budget")
+            }
+            ui { window.frame.isVisible = true }
+            await("retained raster and input reconnect on a fresh Wayland surface") {
+                window.panel.retainedPixelBytes > 0L &&
+                    Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-wayland-pen" }
+            }
+            assertActualPainterMatchesFullRedraw(window, "hide/show reconnect")
+        } finally { ui { window.close(); assertEquals(0L, window.panel.retainedPixelBytes) } }
     }
 
     @Test fun actualTabletFramesPreservePressureTiltHistoryAndCanonicalHandoff() {

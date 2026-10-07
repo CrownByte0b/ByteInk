@@ -54,8 +54,11 @@ import xml.etree.ElementTree as ET
 results, output, scale = sys.argv[1:]
 xml = Path(results) / 'TEST-com.vivenotes.byteink.compose.WaylandPenIntegrationTest.xml'
 root = ET.parse(xml).getroot()
-if int(root.get('tests', 0)) < 9 or any(int(root.get(key, 0)) for key in ['skipped', 'failures', 'errors']):
-    raise SystemExit('All nine native Wayland cases must finish without errors or skips (toolkit termination is not a pass).')
+retained_case = 'nativeDirtyFramesRetainFinishedContentAndMatchFullPainterThroughEraseAndReconnect'
+if (int(root.get('tests', 0)) < 10 or
+        not any(case.get('name') == retained_case for case in root.findall('testcase')) or
+        any(int(root.get(key, 0)) for key in ['skipped', 'failures', 'errors'])):
+    raise SystemExit('All native Wayland cases, including retained drawing, must finish without errors or skips (toolkit termination is not a pass).')
 Path(output, f'wayland-scale-{scale}.xml').write_bytes(xml.read_bytes())
 print(f'Native Wayland: {root.get("tests")} cases passed at {scale}x scaling, no skips.')
 PY

@@ -109,6 +109,30 @@ or establish physical input-to-display latency. `lastInputToRenderNanos` measure
 to Skia recording only. Skia's heavyweight Swing integration also has the usual SwingPanel z-order
 and clipping constraints; use the regular canvas surface when those constraints matter.
 
+Native Wayland retains finished content and a composed frame in physical sRGB rasters. Triangle
+mesh paints restore the engine's damaged area from the finished background and redraw intersecting
+wet strokes in order. Filled outlines (`InkPathRenderer` and mesh-renderer DISCARD coats such as
+highlighters) restore their entire old/current wet extent when geometry changes. Dirty regions
+also expand across intersecting outlined strokes, including overlaps, because path antialiasing
+can change prefix coverage outside native damage or through a partial clip. Prediction removal
+and cancellation include the old visible bounds; the
+completion callback refreshes finished content before handoff. Incidental OS repaint requests
+present the existing frame. Keep `drawContent` stable between changes: call `panel.requestInkRender()`
+after changing a scene, erasure/exclusion, view, texture or animation outside completion. This call
+invalidates finished content even when the callback object stays the same. The Compose wrapper
+does this during its panel update. Changing the callback or clear color also invalidates retention.
+
+The panel's `retainedPixelBudgetBytes` defaults to 64 MiB for both N32 rasters together
+(8 × physical width × physical height bytes). Set it to zero to use full redraw; oversized views
+and custom renderers also use full redraw. Retention supports the built-in mesh/path renderers and
+is released on detach, disable and close. Explicit or queued paints of hidden/disabled panels draw
+finished content without retaining pixels; reenabling/showing restores the configured budget.
+`retainedPixelBytes`, `retainedBackgroundBuildCount`,
+`retainedFullRedrawCount`, `retainedDirtyRedrawCount` and `retainedLastRedrawnPixelCount` expose
+retention and raster work; Skiko's full-window pixel transfers and compositor work are separate.
+The panel owns its session's updated-region accumulator: borrowed live engines must not be mutated
+or have `resetUpdatedRegion()` called by another consumer.
+
 Verification:
 
 ```sh

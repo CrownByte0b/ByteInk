@@ -46,12 +46,33 @@ public class InkLowLatencyPanel(
     renderer: InkRenderer? = null,
     private val inputSource: InkInputSource? = null,
     predictorFactory: (() -> InkInputPredictor)? = { InkLinearPredictor() },
-    public var drawContent: (Canvas, Int, Int) -> Unit = { _, _, _ -> },
+    drawContent: (Canvas, Int, Int) -> Unit = { _, _, _ -> },
     private val centimetersPerNativePixel: Float? = null,
 ) : JPanel(BorderLayout()), AutoCloseable {
     public val session: InkAuthoringSession = InkAuthoringSession(predictorFactory)
     public val renderer: InkRenderer = renderer ?: InkMeshRenderer()
+    public var drawContent: (Canvas, Int, Int) -> Unit = drawContent
+        set(value) { checkUiThread(); field = value; retainedRaster?.invalidateContent() }
     public var clearColorArgb: Int = 0xffffffff.toInt()
+        set(value) {
+            checkUiThread()
+            if (field != value) { field = value; retainedRaster?.invalidateContent() }
+        }
+    /** Combined physical background/frame raster budget on native Wayland; zero uses full redraw. */
+    public var retainedPixelBudgetBytes: Long = InkRetainedAuthoringRaster.DEFAULT_PIXEL_BUDGET_BYTES
+        set(value) {
+            checkUiThread()
+            require(value >= 0L) { "Retained pixel budget must be nonnegative" }
+            field = value
+            retainedRaster?.pixelBudgetBytes = value
+        }
+    /** Retained physical N32 pixel bytes, excluding Skiko's presentation buffers and renderer data. */
+    public val retainedPixelBytes: Long get() = retainedRaster?.retainedPixelBytes ?: 0L
+    public val retainedBackgroundBuildCount: Long get() = retainedRaster?.backgroundBuildCount ?: 0L
+    public val retainedFullRedrawCount: Long get() = retainedRaster?.fullRedrawCount ?: 0L
+    public val retainedDirtyRedrawCount: Long get() = retainedRaster?.dirtyRedrawCount ?: 0L
+    /** Physical pixels restored/rasterized by the last paint; full presentation copies are separate. */
+    public val retainedLastRedrawnPixelCount: Long get() = retainedRaster?.lastRedrawnPixelCount ?: 0L
     /** Software packet-handler to Skia recording time, excluding hardware/compositor/scanout. */
     public var lastInputToRenderNanos: Long = 0L
         private set
@@ -72,6 +93,7 @@ public class InkLowLatencyPanel(
     private var skipSessionAdvance = false
     private var pendingInputNanos: Long? = null
     private val wayland = WaylandRuntime.isWayland()
+    private val retainedRaster = if (wayland) InkRetainedAuthoringRaster() else null
     private var layer: SkiaLayer? = null
     private var swingLayer: SkiaSwingLayer? = null
     private val contentScale: Float get() = layer?.contentScale ?: graphicsConfiguration.defaultTransform.scaleX.toFloat()
@@ -96,22 +118,32 @@ public class InkLowLatencyPanel(
 
     init {
         checkUiThread()
-        session.onLiveStrokeRetired = this.renderer::releaseLiveStroke
+        session.onLiveStrokeRetired = { stroke ->
+            retainedRaster?.retireLiveStroke(stroke)
+            this.renderer.releaseLiveStroke(stroke)
+        }
         val delegate = SkikoRenderDelegate { canvas, width, height, nanoTime ->
             if (!closed) {
                 if (!skipSessionAdvance) session.advanceNow(nanoTime)
-                canvas.clear(clearColorArgb)
                 val scale = contentScale
-                canvas.save()
-                try {
-                    canvas.scale(scale, scale)
-                    val logicalWidth = (width / scale).toInt()
-                    val logicalHeight = (height / scale).toInt()
-                    val composeCanvas = canvas.asComposeCanvas()
-                    drawContent(composeCanvas, logicalWidth, logicalHeight)
-                    val viewport = Rect(0f, 0f, logicalWidth.toFloat(), logicalHeight.toFloat())
-                    session.liveStrokes.forEach { live -> this.renderer.render(composeCanvas, live.stroke, live.strokeToView, viewport) }
-                } finally { canvas.restore() }
+                val retained = retainedRaster
+                if (retained != null) {
+                    // An explicit/queued paint can still run after disconnect released the pixels.
+                    retained.pixelBudgetBytes = if (authoringEnabled && isShowing) retainedPixelBudgetBytes else 0L
+                    retained.draw(canvas, width, height, scale, clearColorArgb, this.renderer, session.liveStrokes, this.drawContent)
+                } else {
+                    canvas.clear(clearColorArgb)
+                    canvas.save()
+                    try {
+                        canvas.scale(scale, scale)
+                        val logicalWidth = (width / scale).toInt()
+                        val logicalHeight = (height / scale).toInt()
+                        val composeCanvas = canvas.asComposeCanvas()
+                        this.drawContent(composeCanvas, logicalWidth, logicalHeight)
+                        val viewport = Rect(0f, 0f, logicalWidth.toFloat(), logicalHeight.toFloat())
+                        session.liveStrokes.forEach { live -> this.renderer.render(composeCanvas, live.stroke, live.strokeToView, viewport) }
+                    } finally { canvas.restore() }
+                }
                 renderedFrameCount++
                 pendingInputNanos?.let { lastInputToRenderNanos = (System.nanoTime() - it).coerceAtLeast(0L) }
                 pendingInputNanos = null
@@ -154,8 +186,10 @@ public class InkLowLatencyPanel(
         super.removeNotify()
     }
 
-    /** Requests a direct render after updating a finished scene or view; multiple requests coalesce. */
+    /** Invalidates retained finished content after scene/view/animation changes and requests a coalesced render. */
     public fun requestInkRender() {
+        checkUiThread()
+        retainedRaster?.invalidateContent()
         requestInkRender(advanceSession = true)
     }
 
@@ -194,6 +228,7 @@ public class InkLowLatencyPanel(
         disconnect()
         closed = true
         session.close()
+        retainedRaster?.close()
         layer?.dispose()
         swingLayer?.dispose()
         if (ownsRenderer) (this.renderer as InkMeshRenderer).close()
@@ -215,9 +250,14 @@ public class InkLowLatencyPanel(
                 if (attached && authoringEnabled && !closed) {
                     checkUiThread()
                     pendingInputNanos = pendingInputNanos ?: System.nanoTime()
-                    session.handle(event, brush, strokeToView, onStrokeFinished)
+                    // Freeze the user's callback at Begin just as the session freezes brush/view.
+                    val completion: (Long, Stroke) -> Unit = if (event is InkInputEvent.Begin && retainedRaster != null) {
+                        val completed = onStrokeFinished
+                        { id, stroke -> retainedRaster.invalidateContent(); completed(id, stroke) }
+                    } else onStrokeFinished
+                    session.handle(event, brush, strokeToView, completion)
                     processedPacketCount++
-                    requestInkRender()
+                    requestInkRender(advanceSession = true)
                 }
             }
             if (closed || !authoringEnabled || !isDisplayable) {
@@ -237,7 +277,9 @@ public class InkLowLatencyPanel(
         connectTimer.stop()
         val old = subscription
         subscription = null
-        try { old?.close() } finally { session.cancelAll(); pendingInputNanos = null }
+        try { old?.close() } finally {
+            try { session.cancelAll() } finally { retainedRaster?.clear(); pendingInputNanos = null }
+        }
     }
     private fun checkUiThread() { check(EventQueue.isDispatchThread()) { "Use InkLowLatencyPanel on the AWT event thread" } }
 }

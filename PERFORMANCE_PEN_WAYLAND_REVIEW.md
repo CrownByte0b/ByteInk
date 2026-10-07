@@ -222,6 +222,14 @@ reported separately if not rerun for this implementation.
 
 No follow-up above is represented as implemented by the initial changes.
 
+Follow-up status (2026-10-07): the user requested item 1 above. Native Wayland now retains the
+finished background and composed frame, restores conservative wet damage, preserves overlap and
+prediction retraction, and exposes a combined 64 MiB pixel budget with full-redraw fallback.
+Fifteen exact pixel cases, ten actual Wayland cases at both 1x/2x, the fresh complete Linux/JBR25 build
+and existing X11/OpenGL checks pass. Implementation, matched measurements and remaining limits
+are recorded in [PERFORMANCE_RETAINED_AUTHORING.md](PERFORMANCE_RETAINED_AUTHORING.md).
+Items 2–5 and complete input-arrival/presentation diagnostics remain separate follow-ups.
+
 ## Primary sources checked
 
 - [Wayland client API: event queues, polling, prepare/read/cancel, flush backpressure and roundtrips](https://wayland.freedesktop.org/docs/html/apb.html).
