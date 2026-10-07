@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GROUPS = {
     "core": ("Engine and geometry", "byteink-core", ["InkRuntime", "InkMeshes", "StrokeMesh", "SpatialIndex"]),
-    "authoring": ("Input and authoring", "byteink-compose", ["InkPointerSample", "InkAuthoringController", "InkDrawingSurface"]),
+    "authoring": ("Input and authoring", "byteink-compose", ["InkPointerSample", "InkInputPredictor", "InkAuthoringController", "InkAuthoringSession", "InkDrawingSurface", "NativeInkInputSource", "InkLowLatencyPanel"]),
     "rendering": ("Rendering and caches", "byteink-compose", ["InkRenderer", "InkMeshRenderer", "InkTextureStore", "InkPathRenderer", "InkScene", "InkSceneRasterCache"]),
     "brushes": ("Brushes and tools", "byteink-kit", ["ViveBrushes", "ViveInkTool", "InkColors"]),
     "storage": ("Stored rows and codecs", "byteink-kit", ["StoredInk", "ViveInkCodec", "ViveInkPage", "DecodedInkOperation"]),
@@ -39,15 +39,33 @@ PARAMETERS = {
     "box": "Inclusive query bounds in the index's coordinate system.",
     "xMin": "Left query edge in index units.", "yMin": "Top query edge in index units.",
     "xMax": "Right query edge in index units.", "yMax": "Bottom query edge in index units.",
-    "x": "Horizontal coordinate; surface pixels for pointer samples, page dp for InkPoint.",
-    "y": "Vertical coordinate; surface pixels for pointer samples, page dp for InkPoint.",
+    "x": "Horizontal coordinate; input-surface units for pointer samples, page dp for InkPoint.",
+    "y": "Vertical coordinate; input-surface units for pointer samples, page dp for InkPoint.",
     "uptimeMillis": "Nonnegative monotonic event/frame milliseconds, using one clock per gesture.",
     "toolType": "Device tool type; keep it constant within a gesture.",
     "pressure": "Measured finite pressure in [0, 1], or null when unavailable; Int brush levels use 0–5.",
+    "tiltRadians": "Measured finite shaft tilt in [0, pi/2], or null when unavailable; zero is perpendicular to the surface.",
+    "orientationRadians": "Measured finite shaft azimuth in [0, 2*pi), from local +x toward +y, or null when unavailable; not barrel rotation.",
+    "strokeUnitLengthCm": "Calibrated finite positive centimeters per input-surface unit, or null when unavailable; do not infer from logical DPI.",
+    "pointerId": "Stable pointer identifier within the event stream; default 0 preserves single-pointer callers.",
+    "samples": "Ordered observations in input-surface coordinates; prediction methods replace the speculative tail and do not store it.",
+    "predictedSamples": "Replaceable speculative observations; empty clears predictions. Null requests automatic session prediction; the regular surface only forwards explicit predictions.",
+    "event": "Pointer event dispatched serially on the session's authoring thread.",
+    "predictorFactory": "Factory for a separate predictor per gesture; null disables automatic forecasting while allowing explicit predictions.",
+    "predictionMillis": "Session forecast horizon in milliseconds, within 0–100; zero disables automatic forecasting.",
+    "targetUptimeMillis": "Nonnegative target time on the same monotonic millisecond clock as recorded observations.",
+    "maxPredictionMillis": "Maximum forecast horizon in milliseconds, within 1–100.",
+    "maxPredictionDistance": "Finite positive forecast-distance ceiling in the same units as pointer coordinates.",
+    "nanoTime": "Current monotonic nanoseconds, normally System.nanoTime(); the session maps this to each gesture's input clock.",
+    "component": "Displayable AWT input component; construct and manage the adapter on the event dispatch thread.",
+    "windowHandle": "Nonzero matching native HWND, XID, or configured JBR Wayland top-level wl_surface handle; not an AWT object identity.",
+    "pixelsPerLocalUnit": "Callback returning finite positive native pixels per component-local logical unit; native points are divided by this scale.",
+    "centimetersPerNativePixel": "Optional calibrated finite positive centimeters per native pixel; logical display DPI is not physical calibration.",
+    "onFailure": "EDT callback after capture is stopped and gestures cancelled; the default throws an IllegalStateException.",
     "sample": "Real pointer observation; a nullable finishing sample may be omitted.",
     "listener": "Serial UI-thread event callback; closing the subscription stops callbacks.",
     "brush": "Native brush captured at gesture start; keep stored metadata consistent with it.",
-    "strokeToView": "Finite invertible stroke/page-to-surface-pixel transform, snapshotted at begin.",
+    "strokeToView": "Finite invertible stroke/page-to-input-surface transform, snapshotted at begin; regular Compose uses pixels, direct panels use AWT logical units.",
     "controller": "UI-thread authoring controller; attach to one surface at a time.",
     "modifier": "Compose layout, sizing and drawing modifiers.",
     "renderer": "Reusable drawing-thread renderer; clear path caches or close owned mesh renderers on disposal.",
@@ -156,14 +174,33 @@ NOTES = {
     "StrokeMesh": "Owned rendering snapshot. Vertex floats: position XY (0–1), opacity shift (2), HSL shift (3–5), side derivative XY/label (6–8), forward derivative XY/label (9–11), surface UV (12–13), animation offset (14). Missing attributes are zero; indices are unsigned native values widened to Int. Constructor retains supplied arrays.",
     "InkMeshes": "Read live strokes on their authoring thread. Returned geometry survives later updates/clear.",
     "SpatialIndex": "Factory construction only. Queries include touching bounds, preserve list order and require exact hit tests afterward.",
-    "InkPointerSample": "Coordinates must be finite, uptime nonnegative, measured pressure finite within [0, 1].",
-    "InkInputEvent": "Variants: Begin(sample), Move(sample), Finish(sample = null), Cancel. Deliver one gesture at a time.",
-    "InkInputSource": "subscribe returns an AutoCloseable subscription. Deliver original device observations serially on the UI thread.",
-    "InkAuthoringController": "begin draws the first dot; append buffers; advance processes a frame; finish returns canonical finished geometry or null when idle. close is terminal.",
-    "InkDrawingSurface": "Captures brush, transform and callback at pointer down. Disabling/removal cancels; the owner must close the controller and clear the renderer.",
+    "InkPointerSample": "Coordinates must be finite and uptime nonnegative. Optional axes must satisfy their documented ranges; availability/tool type is frozen at begin and later missing axes hold their last measured values.",
+    "InkInputEvent": "Pointer-addressed variants: Begin, Move, Batch, Predict, Finish and CancelPointer; Cancel discards all pointers. Batch preserves real history and optionally replaces predictions. Default pointerId is 0L where declared.",
+    "InkInputSource": "subscribe returns an AutoCloseable subscription. Deliver original device observations serially on the UI thread; native subscriptions and closing run on the AWT EDT.",
+    "InkInputPredictor": "Records real observations and returns replaceable predictions on the same input clock. Use one predictor per gesture; predictions never become saved inputs.",
+    "InkLinearPredictor": "Bounded linear position prediction from recent real observations; retains measured optional axes. Reversals, stationary input, tool changes and long gaps reset motion prediction.",
+    "InkAuthoringController": "Single-pointer authoring. begin draws the first dot; append buffers; advance processes geometry; finish clears predictions and returns canonical real-input geometry or null when idle. close is terminal.",
+    "InkAuthoringController.setPredictedInputs": "Replaces the speculative tail; an empty list retracts it. Real input also retracts old forecasts. The caller schedules advance and forecast expiration.",
+    "InkLiveStroke": "Borrowed active engine stroke and its captured transform. Read on the session's authoring thread; do not mutate it or retain it across retirement/reuse.",
+    "InkAuthoringSession": "Concurrent-pointer authoring with an independent controller/predictor per gesture. Captures brush, transform and completion callback at Begin; completion returns only real-input canonical strokes. close is terminal.",
+    "InkAuthoringSession.handle": "Handles events serially; Begin replaces the same pointer's old gesture, inactive moves are ignored, CancelPointer discards one pointer, Cancel discards all. Completion runs synchronously using the callback captured at Begin.",
+    "InkAuthoringSession.advance": "Advance with a time on the same input clock; retires expired forecasts and returns whether geometry changed.",
+    "InkAuthoringSession.advanceNow": "Maps a monotonic nanosecond clock to each gesture before advancing; convenient for native hosts.",
+    "InkAuthoringSession.needsAnimationTick": "Check alongside isUpdateNeeded when scheduling; includes forecast expiry even when current geometry needs no update.",
+    "InkDrawingSurface": "Single-controller Compose frame loop; keeps the first active pointer and forwards explicit predictions without generating or expiring them automatically. Captures brush/transform/callback at Begin. Disabling/removal cancels; the owner closes the controller and renderer.",
+    "InkNativeBackend": "Values: WINDOWS_POINTER (WM_POINTER), LINUX_XINPUT2 (X11/XWayland), LINUX_WAYLAND_TABLET (JBR WLToolkit). Selection follows the actual AWT toolkit, not only session environment variables.",
+    "NativeInkInputSource": "Java 25+ native pen/history adapter for Windows/Linux x86_64. Native Wayland requires JBR 25 WLToolkit, native access, and opening java.desktop/sun.awt.wl. Uses the matching configured top-level surface; no raw reads from JBR's borrowed display socket.",
+    "NativeInkInputSource.subscribe": "EDT-only; component must be displayable, with one subscription per source. Recreate after a Wayland hide/show. Acquisition failures are explicit; native runtime errors deliver Cancel, close capture, then invoke onFailure. Listener exceptions close capture and are rethrown.",
+    "InkLowLatencyPanel": "EDT-owned direct Skia authoring panel; native input and simultaneous-pointer prediction bypass Compose's frame clock. Uses AWT local logical coordinates. Default renderer is an owned InkMeshRenderer; supplied renderers are borrowed. Native Wayland presents through software Swing painting.",
+    "InkLowLatencyPanel.requestInkRender": "Coalesces an EDT render request; finished ink and other drawContent changes made outside input callbacks must request a redraw.",
+    "InkLowLatencyPanel.close": "Terminal EDT cleanup: cancels input, retires wet caches, closes session/presentation and only the panel-owned default renderer.",
+    "InkLowLatencySurface": "Compose wrapper around InkLowLatencyPanel. Uses native input by default, AWT logical coordinates, an owned mesh renderer when omitted, and automatic panel disposal. A caller-supplied renderer remains caller-owned. Native Wayland needs a compatible SwingGraphics ComposePanel host.",
     "InkPathRenderer": "InkPathRenderer() uses 2048 finished entries and 64 MiB. InkPathRenderer(cacheCapacity) keeps the same byte ceiling. Supports texture-free ANY/DISCARD; clearCache releases paths.",
-    "InkRenderer": "Shared finished/live drawing contract for path and mesh renderers. renderVersion invalidates retained view rasters when settings or textures change; the default is 0.",
-    "InkMeshRenderer": "Full pinned Ink mesh/shader rendering: vertex HSL/opacity, prediction fade, derivative AA, textures and atlas animation. ANY/ACCUMULATE use meshes; DISCARD uses a uniform outline with tiling textures. Single drawing thread; close is terminal and releases shaders/effects. Missing textures try the next compatible paint before failing without partial coat drawing.",
+    "InkRenderer": "Shared finished/live drawing contract. renderVersion invalidates retained view rasters when settings or textures change; the default is 0. releaseLiveStroke defaults to a no-op for renderers without wet caches.",
+    "InkRenderer.releaseLiveStroke": "Retire only this engine stroke's cached wet geometry before it is cleared/recycled. Built-in direct panels do this automatically; custom controller/session hosts must call it on retirement. Finished/texture caches are retained.",
+    "InkPathRenderer.releaseLiveStroke": "Releases only this live stroke's cached path, preserving finished paths and renderVersion.",
+    "InkMeshRenderer": "Full pinned mesh/shader rendering: vertex HSL/opacity, prediction fade, derivative AA, textures and atlas animation. ANY/ACCUMULATE use meshes; outlined DISCARD uses a uniform outline with tiling textures and exports mesh attributes lazily only when needed. Single drawing thread; close is terminal. Missing textures try the next compatible paint before failing without partial coat drawing.",
+    "InkMeshRenderer.releaseLiveStroke": "Releases only this live stroke's cached geometry, preserving finished shapes, texture shaders and renderVersion.",
     "rememberInkMeshRenderer": "Remembers the renderer by textureStore identity and closes it on disposal. Omit the store for texture-free brushes.",
     "InkTextureStore": "Supplies preloaded Skia Images by client texture ID. Renderer borrows images and never closes them; cached shaders retain native references. Call renderer.clearCache() after changing an image under the same ID.",
     "InkSceneStroke": "One occurrence; the same native stroke may occur several times with distinct transforms/colors.",
@@ -216,6 +253,20 @@ PROPERTIES = {
     "meshBuildCount": "Cumulative coat mesh preparations, retained across clears.",
     "cachedTextureCount": "Number of retained texture shaders, bounded by textureCacheCapacity.",
     "cachedGeometryBytes": "Retained finished mesh/prepared-vertex/path bytes, bounded by cacheByteBudget; excludes live geometry, JVM headers, GPU uploads and provider images.",
+    "cachedLiveShapeCount": "Number of retained live engine-stroke cache entries; releaseLiveStroke removes one on retirement.",
+    "cachedLiveGeometryBytes": "Retained copied live mesh/prepared-vertex/path bytes; excludes JVM headers, GPU uploads, provider images and native Ink owners. Outside cacheByteBudget.",
+    "activePointerIds": "Snapshot of currently active pointer identifiers; read on the session's authoring thread.",
+    "liveStrokes": "Snapshot list of borrowed active engines and captured transforms; engines may be recycled after retirement.",
+    "predictionMillis": "Configured session forecast horizon; default 12 milliseconds, within 0–100.",
+    "backend": "Native capture backend selected from the operating system and actual AWT toolkit.",
+    "session": "Panel-owned simultaneous-pointer session; mutate/read only on the AWT EDT.",
+    "InkLowLatencyPanel.renderer": "Actual drawing renderer; owned when constructed by the panel, borrowed when supplied by the caller.",
+    "clearColorArgb": "Writable EDT panel clear color, initially opaque white; call requestInkRender after changing it.",
+    "nativeWindowHandle": "Matching HWND/XID or configured top-level Wayland wl_surface; query on the EDT only after attachment.",
+    "authoringEnabled": "Writable EDT input switch; disabling cancels active gestures and closes capture, enabling reacquires it.",
+    "lastInputToRenderNanos": "Last processed-handler-to-Skia-recording interval in nanoseconds; excludes device latency and presentation completion.",
+    "renderedFrameCount": "Cumulative recorded authoring frames; useful for checking idle rendering.",
+    "processedPacketCount": "Cumulative input event packets delivered to the session; a Batch may contain many observations.",
     "cachedPathBytes": "Estimated retained finished-path geometry bytes; bounded by cacheByteBudget.",
     "pathEvictionCount": "Cumulative finished-shape retirements caused by capacity/byte limits.",
     "rasterBuildCount": "Cumulative viewport raster builds, retained across clears.",
@@ -392,6 +443,25 @@ def declarations(path: Path) -> list[dict]:
 
 
 def meaning(name: str, param: str) -> str:
+    if name in ("InkLowLatencyPanel", "InkLowLatencySurface"):
+        native_surface_parameters = {
+            "strokeToView": "Finite invertible stroke/page-to-AWT-local-logical-unit transform, captured per pointer at Begin; the panel applies device scale itself.",
+            "renderer": "Borrowed caller-owned renderer, or null for an owned InkMeshRenderer; the panel closes only its own default renderer.",
+            "inputSource": "Optional caller-supplied serial input source; null acquires built-in native input, with explicit acquisition failures.",
+            "drawContent": "Compose Canvas callback drawn before wet ink; width/height and canvas coordinates use AWT component-local logical units.",
+            "onStrokeFinished": "Captured (pointerId, canonical real-input Stroke) callback; update finished content synchronously and enqueue persistence.",
+            "enabled": "Whether to acquire input; false cancels all active pointers and closes capture.",
+        }
+        if param in native_surface_parameters:
+            return native_surface_parameters[param]
+    if name == "InkAuthoringSession.handle" and param == "onStrokeFinished":
+        return "Captured at Begin; synchronously receives pointerId and a canonical real-input Stroke on completion."
+    if name in ("InkInputEvent.Batch", "InkInputEvent.Predict", "InkAuthoringController.setPredictedInputs") and param == "samples":
+        return ("Ordered real observations; all accepted history is submitted before updating the speculative tail."
+                if name == "InkInputEvent.Batch" else
+                "Replaceable speculative observations in input-surface units; an empty list clears the tail. Never added to saved real inputs.")
+    if name == "InkDrawingSurface" and param == "strokeToView":
+        return "Finite invertible stroke/page-to-local-Compose-pixel transform, captured at Begin; include device density, zoom and scroll."
     if name == "ViveInkPage.replay" and param == "strokes":
         return "Original pre-operation projections, such as LoadedInkPage.sourceStrokes; never supply already cut/moved display projections. Their draw order is preserved."
     if name == "LoadedInkLibrary" and param == "path":

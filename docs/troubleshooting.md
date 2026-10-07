@@ -12,7 +12,17 @@
 | Windows native path fails under Zulu | Try an ASCII cache path such as `-Dbyteink.ink.cache=C:/byteink-cache`; pinned JBR 25 supports broader Unicode paths. |
 | Drawing disappears at pointer release | Add the completed stroke to finished content and keep it in `drawContent`. |
 | Pointer samples arrive but wet shape stalls | Schedule frames from `hasPendingInputs` and `isUpdateNeeded`; call `advance`, not only `append`. |
-| Width/position wrong after zoom | Separate page dp from surface pixels; include density/scroll/zoom in transforms. |
+| Speculative tail remains when the pen stops | A custom session loop must schedule while `needsAnimationTick()` is true, then advance to expire predictions. Custom controller loops retract forecasts explicitly. |
+| A second pointer is ignored | `InkDrawingSurface` has one controller/active pointer; use `InkAuthoringSession` or the native direct surfaces for simultaneous pointers. |
+| Native subscription/thread exception | Subscribe/close on the AWT EDT, with a displayable component, one subscriber and its matching live native handle. |
+| Wayland backend still reports `LINUX_XINPUT2` | Selection uses the actual AWT toolkit. Run JBR 25 with `-Dawt.toolkit.name=WLToolkit` before AWT initializes. |
+| Native Wayland package access fails | Add `--add-opens=java.desktop/sun.awt.wl=ALL-UNNAMED` and native access; see [runtime setup](guides/authoring.md#native-platform-setup). |
+| Compose host fails under WLToolkit | Use `JFrame` plus `ComposePanel(renderSettings = RenderSettings.SwingGraphics())`, as in the native example, or a direct Swing panel. The tested heavyweight Compose/Skiko host assumes X11. |
+| Native handle unavailable or stale after hide/show | Wayland surfaces exist after visible top-level configuration and change after hide/show. Recreate custom native sources; the built-in panel waits/reconnects. |
+| Native Wayland pen axes are absent | Check device/compositor tablet-v2 support. Primary mouse and touch do not fabricate pen pressure. |
+| XInput2 touch subscription cannot be acquired | Check for another exclusive touch selector on the same window and that the component's XID is correct. Acquisition failure is explicit. |
+| Width/position wrong after zoom | Regular Compose maps page units to pixels with density/scroll/zoom. Direct panels use AWT logical units and apply device scale themselves. |
+| Completed gestures retain wet renderer memory | Call `releaseLiveStroke` before custom-host completion/cancellation/reuse. Built-in direct panels wire this automatically; mesh live-cache diagnostics show retention. |
 | Raster blurs under parent zoom | Use physical viewport sizing and the ancestor's uniform zoom as `rasterScale`. |
 | Partial erase differs after reload | Round-trip mask geometry before preview/target collection; persist the erase and exact target links together. |
 | Unknown/malformed row vanishes visually | Inspect `unreadable`; preserve the original row and bytes. Nullable decoding does not mean deletion. |

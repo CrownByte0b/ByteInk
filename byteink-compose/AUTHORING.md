@@ -17,16 +17,16 @@ Use the dedicated surface for authoring without a Compose frame-clock wait:
 ```kotlin
 val finished = remember { mutableStateListOf<Stroke>() }
 val renderer = remember { InkMeshRenderer() }
-DisposableEffect(renderer) { onDispose { renderer.clearCache() } }
+DisposableEffect(renderer) { onDispose { renderer.close() } }
 
 InkLowLatencySurface(
     brush = selectedBrush,
     modifier = Modifier.fillMaxSize(),
-    strokeToView = pageToLocalPixels,
+    strokeToView = pageToAwtLogical,
     renderer = renderer,
     onStrokeFinished = { pointerId, stroke -> finished.add(stroke) },
     drawContent = { canvas, _, _ ->
-        finished.forEach { renderer.render(canvas, it, pageToLocalPixels) }
+        finished.forEach { renderer.render(canvas, it, pageToAwtLogical) }
     },
 )
 ```
@@ -34,8 +34,10 @@ InkLowLatencySurface(
 Add the completed stroke to the finished scene synchronously in the callback to preserve the
 handoff before the next draw. For large pages, supply the existing scene/raster cache through
 `drawContent` instead of traversing every stroke. The surface owns its authoring session and
-native subscription; a supplied renderer is borrowed. It releases its own renderer cache on
-disposal. `InkLowLatencyPanel` provides the same surface directly to Swing hosts.
+native subscription; a supplied renderer is borrowed. It closes only its own default renderer on
+disposal. `InkLowLatencyPanel` provides the same surface directly to Swing hosts. Direct surfaces
+use AWT component-local logical coordinates and apply device scaling themselves; do not multiply
+`pageToAwtLogical` by Compose's pixel density. See the [wiki's compiling native host example](../docs/guides/authoring.md#native-low-latency-surfaces), including JBR Wayland's SwingGraphics host.
 
 Native packets retain chronological real history and measured pressure. Projected pen tilt is
 converted into the Ink polar tilt and shaft azimuth; Windows barrel twist is not shaft orientation.
@@ -47,7 +49,7 @@ started with that axis. Physical length is populated only when the host supplies
 is omitted under anisotropic scaling or shear.
 
 Each pointer has an independent real Ink engine and predictor. The default forecast holds measured
-axes, caps its horizon at 24 ms and displacement at 32 local pixels, and resets on reversals, pauses
+axes, caps its horizon at 24 ms and displacement at 32 input-coordinate units, and resets on reversals, pauses
 and tool changes. The session targets 12 ms ahead. Replacements and new real observations retract
 the old speculative tail. A stopped-device forecast expires through the surface's timer. Finish
 always removes prediction and reconstructs the canonical stroke from real inputs before encoding.

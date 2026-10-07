@@ -49,6 +49,20 @@ Apply the Kotlin Compose compiler and Compose Multiplatform plugins in your appl
 
 For a plain JVM project, put the same dependencies in `dependencies { ... }`. [The example build](examples/build.gradle.kts) uses a standalone JVM consumer.
 
+## Native Wayland setup
+
+The native Wayland authoring backend is tested with **JBR 25**, a live Wayland compositor and these application JVM arguments:
+
+```kotlin
+jvmArgs += listOf(
+    "-Dawt.toolkit.name=WLToolkit",
+    "--add-opens=java.desktop/sun.awt.wl=ALL-UNNAMED",
+    "--enable-native-access=ALL-UNNAMED",
+)
+```
+
+Use the [SwingGraphics Compose host or direct Swing panel](guides/authoring.md#native-platform-setup) shown in the native authoring example. An ordinary Java 25 Linux runtime can use X11/XWayland on a Wayland desktop; `WAYLAND_DISPLAY` alone does not select JBR's Wayland toolkit. Windows and X11 native authoring need Java 25+ and native access, without the JBR-specific flags.
+
 ## Other repository choices
 
 | Mode | Setup |
@@ -82,4 +96,4 @@ This uses the same input/brush types as AndroidX Ink. `elapsedTimeMillis` starts
 
 `ViveInkTool.complete` returns the finished stroke and a new stored row. `canonicalStroke` rebuilds that row through the codec, giving the geometry a reload will use. Persist `row` with a unique ID, correct page ID, and repository-allocated `seq`.
 
-For live drawing, continue to [the Compose surface](guides/authoring.md#compose-surface). [All tool parameters](reference/brushes.md).
+For live drawing, continue to [the Compose surface](guides/authoring.md#compose-surface) or [native low-latency surfaces](guides/authoring.md#native-low-latency-surfaces). [All tool parameters](reference/brushes.md).

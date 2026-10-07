@@ -14,8 +14,8 @@ public data class InkPoint(val x: Float, val y: Float)
 
 | Parameter | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `x` | `Float` | `Required` | Horizontal coordinate; surface pixels for pointer samples, page dp for InkPoint. |
-| `y` | `Float` | `Required` | Vertical coordinate; surface pixels for pointer samples, page dp for InkPoint. |
+| `x` | `Float` | `Required` | Horizontal coordinate; input-surface units for pointer samples, page dp for InkPoint. |
+| `y` | `Float` | `Required` | Vertical coordinate; input-surface units for pointer samples, page dp for InkPoint. |
 
 [Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L4)
 

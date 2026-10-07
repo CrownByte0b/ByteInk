@@ -2,7 +2,7 @@
 
 ## Choose a renderer
 
-Both renderers implement `InkRenderer`, which accepts finished and live strokes through `render` and `DrawScope.drawInk`. Scenes, raster caches and `InkDrawingSurface` accept either implementation. Existing path-specific overloads remain available; the drawing surface defaults to `InkPathRenderer`.
+Both renderers implement `InkRenderer`, which accepts finished and live strokes through `render` and `DrawScope.drawInk`. Scenes, raster caches and authoring surfaces accept either implementation. Existing path-specific overloads remain available. `InkDrawingSurface` defaults to `InkPathRenderer`; `InkLowLatencyPanel` and `InkLowLatencySurface` default to an owned `InkMeshRenderer`.
 
 | Renderer | Behavior |
 | --- | --- |
@@ -35,11 +35,14 @@ yCanvas = d * xPage + e * yPage + f
 | Coordinates | Unit |
 | --- | --- |
 | Native stroke inputs/mesh, `PageStroke`, lasso/erase paths | Page dp |
-| `InkPointerSample`, `Rect` viewports | Local surface/canvas pixels |
-| `sceneToCanvas` / `strokeToView` | Maps dp to pixels, including density/zoom/scroll |
+| Regular Compose `InkPointerSample`, `Rect` viewports | Local surface/canvas pixels |
+| Regular Compose `sceneToCanvas` / `strokeToView` | Maps dp to pixels, including density/zoom/scroll |
+| Native panel samples, `drawContent` canvas/dimensions, `strokeToView` | AWT component-local logical units; the panel applies device scale |
 | `rasterScale` | Physical pixels per local pixel from uniform ancestor zoom |
 
 For a scrolled page: translation is `-scrollDp * density * zoom`; do not use the document's full extent as the raster viewport. [Upstream affine transform API](https://developer.android.com/reference/kotlin/androidx/ink/geometry/ImmutableAffineTransform).
+
+For a direct native panel, translation is instead `-scrollDp * zoom` in AWT logical units. Do not apply the Compose pixel-density multiplier again. Keep the finished scene transform consistent with the panel's captured input transform.
 
 ## Draw a finished scene
 
@@ -83,11 +86,21 @@ drawCachedInkScene(
 
 Geometry/view capacity or byte budget `0` disables that retention; `textureCacheCapacity` must be positive. Oversized geometry/rasters draw transiently and release afterward. Live geometry, native Ink meshes, provider-owned texture images, scene metadata, JVM headers and GPU uploads are outside the retained finished-geometry/raster byte ceilings.
 
-Mesh geometry is cached by shape and effective linear canvas transform. Translation reuses prepared vertices; zoom, recoloring and atlas frames rebuild them. Live geometry is weakly owned and refreshed by shape version. The renderer uses Compose `drawVertices` and Skia runtime shaders in batches of sixteen triangles; performance depends on mesh size and backend.
+Mesh geometry is cached by shape and effective linear canvas transform. Translation reuses prepared vertices; zoom, recoloring and atlas frames rebuild them. Live geometry is weakly owned and refreshed by shape version. Outlined `DISCARD` coats export mesh attributes lazily: a uniform outlined coat can draw without copying the full mesh, while a paint needing mesh attributes or an outline-free shape still obtains them. Texture/paint availability is checked on each draw, including when a previously missing image becomes available.
+
+The renderer uses Compose `drawVertices` and Skia runtime shaders in batches of sixteen triangles; performance depends on mesh size and backend.
 
 Returning to a retained exact view reuses its raster. Each unseen pan/zoom view renders again in full; the cache does not tile the document. Raster dimensions are `ceil(viewport.width * rasterScale)` by `ceil(viewport.height * rasterScale)`; retained N32 bytes are width × height × 4.
 
 For a canvas inside a uniformly zoomed ancestor, put device density in `sceneToCanvas`, pass ancestor zoom as `rasterScale`, and align the viewport origin to the destination's physical pixel origin. Preserve destination clipping. [Rendering/cache parameters](../reference/rendering.md).
+
+## Live cache retirement
+
+Call `renderer.releaseLiveStroke(liveEngine)` when a custom authoring host retires a live engine, **before** it is cleared or reused. This removes only that stroke's wet path/mesh cache, preserving finished geometry, texture shaders and `renderVersion`. The interface default is a no-op for renderers without live caches; existing custom renderers can add their own cleanup.
+
+`InkLowLatencyPanel` and `InkLowLatencySurface` wire retirement automatically. For a custom controller, keep its current `liveStroke` and release it before `finish`, `cancel`, a replacement `begin`, or `close`. For a custom session, obtain the affected entries from `liveStrokes` and release them before `Finish`, `CancelPointer`, replacement `Begin`, `cancel(pointerId)`, or before cancelling/closing all pointers. `InkAuthoringSession` itself does not own a renderer.
+
+Mesh `cachedLiveShapeCount` and `cachedLiveGeometryBytes` expose retained wet entries and estimated copied geometry bytes. The byte count excludes JVM headers, GPU uploads, provider images and native Ink owners, and is outside the finished `cacheByteBudget`. Weak ownership alone does not release a reachable, pooled engine's cached geometry promptly; explicitly retiring its cache prevents accumulation across gestures. Use `clearCache()` for whole-cache invalidation, such as a texture replacement, and `close()` for final mesh renderer disposal.
 
 ## Exclude strokes during an eraser preview
 
@@ -137,3 +150,5 @@ The path renderer supports texture-free `ANY` and `DISCARD` paint choices. It re
 Mesh rendering passes all 280 saved Android hardware reference cases on Linux and Windows (mean RGB error at most 1/255, SSIM at least 0.99, no unexplained interior pixels), plus Linux NVIDIA and Mesa OpenGL checks. The measured Windows/Linux difference is 21 pixels across 280 images, each at most 1/255 per channel. These are saved-reference comparisons, not a fresh Android capture or a claim of identical hardware pixels or low-latency pen input parity.
 
 Keep renderers, caches and Skia surfaces on one drawing thread. Clear path caches and close mesh renderers and raster/surface/image owners on disposal. Ink's native stroke/input owners use reachability-based cleanup; closing a controller releases references without guaranteeing immediate native-mesh destruction.
+
+A direct panel owns and closes its default mesh renderer. A renderer passed into the panel/surface is borrowed; its application owner closes it. `rememberInkMeshRenderer()` already closes its renderer when removed from composition.

@@ -17,7 +17,7 @@ The wiki includes the **actual Kotlin source files** from `docs/examples/src/mai
 ./gradlew -p docs/examples check run --max-workers=1
 ```
 
-This standalone consumer compiles all examples, including the textured Compose surface, then checks authoring, stored round trips, partial erase/decoded replay/undo, selection, rendering attributes and offscreen mesh rendering. It uses `includeBuild` to consume the current checkout. It needs no personal notebook.
+This standalone consumer compiles all examples, including textured and native Compose surfaces and the SwingGraphics host. Its headless runner checks authoring, simultaneous pointers and replaceable predictions, stored round trips, partial erase/decoded replay/undo, selection, rendering attributes and offscreen mesh rendering. Native window examples are compiled but do not acquire hardware input during this headless run. It uses `includeBuild` to consume the current checkout and needs no personal notebook.
 
 ## Update API pages
 

@@ -63,17 +63,41 @@ def main():
                                             ("onPartial", "reference/storage/"),
                                             ("InkMeshRenderer", "reference/rendering/"),
                                             ("animationTimeMillis", "reference/rendering/"),
-                                            ("ViveInkPage.replay", "reference/storage/")]:
+                                            ("ViveInkPage.replay", "reference/storage/"),
+                                            ("InkLowLatencySurface", "reference/authoring/"),
+                                            ("NativeInkInputSource", "reference/authoring/"),
+                                            ("InkAuthoringSession", "reference/authoring/"),
+                                            ("releaseLiveStroke", "reference/rendering/"),
+                                            ("tiltRadians", "reference/authoring/")]:
                         page.goto(url, wait_until="networkidle")
-                        if width < 600:
+                        if width < 600 and not page.locator("#__search").is_checked():
                             page.locator('label.md-header__button[for="__search"]').click()
                         field = page.locator("input.md-search__input")
-                        field.fill(query)
-                        page.locator(".md-search-result__link").first.wait_for(state="visible")
+                        # Material observes keyup/focus/worker readiness, not input alone.
+                        # Real typing also works when the mobile menu already focused the field.
+                        field.fill("")
+                        field.press_sequentially(query)
+                        assert field.input_value() == query, (query, field.input_value())
+                        target = page.locator(f'.md-search-result__link:visible[href*="{expected}"]').first
+                        try:
+                            target.wait_for(state="visible")
+                        except Exception as error:
+                            state = {
+                                "url": page.url,
+                                "input_value": field.input_value(),
+                                "input_focused": field.evaluate("node => node === document.activeElement"),
+                                "search_open": page.locator("#__search").is_checked(),
+                                "links": page.locator(".md-search-result__link").count(),
+                                "message": page.locator(".md-search-result__meta").inner_text(),
+                                "workers": [worker.url for worker in page.workers],
+                                "page_errors": errors,
+                            }
+                            raise AssertionError(f"No visible search result for {query!r} at {width}px: {state}") from error
                         links = page.locator(".md-search-result__link").evaluate_all("nodes => nodes.map(n => n.href)")
                         assert any(expected in link for link in links), (query, links)
-                        page.locator(".md-search-result__link").first.click()
+                        target.click()
                         page.wait_for_load_state("networkidle")
+                        assert expected in page.url, (query, page.url)
                         assert page.locator("article h1").is_visible()
                         results.append({"width": width, "query": query, "results": len(links)})
                     assert not errors, errors

@@ -6,7 +6,7 @@ Module: `byteink-compose`. [Conventions](index.md). Signatures and defaults foll
 
 ### `InkRenderer`
 
-Shared finished/live drawing contract for path and mesh renderers. renderVersion invalidates retained view rasters when settings or textures change; the default is 0.
+Shared finished/live drawing contract. renderVersion invalidates retained view rasters when settings or textures change; the default is 0. releaseLiveStroke defaults to a no-op for renderers without wet caches.
 
 ```kotlin
 public interface InkRenderer
@@ -80,13 +80,27 @@ public fun render( canvas: Canvas, stroke: InProgressStroke, strokeToCanvas: Aff
 
 [Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderer.kt#L23)
 
+### `InkRenderer.releaseLiveStroke`
+
+Retire only this engine stroke's cached wet geometry before it is cleared/recycled. Built-in direct panels do this automatically; custom controller/session hosts must call it on retirement. Finished/texture caches are retained.
+
+```kotlin
+public fun releaseLiveStroke(stroke: InProgressStroke)
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `stroke` | `InProgressStroke` | `Required` | Native finished or live stroke, as specified by the type. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderer.kt#L31)
+
 ### `InkRenderer.clearCache`
 
 ```kotlin
 public fun clearCache()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderer.kt#L30)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderer.kt#L32)
 
 ### `DrawScope.drawInk`
 
@@ -101,7 +115,7 @@ public fun DrawScope.drawInk( renderer: InkRenderer, stroke: Stroke, strokeToCan
 | `strokeToCanvas` | `AffineTransform` | `AffineTransform.IDENTITY` | Finite stroke-to-local-canvas transform, composed with the canvas's existing transform. |
 | `colorArgb` | `Int?` | `null` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderer.kt#L34)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderer.kt#L36)
 
 ### `DrawScope.drawInk`
 
@@ -116,13 +130,13 @@ public fun DrawScope.drawInk( renderer: InkRenderer, stroke: InProgressStroke, s
 | `strokeToCanvas` | `AffineTransform` | `AffineTransform.IDENTITY` | Finite stroke-to-local-canvas transform, composed with the canvas's existing transform. |
 | `colorArgb` | `Int?` | `null` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderer.kt#L42)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderer.kt#L44)
 
 ## InkMeshRenderer
 
 ### `InkMeshRenderer`
 
-Full pinned Ink mesh/shader rendering: vertex HSL/opacity, prediction fade, derivative AA, textures and atlas animation. ANY/ACCUMULATE use meshes; DISCARD uses a uniform outline with tiling textures. Single drawing thread; close is terminal and releases shaders/effects. Missing textures try the next compatible paint before failing without partial coat drawing.
+Full pinned mesh/shader rendering: vertex HSL/opacity, prediction fade, derivative AA, textures and atlas animation. ANY/ACCUMULATE use meshes; outlined DISCARD uses a uniform outline with tiling textures and exports mesh attributes lazily only when needed. Single drawing thread; close is terminal. Missing textures try the next compatible paint before failing without partial coat drawing.
 
 ```kotlin
 public class InkMeshRenderer( public val textureStore: InkTextureStore? = null, public val cacheCapacity: Int = 2048, public val cacheByteBudget: Long = 64L * 1024 * 1024, public val textureCacheCapacity: Int = 64, ) : InkRenderer, AutoCloseable
@@ -175,7 +189,7 @@ public val cachedShapeCount: Int
 
 Number of retained finished mesh shapes; excludes weakly owned live geometry.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L79)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L81)
 
 ### `InkMeshRenderer.cachedTextureCount`
 
@@ -185,7 +199,27 @@ public val cachedTextureCount: Int
 
 Number of retained texture shaders, bounded by textureCacheCapacity.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L80)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L82)
+
+### `InkMeshRenderer.cachedLiveShapeCount`
+
+```kotlin
+public val cachedLiveShapeCount: Int
+```
+
+Number of retained live engine-stroke cache entries; releaseLiveStroke removes one on retirement.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L84)
+
+### `InkMeshRenderer.cachedLiveGeometryBytes`
+
+```kotlin
+public val cachedLiveGeometryBytes: Long
+```
+
+Retained copied live mesh/prepared-vertex/path bytes; excludes JVM headers, GPU uploads, provider images and native Ink owners. Outside cacheByteBudget.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L85)
 
 ### `InkMeshRenderer.cachedGeometryBytes`
 
@@ -195,7 +229,7 @@ public var cachedGeometryBytes: Long
 
 Retained finished mesh/prepared-vertex/path bytes, bounded by cacheByteBudget; excludes live geometry, JVM headers, GPU uploads and provider images. Private setter.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L81)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L86)
 
 ### `InkMeshRenderer.canDraw`
 
@@ -207,7 +241,7 @@ override fun canDraw(stroke: Stroke): Boolean
 | --- | --- | --- | --- |
 | `stroke` | `Stroke` | `Required` | Native finished or live stroke, as specified by the type. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L114)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L121)
 
 ### `InkMeshRenderer.canDraw`
 
@@ -219,7 +253,7 @@ override fun canDraw(stroke: InProgressStroke): Boolean
 | --- | --- | --- | --- |
 | `stroke` | `InProgressStroke` | `Required` | Native finished or live stroke, as specified by the type. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L121)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L128)
 
 ### `InkMeshRenderer.draw`
 
@@ -235,7 +269,7 @@ public fun draw( canvas: Canvas, stroke: Stroke, strokeToCanvas: AffineTransform
 | `viewport` | `Rect?` | `null` | Visible rectangle in local canvas pixels; supply the actually visible area. |
 | `colorArgb` | `Int?` | `null` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L127)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L134)
 
 ### `InkMeshRenderer.draw`
 
@@ -251,7 +285,7 @@ public fun draw( canvas: Canvas, stroke: InProgressStroke, strokeToCanvas: Affin
 | `viewport` | `Rect?` | `null` | Visible rectangle in local canvas pixels; supply the actually visible area. |
 | `colorArgb` | `Int?` | `null` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L172)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L182)
 
 ### `InkMeshRenderer.render`
 
@@ -267,7 +301,7 @@ override fun render(canvas: Canvas, stroke: Stroke, strokeToCanvas: AffineTransf
 | `viewport` | `Rect?` | `Required` | Visible rectangle in local canvas pixels; supply the actually visible area. |
 | `colorArgb` | `Int?` | `Required` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L210)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L223)
 
 ### `InkMeshRenderer.render`
 
@@ -283,7 +317,7 @@ override fun render(canvas: Canvas, stroke: InProgressStroke, strokeToCanvas: Af
 | `viewport` | `Rect?` | `Required` | Visible rectangle in local canvas pixels; supply the actually visible area. |
 | `colorArgb` | `Int?` | `Required` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L212)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L225)
 
 ### `InkMeshRenderer.clearCache`
 
@@ -291,7 +325,21 @@ override fun render(canvas: Canvas, stroke: InProgressStroke, strokeToCanvas: Af
 override fun clearCache()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L215)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L228)
+
+### `InkMeshRenderer.releaseLiveStroke`
+
+Releases only this live stroke's cached geometry, preserving finished shapes, texture shaders and renderVersion.
+
+```kotlin
+override fun releaseLiveStroke(stroke: InProgressStroke)
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `stroke` | `InProgressStroke` | `Required` | Native finished or live stroke, as specified by the type. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L237)
 
 ### `InkMeshRenderer.close`
 
@@ -299,7 +347,7 @@ override fun clearCache()
 override fun close()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L224)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L244)
 
 ### `rememberInkMeshRenderer`
 
@@ -315,7 +363,7 @@ public fun rememberInkMeshRenderer(textureStore: InkTextureStore? = null): InkMe
 | --- | --- | --- | --- |
 | `textureStore` | `InkTextureStore?` | `null` | Optional preloaded client-texture-ID lookup; images are borrowed and missing images make that paint unavailable. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L406)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt#L427)
 
 ## InkTextureStore
 
@@ -522,6 +570,20 @@ override fun clearCache()
 
 [Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPathRenderer.kt#L181)
 
+### `InkPathRenderer.releaseLiveStroke`
+
+Releases only this live stroke's cached path, preserving finished paths and renderVersion.
+
+```kotlin
+override fun releaseLiveStroke(stroke: InProgressStroke)
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `stroke` | `InProgressStroke` | `Required` | Native finished or live stroke, as specified by the type. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPathRenderer.kt#L190)
+
 ### `DrawScope.drawInk`
 
 ```kotlin
@@ -535,7 +597,7 @@ public fun DrawScope.drawInk( renderer: InkPathRenderer, stroke: Stroke, strokeT
 | `strokeToCanvas` | `AffineTransform` | `AffineTransform.IDENTITY` | Finite stroke-to-local-canvas transform, composed with the canvas's existing transform. |
 | `colorArgb` | `Int?` | `null` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPathRenderer.kt#L280)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPathRenderer.kt#L284)
 
 ### `DrawScope.drawInk`
 
@@ -550,7 +612,7 @@ public fun DrawScope.drawInk( renderer: InkPathRenderer, stroke: InProgressStrok
 | `strokeToCanvas` | `AffineTransform` | `AffineTransform.IDENTITY` | Finite stroke-to-local-canvas transform, composed with the canvas's existing transform. |
 | `colorArgb` | `Int?` | `null` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPathRenderer.kt#L288)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPathRenderer.kt#L292)
 
 ## InkScene
 
