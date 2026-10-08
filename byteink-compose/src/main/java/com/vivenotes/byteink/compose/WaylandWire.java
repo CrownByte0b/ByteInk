@@ -136,7 +136,7 @@ final class WaylandWire implements AutoCloseable {
             case "wl_seat" -> 3;
             default -> 0;
         };
-        if (type.equals("wl_registry") || type.equals("wl_seat") && version < 5 || type.equals("wl_touch") && version < 3)
+        if (type.equals("wl_registry") || type.equals("wl_callback") || type.equals("wl_seat") && version < 5 || type.equals("wl_touch") && version < 3)
             procedure("wl_proxy_destroy", proxy);
         else marshal(proxy, opcode, MemorySegment.NULL, version, 1);
     }

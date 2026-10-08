@@ -80,6 +80,8 @@ public class InkLowLatencyPanel(
         private set
     public var processedPacketCount: Long = 0L
         private set
+    /** EDT-owned subscription readiness; native Wayland becomes ready after asynchronous discovery. */
+    public val isInputReady: Boolean get() = subscription != null && (nativeSource?.isReady ?: true)
     /** Live HWND/XID, or JBR's top-level wl_surface on Wayland (available after window configuration). */
     public val nativeWindowHandle: Long get() {
         checkUiThread(); check(isDisplayable)
@@ -88,6 +90,7 @@ public class InkLowLatencyPanel(
     private val ownsRenderer = renderer == null
     private var closed = false
     private var subscription: AutoCloseable? = null
+    private var nativeSource: NativeInkInputSource? = null
     private var renderQueued = false
     private var queuedRenderNeedsAdvance = false
     private var skipSessionAdvance = false
@@ -264,7 +267,10 @@ public class InkLowLatencyPanel(
                 attached = false
                 acquired.close()
                 session.cancelAll()
-            } else subscription = AutoCloseable { attached = false; acquired.close() }
+            } else {
+                nativeSource = source as? NativeInkInputSource
+                subscription = AutoCloseable { attached = false; acquired.close() }
+            }
         } catch (failure: Throwable) {
             attached = false
             session.cancelAll()
@@ -277,6 +283,7 @@ public class InkLowLatencyPanel(
         connectTimer.stop()
         val old = subscription
         subscription = null
+        nativeSource = null
         try { old?.close() } finally {
             try { session.cancelAll() } finally { retainedRaster?.clear(); pendingInputNanos = null }
         }

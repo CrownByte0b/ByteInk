@@ -112,6 +112,23 @@ The [Step 3 investigation report](https://github.com/CrownByte0b/ByteInk/blob/ma
 
 `NativeInkInputSource` is the lower-level adapter for custom hosts. Subscribe and close on the EDT, use a displayable component and its matching live native handle, and allow one subscription per source. Windows/X11 use the drawing component's HWND/XID; Wayland requires its visible, configured top-level `wl_surface`. Recreate custom Wayland sources after hiding/showing the window, since the native surface changes. The built-in panel handles that lifecycle and waits for configuration. Native acquisition failures are explicit; runtime failures cancel gestures, close capture and invoke `onFailure`.
 
+Native Wayland discovery runs on the reader thread. `subscribe` returns while setup is pending;
+read `source.isReady` on EDT, or `panel.isInputReady` when using the built-in panel. Registry and
+device-binding sync replies must both arrive before readiness is published on EDT. Contacts that
+begin earlier are ignored through their remaining moves and release. Readiness indicates initialized
+capture; a physical tablet and tablet-v2 support are separate from AWT mouse capture. Windows/X11
+subscriptions become ready before `subscribe` returns. Supplied custom panel sources are assumed
+ready when their subscription returns.
+
+Closing a Wayland subscription clears readiness and invalidates queued delivery immediately. Native
+cleanup finishes on its reader, so EDT does not join a reader or wait for a compositor reply. Setup
+can be cancelled during either discovery stage, and a new subscription can start while the old
+reader releases its resources. Generation checks discard old readiness, input and failure packets.
+Wayland setup errors use the existing EDT `onFailure` callback after cancellation and close.
+The private compositor tests cover delayed replies, disconnects during setup, rapid resubscription,
+hide/show and hotplug at both 1× and 2× scaling. The queue and wrapper ownership follow the
+[libwayland client API](https://wayland.freedesktop.org/docs/html/apb.html).
+
 ## Controller lifecycle
 
 For application-managed input, use the same controller directly:

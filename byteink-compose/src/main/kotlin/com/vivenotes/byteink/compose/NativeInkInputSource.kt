@@ -34,6 +34,8 @@ public enum class InkNativeBackend { WINDOWS_POINTER, LINUX_XINPUT2, LINUX_WAYLA
  * pass the top-level wl_surface after showing the window, and enable
  * --add-opens=java.desktop/sun.awt.wl=ALL-UNNAMED on JBR. Surface coordinates are mapped to [component].
  * Hide/show replaces the native surface; close and recreate the source (the built-in panel does this).
+ * Wayland discovery and cleanup run asynchronously; [isReady] becomes true on EDT after discovery.
+ * Contacts beginning before readiness are ignored, including the rest of those contacts.
  */
 public class NativeInkInputSource(
     private val component: Component,
@@ -49,6 +51,10 @@ public class NativeInkInputSource(
         else -> throw UnsupportedOperationException("Native ink supports Linux x86_64 and Windows x86_64")
     }
     private var subscribed = false
+    private var generation = 0L
+    /** EDT-owned capture readiness; false before discovery and immediately after close/failure. */
+    public var isReady: Boolean = false
+        private set
     init {
         require(windowHandle != 0L) { "A live native drawing-area handle is required" }
         require(centimetersPerNativePixel == null || centimetersPerNativePixel.isFinite() && centimetersPerNativePixel > 0f)
@@ -61,6 +67,7 @@ public class NativeInkInputSource(
         check(component.isDisplayable) { "Attach the drawing component before subscribing" }
         val wayland = if (backend == InkNativeBackend.LINUX_WAYLAND_TABLET) WaylandRuntime.windowSurface(component) else null
         require(wayland == null || wayland.surface == windowHandle) { "The handle must be this component's live top-level wl_surface" }
+        val subscribedGeneration = ++generation
         val normalizer = NativePenNormalizer(pixelsPerLocalUnit, centimetersPerNativePixel)
         val accepted = mutableSetOf<Long>()
         val hostWindow = SwingUtilities.getWindowAncestor(component)
@@ -97,13 +104,14 @@ public class NativeInkInputSource(
         lateinit var subscription: AutoCloseable
         val queue = NativeInkPacketQueue(consume = { packet ->
             check(EventQueue.isDispatchThread())
-            if (attached) try {
-                if (packet is Throwable) {
+            if (attached && generation == subscribedGeneration) try {
+                if (packet === NativeInkReady) isReady = true
+                else if (packet is Throwable) {
                     normalizer.clear()
                     try { listener(InkInputEvent.Cancel) } finally { subscription.close() }
                     onFailure(packet)
                 } else if (packet is InkInputEvent) listener(packet)
-                else localFrame(packet as NativePenBridge.Frame)?.let { local ->
+                else if (isReady) localFrame(packet as NativePenBridge.Frame)?.let { local ->
                     normalizer.events(local).forEach { if (attached) listener(it) }
                 }
             } catch (failure: Throwable) {
@@ -121,7 +129,7 @@ public class NativeInkInputSource(
                     strokeUnitLengthCm = centimetersPerNativePixel?.times(scale))
             }
             override fun mousePressed(event: MouseEvent) {
-                if (event.button == MouseEvent.BUTTON1 && attached) { mouseDown = true; enqueue(InkInputEvent.Begin(sample(event), 0)) }
+                if (event.button == MouseEvent.BUTTON1 && attached && isReady) { mouseDown = true; enqueue(InkInputEvent.Begin(sample(event), 0)) }
             }
             override fun mouseDragged(event: MouseEvent) { if (mouseDown && attached) enqueue(InkInputEvent.Move(sample(event), 0)) }
             override fun mouseReleased(event: MouseEvent) {
@@ -151,6 +159,8 @@ public class NativeInkInputSource(
             check(EventQueue.isDispatchThread()) { "Close native input on the AWT event thread" }
             if (attached) {
                 attached = false
+                generation++
+                isReady = false
                 queue.close()
                 component.removeFocusListener(focus)
                 component.removeHierarchyListener(hierarchy)
@@ -168,13 +178,15 @@ public class NativeInkInputSource(
             bridge = when (backend) {
                 InkNativeBackend.WINDOWS_POINTER -> WindowsPenBridge(windowHandle, ::enqueue, ::enqueue)
                 InkNativeBackend.LINUX_XINPUT2 -> X11PenBridge(windowHandle, ::enqueue, ::enqueue)
-                InkNativeBackend.LINUX_WAYLAND_TABLET -> WaylandPenBridge(wayland!!.display, wayland.surface, ::enqueue, ::enqueue)
+                InkNativeBackend.LINUX_WAYLAND_TABLET -> WaylandPenBridge(wayland!!.display, wayland.surface, ::enqueue,
+                    { enqueue(NativeInkReady) }, ::enqueue)
             }
             component.addFocusListener(focus)
             component.addHierarchyListener(hierarchy)
             if (wayland != null) { component.addMouseListener(mouse); component.addMouseMotionListener(mouse) }
             hostWindow?.addWindowFocusListener(windowFocus)
             hostWindow?.addWindowListener(windowFocus)
+            if (wayland == null) isReady = true
         } catch (failure: Throwable) {
             try { subscription.close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
             throw failure
@@ -182,6 +194,9 @@ public class NativeInkInputSource(
         return subscription
     }
 }
+
+/** Ordered with native packets; an old subscription's queue/generation cannot ready a new one. */
+private object NativeInkReady
 
 /** Maps unsigned native 32-bit ticks into one local monotonic clock, retaining historical order. */
 internal class NativeTickClock {

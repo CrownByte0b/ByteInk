@@ -2,6 +2,7 @@ package com.vivenotes.byteink.compose;
 
 import java.lang.foreign.MemorySegment;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -30,10 +31,13 @@ final class WaylandPenBridge implements NativePenBridge {
         final Map<Integer, Contact> contacts = new HashMap<>();
         final List<Frame> pending = new ArrayList<>();
     }
-    private final WaylandWire wire;
-    private final MemorySegment display, queue;
+    private final Object lifecycle = new Object();
+    private WaylandWire wire;
+    private final MemorySegment display;
+    private MemorySegment queue = MemorySegment.NULL, displayWrapper = MemorySegment.NULL;
     private final long target;
     private final Consumer<Frame> frames;
+    private final Runnable ready;
     private final Consumer<Throwable> failure;
     private final Map<Long, Proxy> proxies = new LinkedHashMap<>();
     private final Map<Integer, MemorySegment> seats = new LinkedHashMap<>();
@@ -43,39 +47,59 @@ final class WaylandPenBridge implements NativePenBridge {
     private MemorySegment manager;
     private int managerGlobal;
     private volatile boolean running = true;
-    private boolean closed;
+    private boolean initialized;
+    private int discoveryBarriers;
+    private Throwable failureCause;
     private final Thread reader;
+    private final CompletableFuture<Void> stopped = new CompletableFuture<>();
 
-    WaylandPenBridge(long borrowedDisplay, long surface, Consumer<Frame> frames, Consumer<Throwable> failure) {
+    WaylandPenBridge(long borrowedDisplay, long surface, Consumer<Frame> frames, Runnable ready, Consumer<Throwable> failure) {
         this.display = MemorySegment.ofAddress(borrowedDisplay); this.target = surface;
-        this.frames = frames; this.failure = failure;
-        wire = new WaylandWire(this::failed);
-        queue = wire.pointer("wl_display_create_queue", display);
-        if (queue.address() == 0) { wire.close(); throw new IllegalStateException("Cannot create Wayland ink queue"); }
+        this.frames = frames; this.ready = ready; this.failure = failure;
         reader = new Thread(this::read, "byteink-wayland-pen"); reader.setDaemon(true);
-        try {
-            MemorySegment wrapper = wire.pointer("wl_proxy_create_wrapper", display);
-            MemorySegment registry;
-            try {
-                wire.procedure("wl_proxy_set_queue", wrapper, queue);
-                registry = wire.child(wrapper, 1, "wl_registry", MemorySegment.NULL);
-            } finally { wire.procedure("wl_proxy_wrapper_destroy", wrapper); }
-            own(registry, "wl_registry", 0);
-            if (wire.integer("wl_display_roundtrip_queue", display, queue) < 0 || !running)
-                throw new IllegalStateException("Cannot discover Wayland input globals");
-            // Flush bindings and device descriptions before accepting input.
-            if (wire.integer("wl_display_roundtrip_queue", display, queue) < 0 || !running)
-                throw new IllegalStateException("Cannot initialize Wayland ink devices");
-            reader.start();
-        } catch (Throwable error) { close(); throw error; }
+        reader.start();
+    }
+    private void discover() {
+        queue = wire.pointer("wl_display_create_queue", display);
+        if (queue.address() == 0) throw new IllegalStateException("Cannot create Wayland ink queue");
+        // Wrappers assign the queue atomically when each new proxy is created, even while JBR
+        // reads the shared display. The toolkit's display proxy and default queue stay untouched.
+        displayWrapper = wire.pointer("wl_proxy_create_wrapper", display);
+        if (displayWrapper.address() == 0) throw new IllegalStateException("Cannot wrap Wayland display");
+        wire.procedure("wl_proxy_set_queue", displayWrapper, queue);
+        own(wire.child(displayWrapper, 1, "wl_registry", MemorySegment.NULL), "wl_registry", 0);
+        discoveryBarrier();
+    }
+    private void discoveryBarrier() {
+        own(wire.child(displayWrapper, 0, "wl_callback", MemorySegment.NULL), "wl_callback", 0);
     }
     private void failed(Throwable error) {
-        if (running) { running = false; failure.accept(error); }
+        boolean report = running;
+        running = false;
+        if (failureCause == null) failureCause = error;
+        else if (failureCause != error) failureCause.addSuppressed(error);
+        if (report) try { failure.accept(error); }
+        catch (Throwable reporting) { error.addSuppressed(reporting); }
     }
     private void read() {
-        try { wire.readLoop(display, queue, () -> running); }
+        try {
+            if (!running) return;
+            WaylandWire acquired = new WaylandWire(this::failed);
+            synchronized (lifecycle) { wire = acquired; }
+            if (!running) return;
+            discover();
+            wire.readLoop(display, queue, () -> running);
+        }
         catch (Throwable error) { failed(error); }
+        finally {
+            try { releaseResources(); }
+            catch (Throwable error) { failed(error); }
+            if (failureCause == null) stopped.complete(null);
+            else stopped.completeExceptionally(failureCause);
+        }
     }
+    // Completion is for lifecycle verification/owners outside EDT; close itself never waits.
+    CompletableFuture<Void> termination() { return stopped; }
     private MemorySegment own(MemorySegment pointer, String type, long parent) {
         if (pointer.address() == 0) throw new IllegalStateException("Cannot create " + type);
         proxies.put(pointer.address(), new Proxy(pointer, type, parent));
@@ -118,6 +142,11 @@ final class WaylandPenBridge implements NativePenBridge {
             return;
         }
         switch (proxy.type()) {
+            case "wl_callback" -> {
+                release(self.address());
+                if (++discoveryBarriers == 1) discoveryBarrier();
+                else { initialized = true; ready.run(); }
+            }
             case "wl_registry" -> {
                 if (event.equals("global")) {
                     int name = number(args, 0), version = number(args, 2);
@@ -182,13 +211,15 @@ final class WaylandPenBridge implements NativePenBridge {
                 tool.axes = 0; tool.out = false;
             }
             case "proximity_out" -> tool.out = true;
-            case "down" -> tool.transitions.add(BEGIN);
+            // A sync reply can arrive between down and frame; gate the actual begin event,
+            // not only the frame that later publishes its accumulated observations.
+            case "down" -> { if (initialized) tool.transitions.add(BEGIN); }
             case "up" -> tool.transitions.add(FINISH);
             case "motion" -> { tool.x = fixed(args, 0); tool.y = fixed(args, 1); tool.changed = true; }
             case "pressure" -> { tool.pressure = Math.min(65535L, Integer.toUnsignedLong(number(args, 0))) / 65535f; tool.axes |= tool.capabilities & PRESSURE; tool.changed = true; }
             case "tilt" -> { tool.tiltX = (float) fixed(args, 0); tool.tiltY = (float) fixed(args, 1); tool.axes |= tool.capabilities & TILT; tool.changed = true; }
             case "frame" -> {
-                if (tool.surface == target && (tool.active || !tool.transitions.isEmpty())) {
+                if (initialized && tool.surface == target && (tool.active || !tool.transitions.isEmpty())) {
                     Point point = new Point(tool.x, tool.y, Integer.toUnsignedLong(number(args, 0)), tool.pressure, tool.tiltX, tool.tiltY, tool.kind == PEN ? tool.axes : 0);
                     boolean transitioned = !tool.transitions.isEmpty();
                     for (int phase : List.copyOf(tool.transitions)) {
@@ -210,7 +241,7 @@ final class WaylandPenBridge implements NativePenBridge {
         Touch touch = touches.get(key);
         switch (event) {
             case "down" -> {
-                if (pointer(args, 2).address() == target) {
+                if (initialized && pointer(args, 2).address() == target) {
                     Contact contact = new Contact(fixed(args, 4), fixed(args, 5));
                     Contact old = touch.contacts.put(number(args, 3), contact);
                     if (old != null) touch.pending.add(new Frame(old.id, CANCEL, TOUCH, List.of()));
@@ -254,34 +285,40 @@ final class WaylandPenBridge implements NativePenBridge {
         if (proxy != null) wire.destroy(proxy.pointer(), proxy.type());
     }
     @Override public void close() {
-        if (closed) return;
-        running = false;
-        if (reader.isAlive()) {
-            wire.wakeReader();
-            try { reader.join(3000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException("Wayland shutdown interrupted", e); }
-            if (reader.isAlive()) throw new IllegalStateException("Wayland ink reader did not stop; its callbacks remain allocated");
+        synchronized (lifecycle) {
+            if (!running) return;
+            running = false;
+            if (wire != null) wire.wakeReader();
         }
-        closed = true;
+    }
+    private void releaseResources() {
+        if (wire == null) return;
         boolean prepared = false, healthy = false, released = false;
         try {
             // Reserve a read after draining our queue. All other toolkit readers now wait until
             // cancel_read, so they cannot create an unobserved child between draining and destroy.
-            while (true) {
+            while (queue.address() != 0) {
                 if (wire.integer("wl_display_prepare_read_queue", display, queue) == 0) { prepared = true; break; }
                 if (wire.integer("wl_display_dispatch_queue_pending", display, queue) < 0) break;
             }
             healthy = prepared && wire.integer("wl_display_get_error", display) == 0;
             for (long key : List.copyOf(proxies.keySet())) release(key);
+            if (displayWrapper.address() != 0) wire.procedure("wl_proxy_wrapper_destroy", displayWrapper);
             wire.integer("wl_display_flush", display);
             released = true;
         } finally {
             // prepare_read_queue can succeed on a terminal display too; pair every successful call.
             if (prepared) wire.procedure("wl_display_cancel_read", display);
-            wire.procedure("wl_event_queue_destroy", queue);
-            try { wire.closeWakeup(); }
-            finally {
-                if (healthy && released) wire.close();
-                else synchronized (FAILED_DISPLAYS) { FAILED_DISPLAYS.add(wire); }
+            if (queue.address() != 0) wire.procedure("wl_event_queue_destroy", queue);
+            // Exclude a concurrent stop+wake while closing its descriptor/arena. No protocol
+            // dispatch or compositor wait runs under this short lock or on the UI thread.
+            synchronized (lifecycle) {
+                try { wire.closeWakeup(); }
+                finally {
+                    if ((healthy || queue.address() == 0) && released) wire.close();
+                    else synchronized (FAILED_DISPLAYS) { FAILED_DISPLAYS.add(wire); }
+                    wire = null;
+                }
             }
         }
     }

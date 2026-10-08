@@ -8,6 +8,7 @@ import com.vivenotes.byteink.kit.ViveBrushes
 import com.vivenotes.byteink.kit.subtract
 import java.awt.Dimension
 import java.awt.EventQueue
+import java.awt.event.MouseEvent
 import java.awt.image.BufferedImage
 import java.lang.foreign.Arena
 import java.lang.foreign.Linker
@@ -18,7 +19,11 @@ import java.lang.invoke.MethodHandle
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.FutureTask
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.BorderFactory
 import javax.swing.JFrame
@@ -38,12 +43,19 @@ class WaylandPenIntegrationTest {
         while (System.nanoTime() < deadline) { if (ui(check)) return; Thread.sleep(10) }
         fail(message)
     }
+    private fun <T> responsiveUi(action: () -> T): T {
+        val task = FutureTask(action)
+        EventQueue.invokeLater(task)
+        return task.get(2, TimeUnit.SECONDS)
+    }
+    private fun awaitReadersStopped() = await("native Wayland readers release their callbacks off EDT") {
+        Thread.getAllStackTraces().keys.none { it.isAlive && it.name == "byteink-wayland-pen" }
+    }
     private class Window(val frame: JFrame, val panel: InkLowLatencyPanel, val finished: MutableList<Stroke>) : AutoCloseable {
         override fun close() { panel.close(); frame.dispose() }
     }
     private fun window(predictorFactory: (() -> InkInputPredictor)? = { InkLinearPredictor() }): Window {
         assertTrue(ui { WaylandRuntime.isWayland() }, "Tests must use JBR's native Wayland toolkit")
-        val readers = Thread.getAllStackTraces().keys.count { it.isAlive && it.name == "byteink-wayland-pen" }
         val window = ui {
             val finished = mutableListOf<Stroke>()
             val frame = JFrame("Isolated Wayland pen verification").also { it.isUndecorated = true }
@@ -57,7 +69,7 @@ class WaylandPenIntegrationTest {
             Window(frame, panel, finished)
         }
         await("configured Wayland surface, native capture and first Skia frame") {
-            window.panel.renderedFrameCount > 0 && Thread.getAllStackTraces().keys.count { it.isAlive && it.name == "byteink-wayland-pen" } == readers + 1
+            window.panel.renderedFrameCount > 0 && window.panel.isInputReady
         }
         return window
     }
@@ -187,8 +199,7 @@ class WaylandPenIntegrationTest {
                 window.panel.authoringEnabled = true
             }
             await("reenabling authoring restores retained buffers and native capture") {
-                window.panel.retainedPixelBytes > 0L &&
-                    Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-wayland-pen" }
+                window.panel.retainedPixelBytes > 0L && window.panel.isInputReady
             }
             injector(window).use { input ->
                 val before = ui { window.finished.size }
@@ -210,8 +221,7 @@ class WaylandPenIntegrationTest {
             }
             ui { window.frame.isVisible = true }
             await("retained raster and input reconnect on a fresh Wayland surface") {
-                window.panel.retainedPixelBytes > 0L &&
-                    Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-wayland-pen" }
+                window.panel.retainedPixelBytes > 0L && window.panel.isInputReady
             }
             assertActualPainterMatchesFullRedraw(window, "hide/show reconnect")
         } finally { ui { window.close(); assertEquals(0L, window.panel.retainedPixelBytes) } }
@@ -252,7 +262,7 @@ class WaylandPenIntegrationTest {
                 assertTrue(inkPixel(window) and 0xff < 200, "finished scene retains visible ink after wet handoff")
             }
         } finally { ui { window.close() } }
-        assertFalse(Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-wayland-pen" })
+        awaitReadersStopped()
     }
 
     @Test fun separateWindowsShareTheToolkitConnectionWithoutCrossCaptureOrClosingIt() {
@@ -310,9 +320,9 @@ class WaylandPenIntegrationTest {
                     await("device removal cancels") { window.panel.session.activePointerIds.isEmpty() }
                 }
                 ui { window.frame.isVisible = false }
-                assertFalse(Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-wayland-pen" })
+                awaitReadersStopped()
                 ui { window.frame.isVisible = true }
-                await("Wayland reattach") { Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-wayland-pen" } }
+                await("Wayland reattach") { window.panel.isInputReady }
                 send(window, input, 0)
                 await("new surface contact") { window.panel.session.activePointerIds.size == 1 }
                 send(window, input, 2, 110.0, time = 1020)
@@ -321,6 +331,7 @@ class WaylandPenIntegrationTest {
                 send(window, input, 0); send(window, input, 2)
                 Thread.sleep(100)
                 ui { assertEquals(1, window.finished.size); window.panel.authoringEnabled = true }
+                await("capture ready after enabling") { window.panel.isInputReady }
                 send(window, input, 6, time = 1030)
                 await("same-frame down/up") { window.finished.size == 2 }
             }
@@ -375,13 +386,208 @@ class WaylandPenIntegrationTest {
                         window.panel.authoringEnabled = true
                     }
                 }
+                await("current generation ready after hotplug/detach") { window.panel.isInputReady }
                 send(window, input, 0, time = 1100)
                 await("pen survives hotplug during repeated detach") { window.panel.session.activePointerIds.size == 1 }
                 send(window, input, 2, 120.0, time = 1110)
                 await("finish after hotplug/detach") { window.finished.size == 1 }
             }
         } finally { ui { window.close() } }
-        assertFalse(Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-wayland-pen" })
+        awaitReadersStopped()
+    }
+
+    @Test fun delayedDiscoveryKeepsEdtResponsiveAndRequiresBothSyncReplies() {
+        var attachNanos = 0L
+        WaylandDiscoveryConnection().use { connection ->
+            val ready = AtomicInteger()
+            val failure = AtomicReference<Throwable>()
+            val bridge = responsiveUi {
+                val start = System.nanoTime()
+                WaylandPenBridge(connection.display(), 1L, { fail("No input devices were advertised") },
+                    { ready.incrementAndGet() }, { failure.set(it) }).also { attachNanos = System.nanoTime() - start }
+            }
+            try {
+                val first = connection.nextSync()
+                Thread.sleep(150)
+                responsiveUi { assertEquals(0, ready.get(), "no readiness before registry discovery") }
+                connection.completeSync(first)
+                val second = connection.nextSync()
+                Thread.sleep(150)
+                responsiveUi { assertEquals(0, ready.get(), "globals alone do not establish device readiness") }
+                connection.completeSync(second)
+                await("asynchronous device discovery completes") { ready.get() == 1 }
+                assertNull(failure.get())
+            } finally { responsiveUi { bridge.close() }; bridge.termination().get(3, TimeUnit.SECONDS) }
+        }
+        WaylandDiscoveryConnection().use { reference ->
+            val blocked = FutureTask {
+                val start = System.nanoTime()
+                reference.blockingDiscoveryReference()
+                System.nanoTime() - start
+            }
+            val heartbeat = FutureTask { true }
+            EventQueue.invokeLater(blocked)
+            try {
+                val first = reference.nextSync()
+                EventQueue.invokeLater(heartbeat)
+                Thread.sleep(150)
+                assertFalse(heartbeat.isDone, "the synchronous reference stalls a queued UI task")
+                reference.completeSync(first)
+                val second = reference.nextSync()
+                Thread.sleep(150)
+                assertFalse(heartbeat.isDone, "the synchronous reference still stalls during device discovery")
+                reference.completeSync(second)
+                val blockedNanos = blocked.get(3, TimeUnit.SECONDS)
+                assertTrue(heartbeat.get(3, TimeUnit.SECONDS))
+                println("Wayland controlled delayed discovery: attachEdtNanos=$attachNanos, " +
+                    "blockingReferenceEdtNanos=$blockedNanos, withheldReplyMillis=300")
+            } finally {
+                if (!blocked.isDone) { reference.disconnectServer(); runCatching { blocked.get(3, TimeUnit.SECONDS) } }
+            }
+        }
+    }
+
+    @Test fun closeDuringEitherDiscoveryBarrierCanReattachOnTheSameDisplay() {
+        for (barrier in 1..2) WaylandDiscoveryConnection().use { connection ->
+            val ready = AtomicInteger()
+            val failure = AtomicReference<Throwable>()
+            val bridge = responsiveUi { WaylandPenBridge(connection.display(), 1L, {},
+                { ready.incrementAndGet() }, { failure.set(it) }) }
+            var pending = connection.nextSync()
+            if (barrier == 2) { connection.completeSync(pending); pending = connection.nextSync() }
+            var closeNanos = 0L
+            try {
+                responsiveUi { val start = System.nanoTime(); bridge.close(); closeNanos = System.nanoTime() - start }
+                bridge.termination().get(3, TimeUnit.SECONDS)
+                responsiveUi { assertEquals(0, ready.get()); assertNull(failure.get()) }
+                // Deliver the old callback after its queue/upcalls were released. It must neither
+                // invoke freed closures nor mark a replacement bridge ready on this shared display.
+                connection.completeSync(pending)
+                val replacement = responsiveUi { WaylandPenBridge(connection.display(), 1L, {},
+                    { ready.incrementAndGet() }, { failure.set(it) }) }
+                try {
+                    connection.completeSync(connection.nextSync())
+                    responsiveUi { assertEquals(0, ready.get()) }
+                    connection.completeSync(connection.nextSync())
+                    await("replacement capture ready after canceled barrier $barrier") { ready.get() == 1 }
+                    assertNull(failure.get())
+                } finally { responsiveUi { replacement.close() }; replacement.termination().get(3, TimeUnit.SECONDS) }
+                println("Wayland controlled canceled discovery: barrier=$barrier, closeEdtNanos=$closeNanos")
+            } finally { bridge.close(); bridge.termination().get(3, TimeUnit.SECONDS) }
+        }
+    }
+
+    @Test fun disconnectDuringEitherDiscoveryBarrierReportsFailureOnceAndStops() {
+        for (barrier in 1..2) WaylandDiscoveryConnection().use { connection ->
+            val ready = AtomicInteger()
+            val failures = AtomicInteger()
+            val bridge = responsiveUi { WaylandPenBridge(connection.display(), 1L, {},
+                { ready.incrementAndGet() }, { failures.incrementAndGet() }) }
+            try {
+                val first = connection.nextSync()
+                if (barrier == 2) { connection.completeSync(first); connection.nextSync() }
+                connection.disconnectServer()
+                assertFailsWith<ExecutionException> { bridge.termination().get(3, TimeUnit.SECONDS) }
+                responsiveUi { assertEquals(1, failures.get()); assertEquals(0, ready.get()); bridge.close(); bridge.close() }
+            } finally { bridge.close(); runCatching { bridge.termination().get(3, TimeUnit.SECONDS) } }
+        }
+    }
+
+    @Test fun penAndTouchBeginsBeforeReadinessStayIgnoredWhenTheirFramesArriveAfterIt() {
+        WaylandDiscoveryConnection(true).use { connection ->
+            val frames = ConcurrentLinkedQueue<NativePenBridge.Frame>()
+            val ready = AtomicInteger()
+            val failure = AtomicReference<Throwable>()
+            val bridge = responsiveUi { WaylandPenBridge(connection.display(), connection.surface(), { frames.add(it) },
+                { ready.incrementAndGet() }, { failure.set(it) }) }
+            try {
+                connection.completeSync(connection.nextSync())
+                val devices = connection.nextSync()
+                connection.awaitTouchBinding()
+                assertEquals(0, ready.get())
+                connection.penDownWithoutFrame()
+                connection.touchDownWithoutFrame()
+                connection.completeSync(devices)
+                connection.finishPenContact()
+                connection.finishTouchContact()
+                // Valid contacts then act as an ordered marker: the last touch finish proves
+                // all earlier tablet/touch events, including frames straddling sync, dispatched.
+                connection.penDownWithoutFrame()
+                connection.finishPenContact()
+                connection.touchDownWithoutFrame()
+                connection.finishTouchContact()
+                await("valid post-readiness contacts finish") {
+                    frames.any { it.tool() == NativePenBridge.TOUCH && it.phase() == NativePenBridge.FINISH }
+                }
+                assertEquals(1, ready.get())
+                assertNull(failure.get())
+                for (tool in listOf(NativePenBridge.PEN, NativePenBridge.TOUCH)) {
+                    assertEquals(listOf(NativePenBridge.BEGIN, NativePenBridge.MOVE, NativePenBridge.FINISH),
+                        frames.filter { it.tool() == tool }.map { it.phase() }, "only the contact beginning after readiness is accepted")
+                }
+                assertTrue(frames.filter { it.tool() == NativePenBridge.PEN }.all { it.points().single().axes() == NativePenBridge.PRESSURE })
+                assertTrue(frames.filter { it.tool() == NativePenBridge.TOUCH }.all { it.points().single().axes() == 0 })
+            } finally { responsiveUi { bridge.close() }; bridge.termination().get(3, TimeUnit.SECONDS) }
+        }
+    }
+
+    @Test fun immediateCloseBeforeDiscoveryCanBeRepeatedWithoutReaderOrDescriptorLeaks() {
+        val descriptors = Files.list(Path.of("/proc/self/fd")).use { it.count() }
+        WaylandDiscoveryConnection().use { connection ->
+            val bridges = responsiveUi {
+                List(40) { WaylandPenBridge(connection.display(), 1L, {},
+                    { fail("Canceled discovery must never publish readiness") },
+                    { fail("Canceled discovery failed", it) }).also { it.close(); it.close() } }
+            }
+            bridges.forEach { it.termination().get(3, TimeUnit.SECONDS) }
+        }
+        awaitReadersStopped()
+        val after = Files.list(Path.of("/proc/self/fd")).use { it.count() }
+        assertTrue(after <= descriptors + 2, "canceled discovery leaked descriptors: $descriptors -> $after")
+    }
+
+    @Test fun nativeSubscriptionReadinessResetsAndDropsContactsBeginningBeforeDiscovery() {
+        val window = window()
+        val events = mutableListOf<InkInputEvent>()
+        val failures = mutableListOf<Throwable>()
+        lateinit var source: NativeInkInputSource
+        var subscription: AutoCloseable? = null
+        try {
+            ui {
+                window.panel.authoringEnabled = false
+                assertFalse(window.panel.isInputReady)
+                val component = window.panel.components.single()
+                source = NativeInkInputSource(component, window.panel.nativeWindowHandle, onFailure = { failures.add(it) })
+                repeat(20) {
+                    source.subscribe { fail("Old subscription delivered input") }.close()
+                    assertFalse(source.isReady)
+                }
+                subscription = source.subscribe { assertTrue(EventQueue.isDispatchThread()); events.add(it) }
+                assertFalse(source.isReady, "readiness is published through the EDT queue")
+                component.dispatchEvent(MouseEvent(component, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(),
+                    0, 20, 60, 1, false, MouseEvent.BUTTON1))
+            }
+            await("current direct native subscription is ready") { source.isReady }
+            ui {
+                val component = window.panel.components.single()
+                component.dispatchEvent(MouseEvent(component, MouseEvent.MOUSE_DRAGGED, System.currentTimeMillis(),
+                    MouseEvent.BUTTON1_DOWN_MASK, 50, 60, 0, false, MouseEvent.NOBUTTON))
+                component.dispatchEvent(MouseEvent(component, MouseEvent.MOUSE_RELEASED, System.currentTimeMillis(),
+                    0, 80, 60, 1, false, MouseEvent.BUTTON1))
+                assertTrue(events.isEmpty(), "the rest of a pre-readiness mouse contact stays ignored")
+            }
+            injector(window).use { input ->
+                send(window, input, 0)
+                send(window, input, 2, 100.0, time = 1010)
+                await("ready subscription receives a complete real tablet contact") { events.any { it is InkInputEvent.Finish } }
+            }
+            ui {
+                assertEquals(1, events.count { it is InkInputEvent.Begin })
+                assertTrue(failures.isEmpty())
+                subscription!!.close()
+                assertFalse(source.isReady)
+            }
+        } finally { ui { subscription?.close(); window.close() }; awaitReadersStopped() }
     }
 
     @Test fun idleNativeQueueWaitsWithoutTimeoutWakeupsAndExplicitShutdownCancelsItsRead() {

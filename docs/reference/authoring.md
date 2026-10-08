@@ -624,9 +624,9 @@ public class NativeInkInputSource( private val component: Component, private val
 | `windowHandle` | `Long` | `Required` | Nonzero matching native HWND, XID, or configured JBR Wayland top-level wl_surface handle; not an AWT object identity. |
 | `pixelsPerLocalUnit` | `() -> Float` | `{ 1f }` | Callback returning finite positive native pixels per component-local logical unit; native points are divided by this scale. |
 | `centimetersPerNativePixel` | `Float?` | `null` | Optional calibrated finite positive centimeters per native pixel; logical display DPI is not physical calibration. |
-| `onFailure` | `(Throwable) -> Unit` | `{ throw IllegalStateException("Native ink capture failed", it) }` | EDT callback after capture is stopped and gestures cancelled; the default throws an IllegalStateException. |
+| `onFailure` | `(Throwable) -> Unit` | `{ throw IllegalStateException("Native ink capture failed", it) }` | EDT callback after delivery is stopped and gestures cancelled, including asynchronous Wayland setup failures; native cleanup can finish on its reader. The default throws an IllegalStateException. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L38)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L40)
 
 ### `NativeInkInputSource.backend`
 
@@ -636,11 +636,21 @@ public val backend: InkNativeBackend
 
 Native capture backend selected from the operating system and actual AWT toolkit.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L45)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L47)
+
+### `NativeInkInputSource.isReady`
+
+```kotlin
+public var isReady: Boolean
+```
+
+Read on EDT. True after the current subscription initializes; false before subscription and immediately after close/failure. Native Wayland publishes readiness asynchronously after registry/device discovery. Does not imply tablet hardware/protocol availability. Private setter.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L56)
 
 ### `NativeInkInputSource.subscribe`
 
-EDT-only; component must be displayable, with one subscription per source. Recreate after a Wayland hide/show. Acquisition failures are explicit; native runtime errors deliver Cancel, close capture, then invoke onFailure. Listener exceptions close capture and are rethrown.
+EDT-only; component must be displayable, with one subscription per source. Recreate after a Wayland hide/show. Wayland setup returns asynchronously, publishes isReady on EDT after both discovery sync replies, and ignores contacts beginning earlier. Close clears readiness/delivery immediately and signals off-EDT cleanup. Generation checks discard old packets after resubscription. Wayland setup/runtime errors deliver Cancel, close capture, then invoke onFailure on EDT. Windows/X11 acquisition stays synchronous. Listener exceptions close capture and are rethrown.
 
 ```kotlin
 override public fun subscribe(listener: (InkInputEvent) -> Unit): AutoCloseable
@@ -650,7 +660,7 @@ override public fun subscribe(listener: (InkInputEvent) -> Unit): AutoCloseable
 | --- | --- | --- | --- |
 | `listener` | `(InkInputEvent) -> Unit` | `Required` | Serial UI-thread event callback; closing the subscription stops callbacks. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L58)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L64)
 
 ## InkLowLatencyPanel
 
@@ -803,6 +813,16 @@ Cumulative input event packets delivered to the session; a Batch may contain man
 
 [Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L81)
 
+### `InkLowLatencyPanel.isInputReady`
+
+```kotlin
+public val isInputReady: Boolean
+```
+
+Read on EDT. True when the panel has a ready subscription. Native Wayland waits for asynchronous discovery; supplied custom sources are assumed ready after subscribe returns. False on detach, disable, close or native failure.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L84)
+
 ### `InkLowLatencyPanel.nativeWindowHandle`
 
 ```kotlin
@@ -811,7 +831,7 @@ public val nativeWindowHandle: Long
 
 Matching HWND/XID or configured top-level Wayland wl_surface; query on the EDT only after attachment.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L84)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L86)
 
 ### `InkLowLatencyPanel.authoringEnabled`
 
@@ -821,7 +841,7 @@ public var authoringEnabled: Boolean
 
 Writable EDT input switch; disabling cancels active gestures and closes capture, enabling reacquires it.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L110)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L113)
 
 ### `InkLowLatencyPanel.addNotify`
 
@@ -829,7 +849,7 @@ Writable EDT input switch; disabling cancels active gestures and closes capture,
 override public fun addNotify()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L176)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L179)
 
 ### `InkLowLatencyPanel.removeNotify`
 
@@ -837,7 +857,7 @@ override public fun addNotify()
 override public fun removeNotify()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L184)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L187)
 
 ### `InkLowLatencyPanel.requestInkRender`
 
@@ -847,7 +867,7 @@ Invalidates retained finished content and coalesces an EDT render request. Scene
 public fun requestInkRender()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L190)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L193)
 
 ### `InkLowLatencyPanel.close`
 
@@ -857,7 +877,7 @@ Terminal EDT cleanup: cancels input, retires wet caches, releases retained raste
 override public fun close()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L225)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L228)
 
 ### `InkLowLatencySurface`
 
@@ -881,4 +901,4 @@ public fun InkLowLatencySurface( brush: Brush, modifier: Modifier = Modifier, st
 | `onStrokeFinished` | `(Long, Stroke) -> Unit` | `Required` | Captured (pointerId, canonical real-input Stroke) callback; update finished content synchronously and enqueue persistence. |
 | `drawContent` | `(Canvas, Int, Int) -> Unit` | `{ _, _, _ -> }` | Compose Canvas callback drawn before wet ink; width/height and canvas coordinates use AWT component-local logical units. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L291)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L298)

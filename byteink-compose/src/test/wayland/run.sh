@@ -78,11 +78,19 @@ import xml.etree.ElementTree as ET
 result, evidence, scale, suite, backend = sys.argv[1:]
 xml = Path(result)
 root = ET.parse(xml).getroot()
-required = ({'nativeDirtyFramesRetainFinishedContentAndMatchFullPainterThroughEraseAndReconnect'} if suite == 'pen' else {
+required = ({
+    'nativeDirtyFramesRetainFinishedContentAndMatchFullPainterThroughEraseAndReconnect',
+    'delayedDiscoveryKeepsEdtResponsiveAndRequiresBothSyncReplies',
+    'closeDuringEitherDiscoveryBarrierCanReattachOnTheSameDisplay',
+    'disconnectDuringEitherDiscoveryBarrierReportsFailureOnceAndStops',
+    'penAndTouchBeginsBeforeReadinessStayIgnoredWhenTheirFramesArriveAfterIt',
+    'immediateCloseBeforeDiscoveryCanBeRepeatedWithoutReaderOrDescriptorLeaks',
+    'nativeSubscriptionReadinessResetsAndDropsContactsBeginningBeforeDiscovery',
+} if suite == 'pen' else {
     'realNativeDestinationPresentsWetAlphaAndFinishedHandoff',
     'nativeHideResizeReconfigureAndDisabledFallbackPreserveFinishedPixels',
 })
-if (int(root.get('tests', 0)) < (10 if suite == 'pen' else 2) or
+if (int(root.get('tests', 0)) < (16 if suite == 'pen' else 2) or
         not required.issubset({case.get('name') for case in root.findall('testcase')}) or
         any(int(root.get(key, 0)) for key in ['skipped', 'failures', 'errors'])):
     raise SystemExit('All selected native Wayland cases must finish without errors or skips (toolkit termination is not a pass).')

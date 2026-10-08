@@ -99,6 +99,21 @@ waits for configuration and automatically reconnects. It also cancels on proximi
 removal, focus loss and disable/disposal. Hosts using another Wayland runtime can supply their own
 `InkInputSource`.
 
+Wayland subscription starts discovery on its reader thread and returns without waiting for the
+compositor. Read `NativeInkInputSource.isReady` on EDT, or `InkLowLatencyPanel.isInputReady` for the
+built-in panel. Readiness becomes true on EDT after registry discovery and the device-binding sync
+reply. It describes an initialized subscription, not the presence of a physical tablet; AWT mouse
+can work without tablet-v2. Pen, touch and mouse contacts beginning before readiness are ignored,
+including their subsequent moves/releases. Windows/X11 remain ready when subscription returns;
+caller-supplied panel sources are assumed ready when their `subscribe` returns.
+
+Closing a Wayland subscription immediately clears readiness, invalidates its delivery generation
+and drops queued callbacks. It signals the reader without joining it on EDT; that reader releases
+its own proxies, queue and callbacks, including when stopped during discovery. A replacement can
+subscribe while that cleanup finishes. A discovery/connection error is delivered on EDT through
+`onFailure`, after cancelling gestures and closing that subscription. A late readiness or failure
+from a closed subscription cannot affect its replacement.
+
 The dedicated layer coalesces packet bursts into one direct Skia recording/presentation request,
 uses double buffering and disables vsync throttling on Windows/X11. Native Wayland uses Skiko's
 `SkiaSwingLayer` with software rasterization and immediate EDT painting, because the pinned
