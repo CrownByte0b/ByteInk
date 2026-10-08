@@ -38,8 +38,17 @@ The renderer supports row/column atlas layouts, restart/reverse loops and per-pa
 
 Geometry is cached by shape and effective linear canvas transform. Translation reuses prepared
 vertices; zoom, recoloring and atlas frames rebuild them. Finished geometry has count and byte
-limits, live geometry is weakly owned and refreshed by shape version, and texture shaders have
-a separate entry limit. Rendering uses Compose `drawVertices` and Skia runtime shaders in batches
+limits, and live geometry is weakly owned. On shape changes the renderer compares owned snapshots
+by raw vertex bits and triangle indices, prepares changed vertices and reuses only verified unchanged
+sixteen-triangle chunks. Prediction shrink, earlier vertex mutation and moving partitions invalidate
+affected chunks; this comparison does not consume native damage. Texture-free chunk shaders are
+retained until replacement, eviction or retirement. Textured shaders retain their per-draw behavior
+so input-relative origins and image selection stay current. Geometry metrics include primitive
+scratch capacity and retained shader uniform bytes; JVM headers and additional native/driver
+storage remain outside those estimates. Live bytes are separate from the finished byte budget;
+custom hosts must call `releaseLiveStroke` before clearing/reusing an engine.
+
+Texture shaders have a separate entry limit. Rendering uses Compose `drawVertices` and Skia runtime shaders in batches
 of sixteen triangles because Skiko 0.150.1 does not expose SkMesh. Performance depends on mesh
 size and backend; this implementation does not establish low-latency pen input parity.
 
@@ -56,3 +65,9 @@ texture blending and placement, atlas animation, live predictions, erasure meshe
 alpha/clipping, cache lifetime and color-managed surfaces. The Android hardware comparison
 checks all 280 committed reference cases with MAE at most 1/255, SSIM at least 0.99 and no
 unexplained interior pixels. Passing these gates does not imply identical hardware pixels.
+
+Incremental preparation controls also compare exact full-render pixels and prepared arrays through
+timed prefix mutation, prediction changes, skipped updates, transforms/color/atlas changes and
+native partitions crossing 65,535 vertices. The full owned native export and sixteen-triangle draw
+granularity remain. See [the step 2 performance report](../PERFORMANCE_WET_MESH.md) for measured
+benefits and remaining software paint costs.

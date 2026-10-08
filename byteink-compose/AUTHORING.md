@@ -133,6 +133,13 @@ retention and raster work; Skiko's full-window pixel transfers and compositor wo
 The panel owns its session's updated-region accumulator: borrowed live engines must not be mutated
 or have `resetUpdatedRegion()` called by another consumer.
 
+The mesh renderer also retains verified unchanged wet vertices, sixteen-triangle chunks and
+texture-free chunk shaders between paints. It compares complete owned snapshots, including all
+referenced attributes and indices, independently of the native damage accumulator. Changed
+predictions, transforms, colors, atlas frames and partition layouts rebuild affected preparation;
+completion/cancellation releases it. Full snapshot export and Skiko's full-window presentation
+copies remain. See [RENDERING.md](RENDERING.md) for cache accounting and renderer ownership.
+
 Verification:
 
 ```sh

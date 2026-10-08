@@ -3,6 +3,7 @@ memory/
 benchmarks/*
 !benchmarks/run_pen.py
 !benchmarks/run_retained_authoring.py
+!benchmarks/run_wet_mesh.py
 !benchmarks/pen/
 benchmarks/pen/*
 !benchmarks/pen/*.java

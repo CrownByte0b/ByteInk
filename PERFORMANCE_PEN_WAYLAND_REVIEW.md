@@ -228,7 +228,13 @@ prediction retraction, and exposes a combined 64 MiB pixel budget with full-redr
 Fifteen exact pixel cases, ten actual Wayland cases at both 1x/2x, the fresh complete Linux/JBR25 build
 and existing X11/OpenGL checks pass. Implementation, matched measurements and remaining limits
 are recorded in [PERFORMANCE_RETAINED_AUTHORING.md](PERFORMANCE_RETAINED_AUTHORING.md).
-Items 2–5 and complete input-arrival/presentation diagnostics remain separate follow-ups.
+Item 2 is also complete: exact owned wet-snapshot comparisons reuse unchanged vertices,
+sixteen-triangle chunks and texture-free shaders. Long retained-paint JVM allocation falls
+88.4%, with a modest 8.7% retained-raster median benefit; complete Swing timing ranges overlap
+and P95 does not improve. Estimated wet-cache storage rises 85.7%. All 2,418 fresh Linux/native
+test executions pass with six expected skips; native export remains whole because the measured
+cost does not justify a new bridge. See [PERFORMANCE_WET_MESH.md](PERFORMANCE_WET_MESH.md).
+Items 3–5 and complete input-arrival/presentation diagnostics remain separate follow-ups.
 
 ## Primary sources checked
 

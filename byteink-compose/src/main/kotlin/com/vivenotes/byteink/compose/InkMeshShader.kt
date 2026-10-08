@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.VertexMode
 import androidx.compose.ui.graphics.Vertices
 import com.vivenotes.byteink.core.StrokeMesh
+import org.jetbrains.skia.Shader
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -25,12 +26,70 @@ internal const val VARYING_STRIDE = 16
 internal data class MeshLinearTransform(val a: Float, val b: Float, val d: Float, val e: Float)
 internal data class MeshColor(val r: Float, val g: Float, val b: Float, val a: Float)
 internal data class StampAnimation(val progress: Float, val frames: Int, val rows: Int, val columns: Int)
-internal class MeshChunk(val vertices: Vertices, val varyings: FloatArray)
+internal class MeshChunk(val vertices: Vertices, val varyings: FloatArray) {
+    // Only texture-free shaders are retained: texture origins and providers can change per draw.
+    var untexturedShader: Shader? = null
+    val bytes: Long get() = varyings.size * 4L + vertices.positions.size * 4L +
+        vertices.textureCoordinates.size * 4L + vertices.colors.size * 4L + vertices.indices.size * 2L +
+        (if (untexturedShader == null) 0L else varyings.size * 4L)
+    fun close() { untexturedShader?.close(); untexturedShader = null }
+}
+
+/** The prior state is consumed by the next preparation; close only the latest returned state. */
+internal class PreparedMesh(
+    val mesh: StrokeMesh,
+    val transform: MeshLinearTransform,
+    val color: MeshColor,
+    val stamp: StampAnimation?,
+    val positions: FloatArray,
+    val varying: FloatArray,
+    val changed: BooleanArray,
+    val chunks: List<MeshChunk>,
+    val preparedVertexCount: Int,
+    val preparedChunkCount: Int,
+    val reusedChunkCount: Int,
+) {
+    val scratchBytes: Long get() = positions.size * 4L + varying.size * 4L + changed.size
+    fun close() = chunks.forEach { it.close() }
+}
+
+private class MeshVertexTemplate(val count: Int) {
+    val positions = List(count * 3) { Offset.Zero }
+    val coordinates = List(count * 3) { corner ->
+        Offset((corner / 3) * 2f + .5f + if (corner % 3 == 1) 1f else 0f, if (corner % 3 == 2) 1f else 0f)
+    }
+    val colors = List(count * 3) { Color.White }
+    val indices = List(count * 3) { it }
+    fun vertices() = Vertices(VertexMode.Triangles, positions, coordinates, colors, indices)
+}
+
+// Immutable constructor lists avoid allocating/boxing two point lists and an index list per chunk.
+private val vertexTemplates = Array(MESH_TRIANGLES_PER_DRAW) { MeshVertexTemplate(it + 1) }
+
+private fun meshChunk(mesh: StrokeMesh, positions: FloatArray, varying: FloatArray, start: Int, count: Int): MeshChunk {
+    val vertices = vertexTemplates[count - 1].vertices()
+    val data = FloatArray(MESH_TRIANGLES_PER_DRAW * 3 * VARYING_STRIDE)
+    repeat(count * 3) { corner ->
+        val index = mesh.triangles[start * 3 + corner]
+        vertices.positions[corner * 2] = positions[index * 2]
+        vertices.positions[corner * 2 + 1] = positions[index * 2 + 1]
+        varying.copyInto(data, corner * VARYING_STRIDE, index * VARYING_STRIDE, (index + 1) * VARYING_STRIDE)
+    }
+    return MeshChunk(vertices, data)
+}
 
 /** CPU equivalent of Ink's vertex shader. Skiko exposes fragment RuntimeEffects and drawVertices. */
 internal fun prepareMesh(mesh: StrokeMesh, transform: MeshLinearTransform, color: MeshColor, stamp: StampAnimation?): List<MeshChunk> {
     val positions = FloatArray(mesh.vertexCount * 2)
     val varying = FloatArray(mesh.vertexCount * VARYING_STRIDE)
+    prepareVertices(mesh, transform, color, stamp, positions, varying, null)
+    return (0 until mesh.triangleCount step MESH_TRIANGLES_PER_DRAW).map { start ->
+        meshChunk(mesh, positions, varying, start, minOf(MESH_TRIANGLES_PER_DRAW, mesh.triangleCount - start))
+    }
+}
+
+private fun prepareVertices(mesh: StrokeMesh, transform: MeshLinearTransform, color: MeshColor, stamp: StampAnimation?,
+    positions: FloatArray, varying: FloatArray, changed: BooleanArray?) {
     val v = mesh.vertices
     val det = abs(transform.a * transform.e - transform.b * transform.d)
     val hasHsl = mesh.attributeMask and (1 shl 2) != 0
@@ -46,6 +105,7 @@ internal fun prepareMesh(mesh: StrokeMesh, transform: MeshLinearTransform, color
         return maxOf(0.000001f, det * (dx * dx + dy * dy) / maxOf(0.000001f, sqrt(rx * rx + ry * ry)))
     }
     repeat(mesh.vertexCount) { vertex ->
+        if (changed != null && !changed[vertex]) return@repeat
         val i = vertex * StrokeMesh.VERTEX_STRIDE
         val o = vertex * VARYING_STRIDE
         val sx = v[i + 6]; val sy = v[i + 7]; val sl = v[i + 8]
@@ -105,23 +165,58 @@ internal fun prepareMesh(mesh: StrokeMesh, transform: MeshLinearTransform, color
             varying[o + 15] = (v[i + 13] + frame / stamp.columns) / stamp.rows
         }
     }
-    return (0 until mesh.triangleCount step MESH_TRIANGLES_PER_DRAW).map { start ->
-        val count = minOf(MESH_TRIANGLES_PER_DRAW, mesh.triangleCount - start)
-        val points = ArrayList<Offset>(count * 3)
-        val coords = ArrayList<Offset>(count * 3)
-        val data = FloatArray(MESH_TRIANGLES_PER_DRAW * 3 * VARYING_STRIDE)
-        repeat(count) { triangle ->
-            repeat(3) { corner ->
-                val index = mesh.triangles[(start + triangle) * 3 + corner]
-                points.add(Offset(positions[index * 2], positions[index * 2 + 1]))
-                // Keep each interval away from integer ID boundaries: interpolation rounding
-                // at an edge must not select its neighboring triangle's uniform attributes.
-                coords.add(Offset(triangle * 2f + .5f + if (corner == 1) 1f else 0f, if (corner == 2) 1f else 0f))
-                varying.copyInto(data, (triangle * 3 + corner) * VARYING_STRIDE, index * VARYING_STRIDE, (index + 1) * VARYING_STRIDE)
+}
+
+/** Exact owned-snapshot comparison, independent of native damage resets or assumed stable prefixes. */
+internal fun prepareMeshIncrementally(mesh: StrokeMesh, transform: MeshLinearTransform, color: MeshColor,
+    stamp: StampAnimation?, previous: PreparedMesh? = null): PreparedMesh {
+    val old = previous?.mesh
+    val sameKey = previous != null && previous.transform == transform && previous.color == color && previous.stamp == stamp
+    val oldCapacity = previous?.changed?.size ?: 0
+    val capacity = when {
+        mesh.vertexCount == 0 -> 0
+        mesh.vertexCount > oldCapacity -> maxOf(mesh.vertexCount, oldCapacity + oldCapacity / 2)
+        mesh.vertexCount < oldCapacity / 2 -> mesh.vertexCount
+        else -> oldCapacity
+    }
+    val positions = if (capacity == oldCapacity && previous != null) previous.positions
+        else FloatArray(capacity * 2).also { previous?.positions?.copyInto(it, endIndex = minOf(it.size, previous.positions.size)) }
+    val varying = if (capacity == oldCapacity && previous != null) previous.varying
+        else FloatArray(capacity * VARYING_STRIDE).also { previous?.varying?.copyInto(it, endIndex = minOf(it.size, previous.varying.size)) }
+    val changed = if (capacity == oldCapacity && previous != null) previous.changed else BooleanArray(capacity)
+    var preparedVertices = 0
+    repeat(mesh.vertexCount) { vertex ->
+        var different = !sameKey || old == null || old.attributeMask != mesh.attributeMask || vertex >= old.vertexCount
+        if (!different) {
+            val start = vertex * StrokeMesh.VERTEX_STRIDE
+            for (offset in start until start + StrokeMesh.VERTEX_STRIDE) {
+                if (mesh.vertices[offset].toRawBits() != old!!.vertices[offset].toRawBits()) { different = true; break }
             }
         }
-        MeshChunk(Vertices(VertexMode.Triangles, points, coords, List(points.size) { Color.White }, points.indices.toList()), data)
+        changed[vertex] = different
+        if (different) preparedVertices++
     }
+    prepareVertices(mesh, transform, color, stamp, positions, varying, changed)
+    val chunkCount = (mesh.triangleCount + MESH_TRIANGLES_PER_DRAW - 1) / MESH_TRIANGLES_PER_DRAW
+    val chunks = ArrayList<MeshChunk>(chunkCount)
+    var preparedChunks = 0
+    var reusedChunks = 0
+    repeat(chunkCount) { chunk ->
+        val start = chunk * MESH_TRIANGLES_PER_DRAW
+        val count = minOf(MESH_TRIANGLES_PER_DRAW, mesh.triangleCount - start)
+        val cached = previous?.chunks?.getOrNull(chunk)
+        var reusable = sameKey && cached != null && cached.vertices.indices.size == count * 3 && old!!.attributeMask == mesh.attributeMask
+        if (reusable) {
+            for (offset in start * 3 until (start + count) * 3) {
+                val index = mesh.triangles[offset]
+                if (index != old!!.triangles[offset] || changed[index]) { reusable = false; break }
+            }
+        }
+        if (reusable) { chunks.add(cached!!); reusedChunks++ }
+        else { chunks.add(meshChunk(mesh, positions, varying, start, count)); preparedChunks++ }
+    }
+    previous?.chunks?.forEachIndexed { index, chunk -> if (chunks.getOrNull(index) !== chunk) chunk.close() }
+    return PreparedMesh(mesh, transform, color, stamp, positions, varying, changed, chunks, preparedVertices, preparedChunks, reusedChunks)
 }
 
 /** All twelve Ink texture blend modes, with the accumulated texture as source. */

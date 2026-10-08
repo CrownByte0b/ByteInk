@@ -48,9 +48,11 @@ import kotlin.math.sin
  * following the pinned Ink contract (which ignores vertex color effects on DISCARD coats).
  *
  * Reuse on one drawing thread. Finished geometry and prepared vertices are bounded by both cache
- * limits; live geometry is weakly owned and replaced on every shape-version change. Texture shaders
+ * limits; live geometry is weakly owned, with exact snapshot comparisons reusing unchanged vertices
+ * and triangle chunks on shape-version changes. Texture shaders
  * retain their images independently of the provider, with at most [textureCacheCapacity] entries.
- * [cachedGeometryBytes] excludes JVM object headers, driver uploads and provider-owned images.
+ * [cachedGeometryBytes] includes prepared arrays and retained uniform bytes, excluding JVM object
+ * headers, other native shader/driver storage and provider-owned images.
  * Set [animationTimeMillis] to advance texture animations; shape animations still need updateShape.
  * [clearCache] also invalidates textures; [close] releases shaders and compiled runtime effects.
  */
@@ -78,6 +80,14 @@ public class InkMeshRenderer(
         private set
     internal var meshSnapshotCount: Long = 0L
         private set
+    internal var preparedVertexCount: Long = 0L
+        private set
+    internal var preparedChunkCount: Long = 0L
+        private set
+    internal var reusedChunkCount: Long = 0L
+        private set
+    internal var shaderBuildCount: Long = 0L
+        private set
     public val cachedShapeCount: Int get() = shapes.size
     public val cachedTextureCount: Int get() = textures.size
     /** Active wet caches, separate from the finished geometry budget. */
@@ -92,18 +102,23 @@ public class InkMeshRenderer(
         var path: InkRenderPath? = null
         var key: PreparedKey? = null
         var chunks: List<MeshChunk> = emptyList()
-        val bytes: Long get() = (meshes?.sumOf { it.vertices.size * 4L + it.triangles.size * 4L } ?: 0L) +
-            chunks.sumOf { it.varyings.size * 4L + it.vertices.positions.size * 4L +
-                it.vertices.textureCoordinates.size * 4L + it.vertices.colors.size * 4L + it.vertices.indices.size * 2L } +
+        var preparedMeshes: List<PreparedMesh> = emptyList()
+        private fun meshBytes(mesh: StrokeMesh): Long = mesh.vertices.size * 4L + mesh.triangles.size * 4L
+        val bytes: Long get() = (meshes?.sumOf(::meshBytes) ?: preparedMeshes.sumOf { meshBytes(it.mesh) }) +
+            preparedMeshes.sumOf { it.scratchBytes } + chunks.sumOf { it.bytes } +
             (path?.approximateBytesUsed ?: 0L)
-        fun close() { path?.close(); path = null; meshes = null; chunks = emptyList() }
+        fun invalidateSnapshot() { path?.close(); path = null; meshes = null }
+        fun closePreparation() {
+            chunks.forEach { it.close() }; chunks = emptyList(); preparedMeshes = emptyList(); key = null
+        }
+        fun close() { invalidateSnapshot(); closePreparation() }
     }
-    private class Geometry(val coats: List<CoatGeometry>) {
+    private class Geometry(val coats: List<CoatGeometry>, val incremental: Boolean = false) {
         val bytes: Long get() = coats.sumOf { it.bytes }
         var retainedBytes: Long = 0L
         fun close() = coats.forEach { it.close() }
     }
-    private class LiveGeometry(val version: Long, val geometry: Geometry)
+    private class LiveGeometry(var version: Long, val geometry: Geometry)
     private val shapes = LinkedHashMap<PartitionedMesh, Geometry>(16, .75f, true)
     private val textures = LinkedHashMap<BrushPaint.TextureLayer, Shader>(16, .75f, true)
     private val queue = ReferenceQueue<InProgressStroke>()
@@ -202,8 +217,14 @@ public class InkMeshRenderer(
             requireNotNull(choosePaint(brush, coat, stroke.getMeshFormat(coat))) { "No drawable paint for live Ink coat $coat (check textures and mesh format)" }
         }
         val cached = live[key]
-        val geometry = if (cached?.version == stroke.shapeVersion()) cached.geometry else {
-            Geometry(paints.indices.map { CoatGeometry() }).also {
+        val geometry = if (cached != null && cached.geometry.coats.size == paints.size) {
+            if (cached.version != stroke.shapeVersion()) {
+                cached.geometry.coats.forEach { it.invalidateSnapshot() }
+                cached.version = stroke.shapeVersion()
+            }
+            cached.geometry
+        } else {
+            Geometry(paints.indices.map { CoatGeometry() }, incremental = true).also {
                 live[if (cached == null) StrokeReference(stroke, queue) else key] = LiveGeometry(stroke.shapeVersion(), it)
                 cached?.geometry?.close()
             }
@@ -335,6 +356,7 @@ public class InkMeshRenderer(
             val texture = paintTexture(brush, value)
             try {
                 if (value.selfOverlap == SelfOverlap.DISCARD) {
+                    coat.closePreparation()
                     val path = coat.path ?: buildPath(index).also { coat.path = it }
                     if (texture == null) {
                         paint.color = value.composeColor(brush, colorArgb)
@@ -357,26 +379,53 @@ public class InkMeshRenderer(
                     val color = value.applyColorFunctions(base).convert(ColorSpaces.LinearExtendedSrgb)
                     val stamp = (value.textureLayers.firstOrNull() as? BrushPaint.StampingTexture)?.let(::stampAnimation)
                     val key = PreparedKey(linear, MeshColor(color.red, color.green, color.blue, color.alpha), stamp)
-                    if (key != coat.key) {
-                        coat.chunks = meshes(index).flatMap { prepareMesh(it, linear, key.color, stamp) }
+                    if (key != coat.key || coat.meshes == null) {
+                        val snapshots = meshes(index)
+                        if (key != coat.key) coat.closePreparation()
+                        if (geometry.incremental) {
+                            val previous = coat.preparedMeshes
+                            coat.preparedMeshes = snapshots.mapIndexed { partition, snapshot ->
+                                prepareMeshIncrementally(snapshot, linear, key.color, stamp, previous.getOrNull(partition)).also {
+                                    preparedVertexCount += it.preparedVertexCount
+                                    preparedChunkCount += it.preparedChunkCount
+                                    reusedChunkCount += it.reusedChunkCount
+                                }
+                            }
+                            previous.drop(snapshots.size).forEach { it.close() }
+                            coat.chunks = coat.preparedMeshes.flatMap { it.chunks }
+                        } else {
+                            coat.chunks = snapshots.flatMap { prepareMesh(it, linear, key.color, stamp) }
+                            preparedVertexCount += snapshots.sumOf { it.vertexCount.toLong() }
+                            preparedChunkCount += coat.chunks.size
+                        }
                         coat.key = key
                         meshBuildCount++
                     }
                     val effect = meshEffect ?: RuntimeEffect.makeForShader(INK_MESH_SKSL).also { meshEffect = it }
                     val textureChild = texture ?: white ?: Shader.makeColor(0xffffffff.toInt()).also { white = it }
-                    RuntimeShaderBuilder(effect).use { builder ->
-                        builder.child("coatTexture", textureChild)
-                        builder.uniform("hasTexture", if (texture == null) 0 else 1)
-                        builder.uniform("textureBlend", if (texture == null) 0 else blendIndex(value.textureLayers.last().blendMode))
-                        builder.uniform("colorSpaceProbe", .5f, .5f, .5f, 1f)
+                    val builder = if (texture != null || coat.chunks.any { it.untexturedShader == null }) RuntimeShaderBuilder(effect) else null
+                    try {
+                        builder?.child("coatTexture", textureChild)
+                        builder?.uniform("hasTexture", if (texture == null) 0 else 1)
+                        builder?.uniform("textureBlend", if (texture == null) 0 else blendIndex(value.textureLayers.last().blendMode))
+                        builder?.uniform("colorSpaceProbe", .5f, .5f, .5f, 1f)
                         coat.chunks.forEach { chunk ->
-                            builder.uniform("vertexData", chunk.varyings)
-                            builder.makeShader().use { shader ->
+                            val cachedShader = if (texture == null) chunk.untexturedShader else null
+                            val shader = cachedShader ?: run {
+                                requireNotNull(builder).uniform("vertexData", chunk.varyings)
+                                builder.makeShader().also {
+                                    shaderBuildCount++
+                                    if (texture == null) chunk.untexturedShader = it
+                                }
+                            }
+                            try {
                                 paint.color = Color.White; paint.shader = shader.asComposeShader()
                                 try { canvas.drawVertices(chunk.vertices, BlendMode.Modulate, paint) } finally { paint.shader = null }
+                            } finally {
+                                if (texture != null) shader.close()
                             }
                         }
-                    }
+                    } finally { builder?.close() }
                 }
             } finally { texture?.close() }
         }
