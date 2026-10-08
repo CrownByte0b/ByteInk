@@ -140,6 +140,24 @@ predictions, transforms, colors, atlas frames and partition layouts rebuild affe
 completion/cancellation releases it. Full snapshot export and Skiko's full-window presentation
 copies remain. See [RENDERING.md](RENDERING.md) for cache accounting and renderer ownership.
 
+The [Step 3 investigation](../PERFORMANCE_WAYLAND_GPU.md) adds an isolated test-only
+EGL/Skia renderer with full Swing readback. It owns its offscreen context; JBR keeps
+ownership of the Wayland window. The shipped panel continues to use retained software
+rasterization. Requesting Skiko `OPENGL` selects the pinned Linux GLX path, which requires X11.
+
+JBR's optional startup flag `-Dsun.java2d.vulkan=true` can select a Vulkan Java2D
+destination for Swing. Check the visible window's `graphicsConfiguration.javaClass.name`:
+`WLVKGraphicsConfig` identifies Vulkan, while `WLSMGraphicsConfig` identifies shared memory,
+including fallback after unavailable Vulkan initialization. A Vulkan implementation may
+run on a CPU. This flag does not change the panel's software Skia rasterizer or prove
+display latency; client paint/submission request measurements and fidelity limits are in the report.
+
+Keep Swing's default ancestor buffering for the normal immediate Wayland paint path:
+the buffered `paintImmediately` path also asks JBR to commit the owning window.
+A custom host that disables Swing buffering globally needs its own supported toolkit
+commit arrangement; `Toolkit.sync()` alone flushes the connection without committing
+an unbuffered paint. The benchmark's explicit internal peer call is confined to tests.
+
 Verification:
 
 ```sh
@@ -150,6 +168,11 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ./gradlew :byteink-compose:desktopPenTest
 bash byteink-compose/src/test/wayland/run.sh -PbyteinkTestJavaHome=/absolute/path/to/jbr25
 # Repeat at 2x compositor scaling:
 BYTEINK_WAYLAND_TEST_SCALE=2 bash byteink-compose/src/test/wayland/run.sh -PbyteinkTestJavaHome=/absolute/path/to/jbr25
+# Actual Java2D destination, native buffer alpha and window lifecycle:
+BYTEINK_WAYLAND_TEST_SUITE=presentation BYTEINK_WAYLAND_TEST_VULKAN=true \
+    bash byteink-compose/src/test/wayland/run.sh -PbyteinkTestJavaHome=/absolute/path/to/jbr25
+# Offscreen EGL mesh diagnostics; no Wayland window or X server is borrowed:
+bash byteink-compose/src/test/wayland/run-egl.sh -PbyteinkTestJavaHome=/absolute/path/to/jbr25
 # Windows desktop:
 ./gradlew.bat :byteink-compose:desktopPenTest --no-daemon
 ```
@@ -162,6 +185,15 @@ events to JBR windows, verifies pressure, tilt, history, prediction removal, pad
 simultaneous contacts, bounds filtering, device removal, hide/show, independent windows, repeated
 hotplug during detach, visible wet/dry pixels and immediate Skia handoff. Real `wl_pointer` mouse events are delivered
 through JBR and AWT. These tests do not replace a physical tablet and display-latency measurement.
+
+The separate presentation suite checks the actual SHM/Vulkan surface and buffer at both
+scales, finished handoff, resize, hide/show and disable/cleanup. Request Vulkan, force an
+unavailable Vulkan ICD, and set `BYTEINK_WAYLAND_TEST_BACKEND=shm` to verify fallback.
+Setting the expected backend alone does not disable an available driver. Explicit EGL vendor and Vulkan
+ICD files are needed to force a driver on hosts with multiple implementations;
+`LIBGL_ALWAYS_SOFTWARE=1` alone does not disable NVIDIA's EGL vendor. The EGL diagnostics
+retain a separate strict promotion check (`BYTEINK_EGL_TEST_PROMOTION_CHECK=true`), which
+currently rejects a sparse CPU/GPU reference difference; a passing diagnostic is not promotion.
 
 The vendored tablet-v2 XML retains its MIT license and is pinned by SHA-256 in `WaylandProtocol`
 and `src/test/wayland/generate.py`. To update it, review upstream protocol changes, update both pins,

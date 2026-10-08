@@ -93,6 +93,23 @@ Connect to a reachable compositor: use its `WAYLAND_DISPLAY`, or the default `$X
 
 For native Wayland Compose embedding, use the example's `JFrame` with `ComposePanel(renderSettings = RenderSettings.SwingGraphics())`. The tested Compose/Skiko heavyweight host assumes X11; use this Swing graphics host or a direct Swing `InkLowLatencyPanel` for WLToolkit. SwingGraphics is experimental off-screen presentation and adds a copy whose cost grows with panel size; ByteInk separately selects software painting for its Wayland ink panel. [Compose's Swing interoperability guide](https://kotlinlang.org/docs/multiplatform/compose-desktop-swing-interoperability.html#experimental-off-screen-rendering) describes this host option. Ordinary Compose windows can continue to use the regular surface under X11/XWayland.
 
+### Wayland GPU investigation
+
+The native panel continues to use retained software Skia rendering. The pinned Skiko 0.150.1 supports an isolated offscreen EGL renderer through its public `GLAssembledInterface` and `makeGLWithInterface` APIs, but presenting those pixels through Swing requires GPU readback and full-frame image transfers. That experiment is kept in the verification/benchmark sources. It does not replace the panel's backend or swap buffers on JBR's borrowed `wl_surface`.
+
+JBR 25 separately supports an optional Vulkan **Java2D destination**, selected at application startup with `-Dsun.java2d.vulkan=true`. This preserves the toolkit's window ownership and can change image blits and submission; ByteInk's retained Skia rasters still run on CPU. Set the property before AWT initializes and inspect a visible panel's actual configuration:
+
+```kotlin
+val configuration = panel.graphicsConfiguration
+println("${configuration.javaClass.name}: $configuration")
+```
+
+`sun.java2d.vulkan.WLVKGraphicsConfig` identifies the Vulkan destination; `sun.awt.wl.WLSMGraphicsConfig` identifies shared-memory presentation. A requested Vulkan pipeline can fall back to shared memory when initialization is unavailable. A Vulkan configuration backed by a CPU device, or an EGL renderer named `llvmpipe`, does not establish hardware acceleration. ByteInk does not force this process-wide startup choice.
+
+Keep the normal ancestor Swing buffering for immediate Wayland paints: its buffered paint path asks JBR to commit the owning window. A custom host that globally disables Swing buffering must arrange a supported toolkit commit; `Toolkit.sync()` alone only flushes an unbuffered paint. The benchmark's explicit internal peer call is confined to verification.
+
+The [Step 3 investigation report](https://github.com/CrownByte0b/ByteInk/blob/master/PERFORMANCE_WAYLAND_GPU.md) records the pinned source audit, lifecycle/fidelity checks and client paint/submission request measurements. JBR can coalesce several requests into a later buffer submission; deferred completion, compositor scanout and physical pen-to-photon latency are outside those timings.
+
 `NativeInkInputSource` is the lower-level adapter for custom hosts. Subscribe and close on the EDT, use a displayable component and its matching live native handle, and allow one subscription per source. Windows/X11 use the drawing component's HWND/XID; Wayland requires its visible, configured top-level `wl_surface`. Recreate custom Wayland sources after hiding/showing the window, since the native surface changes. The built-in panel handles that lifecycle and waits for configuration. Native acquisition failures are explicit; runtime failures cancel gestures, close capture and invoke `onFailure`.
 
 ## Controller lifecycle

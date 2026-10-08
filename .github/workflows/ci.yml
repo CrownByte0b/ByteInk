@@ -233,15 +233,24 @@ jobs:
           -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }}
           -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
           -Porg.gradle.java.installations.auto-download=false
-      - name: Install offscreen OpenGL test dependencies
+      - name: Install offscreen OpenGL and EGL test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libxi6 libxtst6
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libvulkan1 mesa-vulkan-drivers libxi6 libxtst6
       - name: Verify mesh shaders on OpenGL
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: >-
           xvfb-run -a ./gradlew :byteink-compose:meshGpuTest :byteink-compose:desktopPenTest
+          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
+          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
+          -Porg.gradle.java.installations.auto-download=false
+      - name: Verify mesh shaders on EGL without X11
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          __EGL_VENDOR_LIBRARY_FILENAMES: /usr/share/glvnd/egl_vendor.d/50_mesa.json
+        run: >-
+          env -u DISPLAY ./gradlew :byteink-compose:meshEglTest
           "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
           -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
           -Porg.gradle.java.installations.auto-download=false
@@ -257,6 +266,39 @@ jobs:
               -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64 \
               -Porg.gradle.java.installations.auto-download=false
           done
+      - name: Verify native Wayland shared-memory and Mesa Vulkan presentation
+        if: matrix.runtime == 'jbr25'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          __EGL_VENDOR_LIBRARY_FILENAMES: /usr/share/glvnd/egl_vendor.d/50_mesa.json
+          VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+        run: |
+          for vulkan in false true; do
+            for scale in 1 2; do
+              BYTEINK_WAYLAND_TEST_SUITE=presentation BYTEINK_WAYLAND_TEST_VULKAN="$vulkan" \
+                BYTEINK_WAYLAND_TEST_SCALE="$scale" \
+                BYTEINK_WAYLAND_TEST_OUTPUT="$PWD/build/wayland-presentation/vulkan-$vulkan-scale-$scale" \
+                bash byteink-compose/src/test/wayland/run.sh \
+                "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME" \
+                -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64 \
+                -Porg.gradle.java.installations.auto-download=false
+            done
+          done
+      - name: Verify unavailable Vulkan falls back to shared memory
+        if: matrix.runtime == 'jbr25'
+        env:
+          VK_DRIVER_FILES: /tmp/byteink-deliberately-no-such-vulkan-icd.json
+          VK_ICD_FILENAMES: /tmp/byteink-deliberately-no-such-vulkan-icd.json
+          BYTEINK_WAYLAND_TEST_SUITE: presentation
+          BYTEINK_WAYLAND_TEST_VULKAN: "true"
+          BYTEINK_WAYLAND_TEST_BACKEND: shm
+        run: >-
+          BYTEINK_WAYLAND_TEST_OUTPUT="$PWD/build/wayland-presentation/unavailable-vulkan"
+          bash byteink-compose/src/test/wayland/run.sh
+          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
+          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
+          -Porg.gradle.java.installations.auto-download=false
       - name: Upload Linux reference geometry and notebook bytes
         if: matrix.runtime == 'zulu27'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -281,6 +323,8 @@ jobs:
           path: |
             **/build/reports/tests/
             **/build/test-results/
+            byteink-compose/build/reports/wayland-gpu/
+            build/wayland-presentation/
             conformance/oracle/build/reports/
             byteink-compose/build/reports/performance/
             byteink-testing/build/reports/performance/

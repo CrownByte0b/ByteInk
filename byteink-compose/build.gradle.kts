@@ -18,8 +18,10 @@ dependencies {
 
 tasks.test {
     exclude("**/InkMeshGpuTest.class")
+    exclude("**/InkMeshEglTest.class")
     exclude("**/DesktopPenIntegrationTest.class")
     exclude("**/WaylandPenIntegrationTest.class")
+    exclude("**/WaylandPresentationIntegrationTest.class")
     val reports = layout.buildDirectory.dir("reports/performance")
     val report = layout.buildDirectory.file("reports/performance/interaction.json")
     outputs.dir(reports)
@@ -36,9 +38,33 @@ tasks.register<Test>("waylandPenTest") {
     filter.includeTestsMatching("com.vivenotes.byteink.compose.WaylandPenIntegrationTest")
     systemProperty("java.awt.headless", "false")
     systemProperty("awt.toolkit.name", "WLToolkit")
+    systemProperty("sun.java2d.vulkan", providers.gradleProperty("byteinkWaylandTestVulkan").getOrElse("false"))
     jvmArgs("--add-opens=java.desktop/sun.awt.wl=ALL-UNNAMED")
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Wayland verification depends on the current compositor and runtime") { true }
+}
+
+// Uses the same isolated compositor runner, with BYTEINK_WAYLAND_TEST_SUITE=presentation.
+tasks.register<Test>("waylandPresentationTest") {
+    group = "verification"
+    description = "Verifies JBR's actual native Wayland presentation destination, scaling and lifecycle."
+    dependsOn(tasks.testClasses)
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("com.vivenotes.byteink.compose.WaylandPresentationIntegrationTest")
+    systemProperty("java.awt.headless", "false")
+    systemProperty("awt.toolkit.name", "WLToolkit")
+    val vulkan = providers.gradleProperty("byteinkWaylandTestVulkan").getOrElse("false")
+    systemProperty("sun.java2d.vulkan", vulkan)
+    systemProperty("byteink.test.waylandBackend", providers.gradleProperty("byteinkWaylandTestBackend")
+        .getOrElse(if (vulkan.equals("true", ignoreCase = true)) "vulkan" else "shm"))
+    systemProperty("byteink.test.waylandScale", providers.gradleProperty("byteinkWaylandTestScale").getOrElse("1"))
+    jvmArgs("--add-opens=java.desktop/sun.awt.wl=ALL-UNNAMED",
+        "--add-opens=java.desktop/sun.java2d=ALL-UNNAMED",
+        "--add-opens=java.desktop/sun.java2d.wl=ALL-UNNAMED",
+        "--add-opens=java.desktop/sun.java2d.vulkan=ALL-UNNAMED")
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Wayland presentation depends on the current compositor, driver and runtime") { true }
 }
 
 // Requires a real AWT/native window. Linux CI uses its private Xvfb display; Windows uses Win32.
@@ -66,4 +92,22 @@ tasks.register<Test>("meshGpuTest") {
     systemProperty("byteink.test.gpu", "true")
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("OpenGL verification depends on the current display and driver") { true }
+}
+
+// Investigation-only offscreen EGL: no X server and no ownership of JBR's window surface.
+tasks.register<Test>("meshEglTest") {
+    group = "verification"
+    description = "Verifies the existing mesh renderer on explicit surfaceless EGL without DISPLAY."
+    dependsOn(tasks.testClasses)
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("com.vivenotes.byteink.compose.InkMeshEglTest")
+    systemProperty("java.awt.headless", "true")
+    systemProperty("byteink.test.egl", "true")
+    systemProperty("byteink.test.eglHardware", providers.gradleProperty("byteinkEglTestHardware").getOrElse("false"))
+    systemProperty("byteink.test.eglPromotionCheck", providers.gradleProperty("byteinkEglPromotionCheck").getOrElse("false"))
+    systemProperty("byteink.test.eglArtifacts", providers.gradleProperty("byteinkEglTestArtifacts")
+        .getOrElse(layout.buildDirectory.dir("reports/wayland-gpu/egl-frames").get().asFile.absolutePath))
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("EGL verification depends on the current driver") { true }
 }

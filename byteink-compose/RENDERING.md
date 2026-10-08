@@ -57,6 +57,7 @@ Verification commands:
 ```sh
 ./gradlew :byteink-core:test :byteink-compose:test :byteink-testing:test
 xvfb-run -a ./gradlew :byteink-compose:meshGpuTest
+env -u DISPLAY ./gradlew :byteink-compose:meshEglTest
 ```
 
 The second command uses Linux GLX and requires Xvfb, Xauth and an OpenGL driver; Linux CI runs it
@@ -65,6 +66,17 @@ texture blending and placement, atlas animation, live predictions, erasure meshe
 alpha/clipping, cache lifetime and color-managed surfaces. The Android hardware comparison
 checks all 280 committed reference cases with MAE at most 1/255, SSIM at least 0.99 and no
 unexplained interior pixels. Passing these gates does not imply identical hardware pixels.
+
+The EGL task is a separate investigation-only control using Skiko's public assembled GL
+interface on an owned surfaceless context. It does not depend on X11 or replace the production
+Wayland painter. It records the actual GL renderer and checks textures, overlap, predictions,
+canonical geometry, scaling and context failure/teardown. Passing its diagnostic gates preserves
+the strict promotion result separately: diagnostics expose an isolated reference gap inside a
+triangle that exceeds promotion limits on both NVIDIA and Mesa. The recorded strict NVIDIA
+check (`-PbyteinkEglPromotionCheck=true`) rejects it. Exact cause remains unresolved.
+See [the Step 3 report](../PERFORMANCE_WAYLAND_GPU.md) for raw pixel/geometry evidence,
+native JBR buffer controls and client paint/submission request measurements. Deferred
+completion, compositor display and physical pen latency are outside those timings.
 
 Incremental preparation controls also compare exact full-render pixels and prepared arrays through
 timed prefix mutation, prediction changes, skipped updates, transforms/color/atlas changes and

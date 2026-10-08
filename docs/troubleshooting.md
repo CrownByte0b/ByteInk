@@ -18,6 +18,8 @@
 | Wayland backend still reports `LINUX_XINPUT2` | Selection uses the actual AWT toolkit. Run JBR 25 with `-Dawt.toolkit.name=WLToolkit` before AWT initializes. |
 | Native Wayland package access fails | Add `--add-opens=java.desktop/sun.awt.wl=ALL-UNNAMED` and native access; see [runtime setup](guides/authoring.md#native-platform-setup). |
 | Compose host fails under WLToolkit | Use `JFrame` plus `ComposePanel(renderSettings = RenderSettings.SwingGraphics())`, as in the native example, or a direct Swing panel. The tested heavyweight Compose/Skiko host assumes X11. |
+| Requesting OpenGL does not accelerate the Wayland ink panel | The panel selects retained software Skia. Pinned Skiko's Linux Swing OpenGL redrawer uses GLX/X11; the isolated EGL experiment still requires readback. See [Wayland GPU investigation](guides/authoring.md#wayland-gpu-investigation). |
+| Vulkan was requested but shared-memory presentation remains | Set `sun.java2d.vulkan` before AWT starts and inspect the visible panel's actual graphics configuration. JBR can fall back when native initialization is unavailable; a CPU Vulkan device also does not prove a hardware gain. |
 | Native handle unavailable or stale after hide/show | Wayland surfaces exist after visible top-level configuration and change after hide/show. Recreate custom native sources; the built-in panel waits/reconnects. |
 | Native Wayland pen axes are absent | Check device/compositor tablet-v2 support. Primary mouse and touch do not fabricate pen pressure. |
 | XInput2 touch subscription cannot be acquired | Check for another exclusive touch selector on the same window and that the component's XID is correct. Acquisition failure is explicit. |
