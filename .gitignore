@@ -5,6 +5,7 @@ benchmarks/*
 !benchmarks/run_retained_authoring.py
 !benchmarks/run_wet_mesh.py
 !benchmarks/run_wayland_gpu.py
+!benchmarks/run_cpu_preparation.py
 !benchmarks/pen/
 benchmarks/pen/*
 !benchmarks/pen/*.java

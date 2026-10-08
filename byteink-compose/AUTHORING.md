@@ -355,5 +355,10 @@ pages; notebook contents and derived artifacts remain outside version control. T
 detect gross regressions across CI machines. Headless raster timing measures scheduling and CPU
 rendering, not hardware input delivery or physical display latency.
 
+Optional SIMD and bounded-worker preparation are isolated benchmark experiments.
+The [CPU preparation report](../docs/guides/cpu-preparation.md) records crossover,
+CPU/allocation, exact output and complete-paint controls. No candidate meets its
+promotion gates; applications retain scalar preparation without additional JVM flags.
+
 The implementation follows the pinned sources and the
 [Ink InProgressStroke lifecycle](https://developer.android.com/reference/androidx/ink/strokes/InProgressStroke).

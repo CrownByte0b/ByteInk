@@ -71,6 +71,7 @@ They must not be combined into one speedup multiplier.
 | Incremental preparation, long retained stroke | JVM allocation per changed Swing paint fell 88.4%. Retained-raster median 7.812 → 7.132 ms. | Complete Swing median ranges overlap and P95 does not improve; estimated retained wet storage rises 85.7%. |
 | Blank-page retained rendering control, physical 4K | Offscreen Swing median 13.179 → 13.643 ms. | Approximately 3.5% slower; report this workload alongside populated-page gains. Fresh-resource first-paint costs are separate. |
 | Isolated hardware EGL/readback candidate | SHM client-request medians were 31.1–34.3% lower than retained software across 1080p/4K/2× workloads. | Experimental, with failed fidelity promotion gates; deferred sends/copies and physical display latency excluded. It is not a shipped backend or accepted-output speedup. |
+| Conditional CPU preparation, after incremental caching | A two-worker prototype reduces the 10,831-vertex loop median 38.3%; SIMD reduces it 9.8%. | No complete-paint case passes the 5% gain outside three-fork spread. Workers also fail a raw NaN fidelity control. Production keeps scalar preparation; see [CPU preparation experiments](cpu-preparation.md). |
 
 The retained and incremental controls exclude native window presentation, compositor
 completion and physical pen latency. Their offscreen Swing measurements include the
@@ -79,10 +80,12 @@ JBR Wayland window, but JBR can coalesce multiple requests into a later send. Pa
 request counts and elapsed request time cannot establish displayed frame rate.
 Source-derived transfer sizes are not measured memory bandwidth.
 
-The raw local evidence is in `build/retained-authoring/`, `build/wet-mesh-step2/`
-and `build/wayland-gpu-step3/`, with source/binary snapshots, controls and commands.
+The raw local evidence is in `build/retained-authoring/`, `build/wet-mesh-step2/`,
+`build/wayland-gpu-step3/` and `build/cpu-preparation-step5/`, with source/binary
+snapshots, controls and commands.
 The reproducible harnesses are `benchmarks/run_retained_authoring.py`,
-`benchmarks/run_wet_mesh.py` and `benchmarks/run_wayland_gpu.py`.
+`benchmarks/run_wet_mesh.py`, `benchmarks/run_wayland_gpu.py` and
+`benchmarks/run_cpu_preparation.py`.
 Publish self-contained evidence for the final release before using these numbers
 in external marketing. The current plans do not supply missing competitor or
 physical latency measurements.
