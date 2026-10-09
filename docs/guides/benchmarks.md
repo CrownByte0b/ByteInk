@@ -8,10 +8,7 @@ optimization plan does not establish superiority over other drawing applications
 comparative measurements must establish each performance claim.
 
 The application benchmark program below is planned; no Xournal++, GIMP or Krita
-performance comparison has been run. The separate
-[ByteInk / Qt 6 / Electron report](toolkit-comparison.md) now measures a shared CPU
-raster workload and minimal-host resources, with a feature matrix and raw evidence.
-Those measurements exclude complete applications and physical pen latency.
+performance comparison has been run.
 Architecture references below were reviewed on 2026-10-08.
 
 ## What other applications use
