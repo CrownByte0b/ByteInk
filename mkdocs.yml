@@ -57,6 +57,7 @@ nav:
       - Erase, select and transform: guides/operations.md
       - Notebook utilities: guides/notebooks.md
       - Positioning and benchmarks: guides/benchmarks.md
+      - ByteInk vs Qt 6 and Electron: guides/toolkit-comparison.md
       - CPU preparation experiments: guides/cpu-preparation.md
       - Software latency diagnostics: guides/software-latency.md
   - API reference:

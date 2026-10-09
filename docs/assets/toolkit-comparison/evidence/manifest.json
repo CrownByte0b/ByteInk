@@ -1,0 +1,644 @@
+{
+  "schema": 1,
+  "created_utc": "2026-10-09T05:28:51.648184+00:00",
+  "git_head": "261577ff948fb5cb3e391e8e86f528237f1cba10",
+  "platform": "Linux 7.2.9-200.fc44.x86_64 x86_64 GNU/Linux",
+  "cpu": {
+    "lscpu": [
+      {
+        "field": "Architecture:",
+        "data": "x86_64"
+      },
+      {
+        "field": "CPU op-mode(s):",
+        "data": "32-bit, 64-bit"
+      },
+      {
+        "field": "Address sizes:",
+        "data": "48 bits physical, 48 bits virtual"
+      },
+      {
+        "field": "Byte Order:",
+        "data": "Little Endian"
+      },
+      {
+        "field": "CPU(s):",
+        "data": "24"
+      },
+      {
+        "field": "On-line CPU(s) list:",
+        "data": "0-23"
+      },
+      {
+        "field": "Vendor ID:",
+        "data": "AuthenticAMD"
+      },
+      {
+        "field": "Model name:",
+        "data": "AMD Ryzen 9 7900X 12-Core Processor"
+      },
+      {
+        "field": "CPU family:",
+        "data": "25"
+      },
+      {
+        "field": "Model:",
+        "data": "97"
+      },
+      {
+        "field": "Thread(s) per core:",
+        "data": "2"
+      },
+      {
+        "field": "Core(s) per socket:",
+        "data": "12"
+      },
+      {
+        "field": "Socket(s):",
+        "data": "1"
+      },
+      {
+        "field": "Stepping:",
+        "data": "2"
+      },
+      {
+        "field": "Frequency boost:",
+        "data": "enabled"
+      },
+      {
+        "field": "CPU(s) scaling MHz:",
+        "data": "77%"
+      },
+      {
+        "field": "CPU max MHz:",
+        "data": "5737.9858"
+      },
+      {
+        "field": "CPU min MHz:",
+        "data": "414.7950"
+      },
+      {
+        "field": "BogoMIPS:",
+        "data": "9382.61"
+      },
+      {
+        "field": "Flags:",
+        "data": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca fsrm flush_l1d amd_lbr_pmc_freeze"
+      },
+      {
+        "field": "Virtualization:",
+        "data": "AMD-V"
+      },
+      {
+        "field": "L1d cache:",
+        "data": "384 KiB (12 instances)"
+      },
+      {
+        "field": "L1i cache:",
+        "data": "384 KiB (12 instances)"
+      },
+      {
+        "field": "L2 cache:",
+        "data": "12 MiB (12 instances)"
+      },
+      {
+        "field": "L3 cache:",
+        "data": "64 MiB (2 instances)"
+      },
+      {
+        "field": "NUMA node(s):",
+        "data": "1"
+      },
+      {
+        "field": "NUMA node0 CPU(s):",
+        "data": "0-23"
+      },
+      {
+        "field": "Vulnerability Gather data sampling:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Ghostwrite:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Indirect target selection:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Itlb multihit:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability L1tf:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Mds:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Meltdown:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Mmio stale data:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Old microcode:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Reg file data sampling:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Retbleed:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Spec rstack overflow:",
+        "data": "Mitigation; Safe RET"
+      },
+      {
+        "field": "Vulnerability Spec store bypass:",
+        "data": "Mitigation; Speculative Store Bypass disabled via prctl"
+      },
+      {
+        "field": "Vulnerability Spectre v1:",
+        "data": "Mitigation; usercopy/swapgs barriers and __user pointer sanitization"
+      },
+      {
+        "field": "Vulnerability Spectre v2:",
+        "data": "Mitigation; Enhanced / Automatic IBRS; IBPB conditional; STIBP always-on; PBRSB-eIBRS Not affected; BHI Not affected"
+      },
+      {
+        "field": "Vulnerability Srbds:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Tsa:",
+        "data": "Mitigation; Clear CPU buffers"
+      },
+      {
+        "field": "Vulnerability Tsx async abort:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Vmscape:",
+        "data": "Mitigation; IBPB before exit to userspace"
+      }
+    ]
+  },
+  "compiler": "c++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)",
+  "electron_fixture": "Trusted local HTML; Node enabled for monotonic hrtime; browser sandbox disabled for fixture only",
+  "clocks": {
+    "byteink": "System.nanoTime",
+    "qt6": "QElapsedTimer.nsecsElapsed",
+    "electron": "process.hrtime.bigint"
+  },
+  "ram_bytes": 32727158784,
+  "power_profile": "powersave",
+  "forks": 6,
+  "warmup_frames_per_case": 40,
+  "measured_frames_per_case": 30,
+  "case_definitions": [
+    [
+      "blank_1080p",
+      1920,
+      1080,
+      0,
+      false,
+      1
+    ],
+    [
+      "notes_100",
+      1920,
+      1080,
+      100,
+      false,
+      1
+    ],
+    [
+      "page_1000",
+      1920,
+      1080,
+      1000,
+      false,
+      1
+    ],
+    [
+      "dense_10000",
+      1920,
+      1080,
+      10000,
+      false,
+      1
+    ],
+    [
+      "page_4k",
+      3840,
+      2160,
+      1000,
+      false,
+      1
+    ],
+    [
+      "alpha_1000",
+      1920,
+      1080,
+      1000,
+      true,
+      1
+    ],
+    [
+      "zoom_1000",
+      1920,
+      1080,
+      1000,
+      false,
+      2
+    ]
+  ],
+  "stack_orders": [
+    [
+      "byteink",
+      "qt6",
+      "electron"
+    ],
+    [
+      "byteink",
+      "electron",
+      "qt6"
+    ],
+    [
+      "qt6",
+      "byteink",
+      "electron"
+    ],
+    [
+      "qt6",
+      "electron",
+      "byteink"
+    ],
+    [
+      "electron",
+      "byteink",
+      "qt6"
+    ],
+    [
+      "electron",
+      "qt6",
+      "byteink"
+    ]
+  ],
+  "source_binary_guards_passed": true,
+  "memory_scope": "Linux process tree smaps_rollup checkpoint; includes host/runtime/PNG allocations; not peak memory",
+  "frame_scope": "CPU full white clear + cached uniform-color closed outline fills; Electron includes one-pixel synchronization readback",
+  "unmeasured": [
+    "Windows",
+    "GPU drawing",
+    "native input",
+    "stroke modeling time",
+    "compositor/display completion",
+    "physical pen latency"
+  ],
+  "provenance": {
+    "source_hashes": {
+      "benchmarks/run_pen.py": "405773452baead9e5056c050426941653010773bdebce83adf55694e20cba588",
+      "benchmarks/run_toolkit_comparison.py": "b8fc79c71ae8867fd94aac46cdea9ba39bd4da5e9ddd18eba7cd2ef4a5a5b526",
+      "benchmarks/toolkits/ByteinkBenchmark.java": "7dc30ac45e01c7a9c2b80827a8f7650e9a8df40aaf94b6a13fcfe4bb89166a40",
+      "benchmarks/toolkits/CMakeLists.txt": "c314255d3de39ddb3fe21a269879d6a44a104e0325bee775c9a042acadac920f",
+      "benchmarks/toolkits/electron.cjs": "39780bfad16e6e7ec6f4f2696b609b6fbd70bf10711d66a2e3d563ccf56c3793",
+      "benchmarks/toolkits/qt_benchmark.cpp": "e63569f6e4432b912e241ad683774da13baa943f0e7ad52b9bd8c725c6a85416",
+      "benchmarks/toolkits/renderer.html": "d558c4dc6455addcf5815d4a482978fcd2235f9ca3856964c007397487bf16d6",
+      "benchmarks/toolkits/requirements.txt": "ac83a8ff6aaf45929fecf2af68123e3f775c58f762b73d570ca1c4b32e0ffc76",
+      "byteink-compose/src/main/java/com/vivenotes/byteink/compose/NativeCalls.java": "9b79d5ba2e5f3b7aab7f482e50f54dbb900405589aa3a4402b3d8a4d741ec4c5",
+      "byteink-compose/src/main/java/com/vivenotes/byteink/compose/NativePenBridge.java": "6a5920523c08fde2e997a578849ad71c27a0594872477761bc66559b27448d6b",
+      "byteink-compose/src/main/java/com/vivenotes/byteink/compose/WaylandPenBridge.java": "abe7da8d970bf032255342f1e4ca559d0cab1e1d5baac5e8e79367ccd5f33e20",
+      "byteink-compose/src/main/java/com/vivenotes/byteink/compose/WaylandProtocol.java": "bd62295471bf43057122bcb4b28c328fd592f1ade74c7f36ac352b91e53ee800",
+      "byteink-compose/src/main/java/com/vivenotes/byteink/compose/WaylandWire.java": "3d63d4d3d87b0a592f36e3fa5e4a7eb9612a69b06b1791665a0749ec13482442",
+      "byteink-compose/src/main/java/com/vivenotes/byteink/compose/WindowsPenBridge.java": "b91ac36ffad6e73c8f3f2c771f9c886f7b605e95714a870d5ef3665e41dc4cd8",
+      "byteink-compose/src/main/java/com/vivenotes/byteink/compose/X11PenBridge.java": "133d20d0050769dc651a67dd82150051f7e22cfed860b658fb1527efd32c992a",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkAuthoringController.kt": "3a02f60d326dbe1c43eb6dc064a6fac5448238bc93016e410016ae578e1d4929",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkAuthoringSession.kt": "97ccaa54560e9a08541d3311d62aec56204ce358da0ffa727e51c6eaec67eba5",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkDrawingSurface.kt": "8f0c21cdb0771a4a72b96ff322fde2552c54a9bbf4779fc5aceee5ca7a2235bd",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkInputPredictor.kt": "51654d1e2ef3a4adc1a5b12b6166e04d79afeba2736eaad0e57ba471bf33e2ae",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt": "0a3098aea3b7c7b2f830a7e895a66211e1e5ab78af658f68b657d6c66e927abe",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyTracker.kt": "67de4428d58e09b3d9e2a0fb9b17a026de3bbbccfdf4f4242ff9d06f79df88d0",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt": "a2b8f46c65079e48028e0065607fbc9d37be66efa2f94f78a15b28ac2bc8fe24",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshRenderer.kt": "b60c166c3dbc62fac2c0592535309377ba894d044086d13e97d9557171bad428",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkMeshShader.kt": "1c7b78ef68fc08ebf3e5dfa821bbdf5f5cfec03c73873d93988ebd1d1bedb4e5",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPathRenderer.kt": "8cb908732a30ae61c40da431b18967eebd8d731090afe927c9450b8f778a5590",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPointerSample.kt": "5220fd0db0ea93a4b5ea2cabc87ffd9b536bb0f576b01b0abccaebaf4f717d2d",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderPath.kt": "fa89a4b1598ce47faff671c616a8935920d514ca54a6597dec1ff3443043e9c2",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderer.kt": "d75fb34e1d5a53993d24719b3f26a48a3416c2ac768b163e61f8e19fc273717a",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRenderingInternals.kt": "51a78c139c60232c5bf4b9b18d6b7cec106e3099d0b240cea00e8ccfead25f34",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkRetainedAuthoringRaster.kt": "9c07ea43cb4d64937857f05a5091da021f5f50ef7e050ac0a2e5d046d9b89336",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkScene.kt": "09832c3f6797f58574682797de339c1a76e838ba2435f59953a6583e3bd642f7",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkSceneRasterCache.kt": "d0f6efc2eec99c13d6593c90e8e907add7beadd97d82c40c5d761b367e56f583",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkTextureStore.kt": "7a9c532a47324a3ac4bd0b727c850c18fa42fc51b4cbb133aa3d6c39fc277abb",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt": "d4ef3e121121bcded9d9feefb97fb2e957382ba903e0ce1eff26e97c9eba9695",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkPacketQueue.kt": "9e59a1fbc46b6012f3cbc2c23c25774db2219ec711a59acd1fc732ff2b310278",
+      "byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/WaylandRuntime.kt": "f237820d01305accd91c50f743f5759a402fc94536b4f0480ea7f241264e81dd",
+      "byteink-core/src/main/kotlin/com/vivenotes/byteink/core/InkMeshes.kt": "26955d95e100035c0b0c2b62003110df797909759dcdbab5a036ce183019fadf",
+      "byteink-core/src/main/kotlin/com/vivenotes/byteink/core/InkRuntime.kt": "b4f9f4a565d84c7ed4de7ce8b5e0b10c88b111d94a2c5a56e6e934fa7e12116c",
+      "byteink-core/src/main/kotlin/com/vivenotes/byteink/core/SpatialIndex.kt": "768bf8f61831c4c0b4fa5a4ea264a3626dd85071a6405dd60c0c3c52a85d49f7",
+      "byteink-core/src/main/kotlin/com/vivenotes/byteink/core/StrokeMesh.kt": "4d591caf61dbb25c2a1c5565203c263fc96114aeeab6d9d4dce60a2e8111e747",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/AndroidInkCompression.kt": "65d6bf0311e50e73e02b58387d52d52a5e93c2791c28b5c83f42e9fabb6fe72b",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/DecodedInkOperation.kt": "1f7468fd60792d42df7bb268d80f08870776f4ced454de838adcfca01727b278",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkColors.kt": "92cfd8f5643cffa18a742fff8fdd698e2b609aa87918e1ff469a7cbfb417a527",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt": "112ddccff855e635df2317fc4b30ada3474b155d6dd437f166f4eb024288b695",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkInputCodec.kt": "d968badf72dab9d8e4c0cd380c415867d14bd9029d46f1994a350ba49c9713ea",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkPageIndex.kt": "1400ec34f7a9c1bf273906f25d9ab09f234c41f3f987c1c40760b93095d02a96",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/Lasso.kt": "9536b1ea5d5a75167888531f45a3c5625f615d7eb8e368038b2663d5345a2654",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PageBounds.kt": "29d533e484d83e9b0dce08eff4c9a52ad3716c41979e3bd02e6a020603e67713",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PageStroke.kt": "f20b89907428b7099ac526e815e55abdaeae224092795c50d97a3c12a3d5cb78",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/StoredInk.kt": "4205c1c62b813a83a7eb1fed1bc2acca01f1910a54693130f6710122f23138fc",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt": "bfda3136dd8c4fe4c6d2da7e98e30f75ba3736ebded0dc965943272a0b2b138d",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt": "a021162e6a0c27f5ed51f56ed13a88460e8fc9b3a41265cdef85d87a6d436aed",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkPage.kt": "08951df97d13b1a1ae8e8b06c0b542081b9a8330e0b0c7168c72f64fa49cb78b",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkTool.kt": "44f47b8164586449c830ef489963682d80585f60dd8db2d7acd354800f59fb78",
+      "byteink-kit/src/main/kotlin/com/vivenotes/byteink/vive/LegacyStorageNative.kt": "510905210b5398fe36dc73a50f345b4a8882dec6c147ccad396c1468ae782e39",
+      "gradle/libs.versions.toml": "0dc1cbc99ded311a9b4fff25f9cc2ed5126efd5ff72c4f1097aa7682ca5e35d8",
+      "upstream/pins.properties": "9f238aaa018b7ecd1d4cd09429cc2e704c743c130bca2e95dea2b3833f1def5d"
+    },
+    "binary_hashes": {
+      "$REPO/build/toolkit-comparison/prepared/qt/qt_benchmark": "8e259bed23db9f0016fb4abbce46be62d1e49800978cb8d551b52d3ef26fdf8f",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/dist/electron": "10a14d05c6ff4f94075cfb3eeb6ed6571be33ebcc08cbd675b5ce9ff84706564",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/package.json": "af9a6fdc372c2516076375d676ba5005937513e1bdcc6769768217a1561b18b6",
+      "$REPO/build/toolkit-comparison/prepared/scene.bin": "4977c88dfdb0f1fc609497a4108e7181e70df7596ea519c1c836998150f8cd78",
+      "$REPO/build/toolkit-comparison/prepared/classes/ByteinkBenchmark$Prototype.class": "ed08acf51ac6733ae19cb0b25857bbe65bc21e6e6b98f851c6fbc6abf3b72b96",
+      "$REPO/build/toolkit-comparison/prepared/classes/ByteinkBenchmark.class": "ffd6717cf0a209095de10630b1b334edd1e3d570b2719f3d2b7b76115f5b9c2b",
+      "/usr/lib64/libQt6Gui.so.6.11.2": "76297e325040b12b087dd586809bdaa6eedd3cea36c95339356dcc61777698d7",
+      "/usr/lib64/libQt6Core.so.6.11.2": "49239eb0aee6655a65e9dfea3a2e3940e59e7ef0ed074f6484e8495d9ae5663b",
+      "/usr/lib64/libQt6DBus.so.6.11.2": "e670c74f6818789c11d72df7e64c1624e6a01ea64f85b9e4c53405087515d6c3",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/dist/chrome_100_percent.pak": "891176da5eee33b54352fdb1407a8e09a2bd48c7eb2077311e75787de33a095e",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/dist/chrome_200_percent.pak": "b3ce9953a50959e9c1a018d6512742f48cee0dbf53644ea952909418bd7c2b3e",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/dist/icudtl.dat": "da53f0b69843aaa43315f0f210a67e4a874b0be338f3dae08ff57b8afe76ab0d",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/dist/snapshot_blob.bin": "318358a565b6799c7cd42f4647a68d07c326aea80171d5b451af8f14d1bc345f",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/dist/libffmpeg.so": "c4c805e46f957356f6b80be31999459e5f07e8b0c351221544ad43a16c980638",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/dist/resources.pak": "631f8de6e1d5b46de9a5930ac3da5c1f77ebd2eef355be75c8c2095d0b29dbab",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/dist/v8_context_snapshot.bin": "f7ce43b3433a5c36621b09b24fb1b49823dcad925c089ebe60f09aa780941aa1",
+      "$REPO/build/toolkit-comparison/tooling/node_modules/electron/dist/libvk_swiftshader.so": "f473264f0013f07345b5bb258dd12f10b461a291c578f32b7466c9000b662707",
+      "$REPO/byteink-compose/build/classes/java/test/com/vivenotes/byteink/compose/HeadlessGlContext.class": "402911a5d9ad09dd58a64a5586d54046a3754bbfc27638bf25f4efb88d26374a",
+      "$REPO/byteink-compose/build/classes/java/test/com/vivenotes/byteink/compose/DesktopInputInjection.class": "34f6bd3c291bd7e9423a75081a60261e0abe968cb8e43abb8dfb5b7f376b2574",
+      "$REPO/byteink-compose/build/classes/java/test/com/vivenotes/byteink/compose/WaylandInputInjection.class": "ce75a5ef4c0fc2a5564b5422360c0903077a394436e4be2095c7076675621f79",
+      "$REPO/byteink-compose/build/classes/java/test/com/vivenotes/byteink/compose/HeadlessEglContext$Binding.class": "d2d110f6b462243050445c5791383af3f892ac1d65b77fb8f1d5e4ccf7274dbe",
+      "$REPO/byteink-compose/build/classes/java/test/com/vivenotes/byteink/compose/HeadlessEglContext.class": "a06c3bc90797b5cf8aa11db266980b2c93a8878d1403fac0b00ab3e7fed1f302",
+      "$REPO/byteink-compose/build/classes/java/test/com/vivenotes/byteink/compose/WaylandDiscoveryConnection.class": "51ae8e830594318ecaa743969b96ef5e8182b758763809f81b02ca8f198aae8e",
+      "$REPO/byteink-compose/build/classes/kotlin/test/META-INF/com.vivenotes.byteink_byteink-compose_test.kotlin_module": "06d262cf732152000d8cb1453e8dc1209b37fa4411e5c4d202265ff0d18ec16d",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/DesktopPenIntegrationTest.class": "3abc1acafaea15b80d0b3cb5eb05c2631e34184bcaa68039dac15aa5b4874bf1",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/DesktopPenIntegrationTest$Source.class": "d621dfb19c8aec1b73907c1b1353b539b8b8833d3b990c3839fda885b99584be",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/DesktopPenIntegrationTest$Renderer.class": "75f8570c613d3ebde61ee31c749751afb77383a63e2c9a6c924c60cf6ebcef68",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/DesktopPenIntegrationTest$Window.class": "8711d49bd0b5fb53989c34363e16ea71e17dbc9ee2a13b02e76acfe2335bcc10",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkAuthoringControllerTest.class": "6ac4bc497769a2de0199e5f00fc9c1cc3f0ad3b9d6f556bb839c509144f52d2c",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest.class": "472ad0e576a28bd492ae037520f1378eb2b19c78618b9d0d28da60fd0bba7417",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$fullMeshRendererDrawsWetAndFinishedInkThroughTheSurface$1.class": "f8f63e480f101f35493a3073d3c289a21c428cc39181f2c26603008a41499ecb",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$mouseDragProducesOneStrokeWithTheSelectedBrushAndEventTimes$1.class": "f8eeeedfd7b78e9f645eb6f4d33575f7d8e2c55c658d22c8ae6846b0bd3af7fc",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$wetStrokeIsVisibleBeforeTouchReleaseAndMapsTouchToolWithoutSyntheticPressure$1.class": "521d9c80445ee971c243a45c84a29dcbb2257a4c6be3e5d78e0022e5dd92222f",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$aWetHighlighterCrossingHasOneLayerOfOpacity$1.class": "49079c61550e19f870682dc49600f07c8cbfe3a9dcb460ac4c055d4dcfde2645",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$cancellingDiscardsWetInkAndDoesNotPublishAStroke$1.class": "b6684a0f0288d0a3f3bfdc75e81a3ab2236ae8f34ed6f22e640d22de66c7f64c",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$rapidStrokesEachPublishOnceAndKeepTheirOwnInputs$1.class": "27f12352ed07290f212ade9c7adbae1cdf7451eedccad369fe355369b1031d2d",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$zoomAndTranslationMapViewCoordinatesBackToStrokeCoordinates$1.class": "d47377b4ca6d88f3b2074426672593095d7982741034d1e508e6e3109fe2c8be",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$anActiveGestureKeepsItsBrushTransformAndCompletionCallbackWhenSettingsChange$1.class": "48cb87b1b554790c616068fa70b406d51a2f33de85c05971f85689bca78cdd70",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$savingAndRebuildingTheFinishedRowPreservesTheWetImage$1.class": "0db8ed4e6994d985d795830527b266af54ebc445d6e4981fda6bfb36b49b8d76",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$disablingTheSurfaceCancelsAnActiveGesture$1.class": "239b0ddfe58d06bb353f9d24dffbacdd8487d62399b2e44b11cc1af0c165415e",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$removingTheSurfaceCancelsWithoutPublishing$1.class": "2f0a45744a98ac5f35d2902310966bc7ec49ce2e220db6dcb4fe23afb501d5f2",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$secondaryMouseButtonDoesNotCreateInk$1.class": "1265cef424ef6090feab6b30a559290c953857689faf6231c0dacc3b9718093b",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$releasingPrimaryFinishesTheStrokeEvenWhileASecondaryButtonIsHeld$1.class": "eccb3fa5de7f77768f86545ce2717c9dc884cb61da6a5c772104fad56aecaf56",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$anInputAdapterDrawsMeasuredStylusInputAndCapturesItsCompletionCallbackAtDown$1.class": "700c14ff299dcb0d811b67a16774727657350f3af7c199f258e16e6d59857e2a",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$inputAdapterCancellationDiscardsInkAndAllowsTheNextGesture$1.class": "5f1370263e2afb6bf906be551d7a6db860d721825a48fe562b9a111715679364",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$disablingAndRemovingTheSurfaceCloseTheAdapterAndIgnoreLateCallbacks$1.class": "ed97c3aff19592786838646d73cb38348a6bd5c06feaf526d2d6be9386f8873c",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$inputAdapterAcquisitionFailureCancelsInputAndIgnoresItsRetainedListener$source$1.class": "9f66aacd010d213db1a96e2f69d6fc9c78731ddf272824d9b279e34e777aa813",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$inputAdapterAcquisitionFailureCancelsInputAndIgnoresItsRetainedListener$thrown$1$1.class": "daf1f74af5cbb80be7603c37f344102eb3bf1a90eb1e25fdd0744c16dea08b65",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$inputHandlerToHeadlessComposeRasterFrameHasABoundedLatency$1.class": "45afb294998096ac9aebd69da3af67d430e87c857d4ea2ed82bc03a76758ab81",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$PixelDifference.class": "953fd03fae93ee054ffc5f5be4abb8dc30a017d25b35c9ccd48972590a6a0446",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkDrawingSurfaceTest$TestInputSource.class": "4040e8b320909eb34d6d837451032d1c5f4970ee4dcf46b8f5b66d1898998798",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkIncrementalMeshRendererTest.class": "c2eef030e0625434f27a320839127231d4f0a471e7571fb398d8188c0507d6fe",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkIncrementalMeshRendererTest$directPreparationTransformColorAndStampKeysInvalidateEveryVertexAndChunk$Parameters.class": "64d0c7d2b154c0126a40f6167a93f77269438b7ff1b47492cf8902074b7eeb54",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkLatencyDiagnosticsTest.class": "70c12946c78630720ba5570e140608149c6261b26ba4fc16b37e2d83af09ae8c",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkMeshEglTest.class": "7553a6808b753a07ae6cbe6c2c0d02abbdb82e340817dbb743a90900c86bd580",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkMeshEglTest$compare$$inlined$sortedByDescending$1.class": "127654452e4bb7d27dcb648cd91a412c08478712d927ba9dd27b6a489e2b2e84",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkMeshEglTest$Frame.class": "7f9fec51430503353243f35aa15e437aeb1cd59422db40fc7e81f817a99b8089",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkMeshEglTest$Binding.class": "e2c2e384b2efc05444855f5aebebb45f2e2bccaac5bac7a41c7b0453d11d59d1",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkMeshGpuTest.class": "b06580f0fd6b53f8344f8f7aa850c971db4f0bda97aa847466b2575cce931aab",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkMeshRendererTest.class": "33914d31aa557262e8539222dcc897da099129802c90042218eaa5252bac532d",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkPathRendererLifetimeTest.class": "0a974b9bc400461733f9ab5bb9c7888cad17857318b2ef9b3370624f52b55a87",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkPathRendererLifetimeTest$RecordingCanvas.class": "f323c6f692217651ddbab4e63572cdde78f81bd2f85bea5c25bcb726430f902d",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkPathRendererTest.class": "a19d0cff1684f496afa8cbb38a939a126539a2f2ff17b21e63df3bfd0a5927ad",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkPenPipelineTest.class": "3ef0dcbbe18497c0bbcc5f67ba11f7e3f7ed615ba880d921cd75a198f5c95d3f",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkPenPipelineTest$predictionFactoryStillRunsAtPacketDeliveryBeforeAnyFrameAdvance$predictor$1.class": "13d2148dc4effb7165536cdfedada0436607af1c426d97e20615b6af54f82ecd",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkRenderPathTest.class": "5692d0fa7570a0a8a5e532925e256b4f42df8e9256a791256050f07ffd531006",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkRetainedAuthoringRasterTest.class": "2e9214e81079fcf01beec06e78359278d7c22d6cf5b652ced35da709119f7306",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkRetainedAuthoringRasterTest$budgetFallbackAndCustomRenderersKeepTheFullRedrawResultWithoutRetainedBytes$2$1.class": "862c0538443e397e4da4fc138c87486d2f235810f683e88ef3d342b30b248563",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkRetainedAuthoringRasterTest$Fixture.class": "b91795b65083e7615ff8c3230fb2cd850fda1cbc79f62c0ff0ede4849d0c7922",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkRetainedAuthoringRasterTest$Companion.class": "7000217f84145f23b1ea89b47f846a990e5be68f1124086f13b321935322b3d7",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkSceneExclusionsTest.class": "5f7ad3bdf5c7bf6e8b9d3bdb5d4213c464eaf4ab1ecce5917a5a49d0e510a89f",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkSceneExclusionsTest$excludingSplitPiecesPreservesTriangleUnionAlphaAndRemainingDrawOrder$$inlined$sortedBy$1.class": "ffb870dee10d28b3c8c679cf98059d6606463ea3054019999929fa875171e065",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkSceneRasterCacheTest.class": "c32f7b0ea97124e799c3fa95fe1ce94ddb746acc1946a9c44afe9825a850cbf6",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkSceneRasterCacheTest$rememberedCacheClosesWhenItsCompositionIsRemoved$1.class": "e7049d6bc68b1da1c33f1e52d39dd6f8e9c055cdcc08430eda3d8aac4a123789",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkSceneTest.class": "835303c75c7c6d34b2f0b1e79557db7c2e16d86ad4f7dd99a938b3cae3abf876",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkSceneViewCacheTest.class": "4badaa3145102b78c2fd5d9f9a2f3ca49847052b059528d047665299d4aa0bab",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/InkSceneViewCacheTest$Companion.class": "cf953e7cfe01c9f875e590a078ae79eeca10fcd0924b4669aa9530c6b7d9d09c",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/NativeInkPacketQueueTest.class": "fd1f2f72bb6aee80ba979a55d479d35e6232635719e3ea92555d6cbdbf2ecc40",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/NativeInkPacketQueueTest$mouseCoalescingPreservesToolsPointersAndLifecycleBarriers$1$queue$1.class": "41e5f8e482911662d3116248e2a358cbf60d05dad9025b22b0ffe37f8a7d0d7f",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/NativePenNormalizationTest.class": "e336175f323563e49b7363bd1a9a437a53a27e151a6cc32a86fde1f5e142b64a",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/WaylandPenIntegrationTest.class": "b0f8183b1833da1ce6744979711766a4574e95b1763264c28ffaaffa90d7ee0e",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/WaylandPenIntegrationTest$Window.class": "8d0deaff7f256bbb5e48d6c32d9b1e5788898a85726dfda437e864e6e1994e97",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/WaylandPresentationIntegrationTest.class": "1cb31fcc6f8df2423b6a80654c0c39e8f53713ad67e00e73381ef9e9a1747bf4",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/WaylandPresentationIntegrationTest$window$window$1$panel$2.class": "6f6519e2aa73e56bfe293176073edb7e9a0f92a4950df9bc609b5b6969cd278c",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/WaylandPresentationIntegrationTest$Window.class": "1fceae85919fc9ba87a7a892ce97634d039e76572ce58c1df008634d690cccdf",
+      "$REPO/byteink-compose/build/classes/kotlin/test/com/vivenotes/byteink/compose/WaylandPresentationIntegrationTest$NativeFrame.class": "a6f390505053ac1ba5d2cbb0f63d3061452f2ec66892316854b1f9c3a8473aba",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/NativeCalls.class": "bf79893ce9df2b084ec435f595e5e969f086c7bdd064b3978a9dd465310df4c0",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/NativePenBridge$Frame.class": "ff2681b46606b4872abee479feaf0589400f2eb7f0755c94e2075ab7b3e2552c",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/NativePenBridge$Point.class": "1c39853694f189196d9391970a325125c2d43c6c980ab137ec936538673d4717",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/NativePenBridge.class": "6c45b39d27b56542755a09ec5740971e8ec1bcf2320f7880faea8f590836d820",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WaylandPenBridge$Contact.class": "ab111d98aaf40fe3106fc779c9ccb1fff1d76d914a1112308fe9510e6b1fad7e",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WaylandPenBridge$Proxy.class": "13acb50befc9b859204672bf09eaf577712604c8afcd7f1f435dba0653284a80",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WaylandPenBridge$Tool.class": "80d6646ecbffabec08654122fbbc11996e7aed5374edacde8c89055bff5e278e",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WaylandPenBridge$Touch.class": "c23014c21e632437d1c8a7b90224b2d20d8eb1c379295bcf6d1bacf4d81b6983",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WaylandPenBridge.class": "ed91cbe26826ee62e7cfb9bbfd01171b85884c5df6893a5b56c8bb0742ac57ea",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WaylandProtocol$Interface.class": "976405aae1c494205812967a6dd7fd6959495d516dad3e4a0f4915dfe1a912ee",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WaylandProtocol$Message.class": "544121ba411a3fa874f699cb6d325634f60e468de4c5e733cd973b4961937faa",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WaylandProtocol.class": "b582eea01549dd6644df5dafc3f3e0343784c6f026a64a14cb11eee860176b30",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WaylandWire.class": "357701a25d82177c72c9f42a5fb234268052961350a8ae241904ab361f943736",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WindowsPenBridge$Hub.class": "c01c4b9603e64cf027eb5199387620b22a88d2170c883a259927083d6002dcd9",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WindowsPenBridge$Runtime.class": "77e1859edd8593e4d8dc803f32ebe2c8c838805a5cf8a718b4b5e7d64ace16ac",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/WindowsPenBridge.class": "e7bde5286e8411dc851844b7d53529e5e22c7d9d32ad4761c4f1dc75552c5414",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/X11PenBridge$Axis.class": "dcc76d4af0546b56af9d93b253092188a454d80efc05b577316a5b699d6afb02",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/X11PenBridge$Device.class": "245bdbc7158ad72ce4d58fe7bfe458e121d6877ce7a621b6f53384aae6431e84",
+      "$REPO/byteink-compose/build/classes/java/main/com/vivenotes/byteink/compose/X11PenBridge.class": "8ea2e580f3001d28817db9e2e4446410eb1b5e2b5b876119bc5309cca5105b3a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/META-INF/com.vivenotes.byteink_byteink-compose.kotlin_module": "af93d0cdaacce29eeec700cfcb49011b16cfb604a2460178086ee0f7f4d5016a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/FrameTiming.class": "05d2bb199a42949f63abaaa7549364b580164080164ada8bb20c1fb489ddd8ee",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkAuthoringController.class": "0a1fe979ab627035ec9ead6d0fb634a9def129312cede8bc26d65959c8422448",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkAuthoringSession$Gesture.class": "d99f6453c0575d853a8aa12b996fd65c4919bdc42771df141d18889a1062ad86",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkAuthoringSession.class": "df7a82ab1a3e7db5a587c88dd1d8af294bb954cd4425d60c02b8f17f3a61b55d",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkDrawingSurfaceKt$InkDrawingSurface$6$1$2$emit$1.class": "c409cdd83f9a7638337972ad3019549f8940ec9ab4a85b4d524614e3c63ee3a8",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkDrawingSurfaceKt$InkDrawingSurface$6$1$2.class": "c1e7f166928c8245b9cffb4cd85d8afead5881cb3e34b67592f03af87e6bd599",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkDrawingSurfaceKt$InkDrawingSurface$6$1.class": "899d148f1a3d60e76fcdd7b13357a96f5be6e89ee90e150150052e3f1ff540e3",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkDrawingSurfaceKt$InkDrawingSurface$inputModifier$1$1$1.class": "48d3674b09140d7c632d717650d4d4a688994cd1c10afd3faebc1604937b58c8",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkDrawingSurfaceKt$InkDrawingSurface$inputModifier$1$1$invoke$1.class": "3405a78e83a061c458a945bd30e1845bd3942a91ff4c1c2261dbf267bb6bdda2",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkDrawingSurfaceKt$InkDrawingSurface$inputModifier$1$1.class": "157cae3371817253cb48af785970a3dfe70511e82fc9709e8eabcda2165b85c9",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkDrawingSurfaceKt$InkDrawingSurface$lambda$8$0$$inlined$onDispose$1.class": "d1e88918a3c6d346e811681415e6bb4a60ecc218b2f639ca18a124e62a67d3f1",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkDrawingSurfaceKt.class": "41093d2f5cb21aa3fc4dc9292616e51fb1cb6ec8066d82195265cbba40ca427d",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputEvent$Batch.class": "8535ec22c00d9b76161059ba2c9027a861ccb573228cc6e528e51a826c3b61fd",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputEvent$Begin.class": "ff71b6675b7001e4c541ad33a3142f07cf3957d4cae30ca3ae4f0882c72900c2",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputEvent$Cancel.class": "26e4a289c6509965a6b073e4778bc7e59ae773e89b7475a40d952a1749eb9969",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputEvent$CancelPointer.class": "db70a8e75e3d3b1514a91d80dd266a5b70f6761fe9e9a8f108de470e528bac50",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputEvent$Finish.class": "17f3ec010e2d984ea34746bff1f8326fc5f6214288a60b212ba76c96a7e87f5a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputEvent$Move.class": "67d0fd259db78a502c975267e505b2e9f0e9a6e06f681ca192dbae342b27c1a7",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputEvent$Predict.class": "c7b2320f7204d70f50f03f75921a5bed41a47a9559c0e791b4c365e8857169ce",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputEvent.class": "90c4fab55c5d6c6c5504cb22340683a0632375e892de6a25bb1ddaf92feb48c2",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputPredictor.class": "18f6695f40bd0a37331b572e5b84193bef0d548d819a7d558e06cf36590ea73f",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkInputSource.class": "51bea3a0d197b6801e09955dbd9fa968cd0d6623b55b3b729a4d85334a414f91",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyArrival.class": "e6c4d5e72bde023426ae64b22f4dc0524f762adc301edb087745cce8f1ebc330",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyDelivery.class": "3375c6c9e0d1e0099196237528cd2e8e862cb7acb053a8ead6eaba9307ee8b50",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyDiagnostics$1.class": "a6c3467f70dc703d4bdf799ae95f4d51223c12d7f9cf46887af5dc2753e86cb4",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyDiagnostics.class": "8748a7a362e51e8822a39b6c5ffe855d09eff947f201579f8b8784543e9a6804",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyDiagnosticsKt.class": "4420d4f8419d9849bdc0e2fd28b2b861d0fd8395dd1b75d0176c23a0ec6a2d6a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyFrame.class": "515aeded7db16ced863d23c239d0a60fc8bf4f4d17b7733cc6218342be2382c3",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyInput.class": "6dd561db39483e1112f7a7e673d4c12f57a39f19ec42f7ed61e03b00a0c4bad9",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyInputOrigin.class": "6def42675809d4e63219a5a9bd22d02947e66eedd3973a2588f0bbcd6fc55b50",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyRenderPath.class": "a5a5c157ca8c22db5efdbacc2351e3909da608b664cf74fb27e4d9a4cd013288",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencySnapshot.class": "c42628c30f93c754f8b4c6073bafc1fe70eccba940aef73561213aabaa3a2b13",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyTracker$Frame.class": "0abee21fef373b19f314944629ef724f3a4e46d09381891cbc8d6be5834a644d",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyTracker$Input.class": "e94ab5cc5452a91e2cac820680762e1a3797e90bf0cd11ed7291e1abeae3646d",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyTracker$Paint.class": "69098901d508b51a1cefb26b35390853a63aa9da385c75ace6246e219a7e4cc4",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyTracker$Request.class": "9e970487b928b727dca0d88c68235e4baa5e362faa56e8bbaae84df86c057451",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyTracker$Ticket.class": "ed27ab4eef31f7c4de0a63088019c6a75a6e454be443a79dcbb94c3c0deff19a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyTracker.class": "f9b2d0dcca54cd8d890bef0cc72c7691b490620fbe35ceac347588338e26ac26",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLatencyTrackerKt.class": "93e99c9520d26eb0f9b15d977cffd3204408972ef9ff57496b0dba21caa0efeb",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLinearPredictor.class": "7ac79eba621f62fff7e3cf656091f546cfeda118f35db69f5d69e64eef5bf9ba",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLiveStroke.class": "2402e2d36e403eefecabad200b16c0f59882a745db6eb6b01823a6226b7fb889",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLowLatencyPanel$4.class": "90047cbba2ab026fb9620b4b747b1fb1cbb80dee338e223927e3204f759ace65",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLowLatencyPanel$connect$acquired$2.class": "54299a4a948b585efaa9847835ce9af0971bc37d6ebdbc14daa4cbcd65720a5d",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLowLatencyPanel.class": "06e70d9c45fa1fd17abb46bf241dbd717eb1880343a4cdc26077a5548f5e64cd",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLowLatencyPanelKt$InkLowLatencySurface$4$1$1$1$1.class": "cd58eaa485b112a941dea2bb7f985cf8f70742917efa430a514d0bf7525f2b43",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLowLatencyPanelKt$InkLowLatencySurface$lambda$4$0$$inlined$onDispose$1.class": "3360048a47cae47d186b67209c198809d2685b3c9bbd9f84a01327af0d636817",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkLowLatencyPanelKt.class": "e0cbf5d120246d1d8822940d02c583307c62a94a94bd0ceaee92161c9fa5c371",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkMeshRenderer$CoatGeometry.class": "5b1ad7690aaadb90aa00755fd2899c951f7c24a3abf69f480d27b71d04db0b32",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkMeshRenderer$Geometry.class": "d94968a8282f6bd3a51621c1b6e33033ea8f9d3b6d4d66f8481e5ca34a94289e",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkMeshRenderer$LiveGeometry.class": "3573e388090282582e4651160cd5f68236ece25bcb39c0031d82b39d953036bb",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkMeshRenderer$PreparedKey.class": "94a5c036d37ce79ff3a8ad78b2c4822e54403109dc7106aa6e108676061c98fa",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkMeshRenderer$StrokeReference.class": "ea8d3bd32435b803eb939bece5b8ef73e88bfa62fa3ead5508363702d779c940",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkMeshRenderer.class": "191284dd20088049608cbfd3d3c4042d6eafc427aec564f6b71e379be6bfc741",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkMeshRendererKt$rememberInkMeshRenderer$lambda$1$0$$inlined$onDispose$1.class": "770a66537fc109832ea4a048153575c30fce12b854169f210948a28826cab7d0",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkMeshRendererKt.class": "4647a59833b10db57f8ae5f71df5b11ca065d211bbe77738870a1bf1a92533c2",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkMeshShaderKt.class": "1ea47f750e35fd2994f56ae0835541d05b7a875bc692fc7655ead95ed36aada6",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkNativeBackend.class": "b5637cfab2788818c7ad57d12d2c5d25aa76c638ced7478c9ef9365aa2fd74a9",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkPanelHolder.class": "fe270bcb28e7e65fb2028be022af84b2ffa093c30848b2f5fecdef9a2af966f3",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkPathRenderer$CachedShape.class": "a7f39658bfa52c524d64ed8da46a127366eef4dd6c8f37c57d978befdad453e0",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkPathRenderer$Companion.class": "67e6f0ce669acdee06996e9d00ee70bddd202c17116a2ff777520eed80e6afe5",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkPathRenderer$LivePaths.class": "859c8ee41f12424589814ba964fb5b5af111e451ce5b09f2d62c0b653313fa99",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkPathRenderer$StrokeReference.class": "c8aaeded5973186816f0c666863614d2fd7255da21b9c5a1e9d18373b9c7dee2",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkPathRenderer.class": "a2d406d6d37fc2e72e80c1a21114adfb696f7bbb1b864afb09ba6f4e3e790891",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkPathRendererKt.class": "6ddaae07779f3a48421e08d065d87ad05cf79cc9d77a0d2593ca0e26ea0aa55a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkPointerSample.class": "3f03e09da098f756fd3e12338f234575cbaf801fc88a6a957c98c827be0b93bc",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRenderer$DefaultImpls.class": "5eb2670d93522a14777c54044de5282b5d3f2464677b9341b9674c326a250880",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRenderer.class": "60443c25ae655461735a5b0c13f4b505fb73f87d915aad61d633cec6253308b3",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRendererKt.class": "29572fc7d49ac024c23570f1506710681379dc27591934107587a2a89a3dfa7e",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRenderingInternalsKt.class": "bccc805f896cbcf03062ea43d2566b23dc5bdc0b391793965baba95ad9e0a26a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRenderPath.class": "b901882af228173df4bc9a80900384641b2154aa60510bf29f1925657d77fd6f",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRenderPathKt.class": "18349e4e117f78eb5611a2864d998680b0dd17c438b6a1296b53e7d93e424bd0",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRetainedAuthoringRaster$Companion.class": "6b0a70f021afa37ca08a1543e3c44bb3f23caa8a742c250e066d248c932a1284",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRetainedAuthoringRaster$Damage.class": "5fcef2949927a10e8ab5845769eedb7483932ebcda1464ad058345dfa303451d",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRetainedAuthoringRaster$Presented.class": "677dfdcc9b18393d082788a3ef4085054566e44150bcd8e56669cc21d2b24377",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkRetainedAuthoringRaster.class": "ef7f0eeae1d92c418b8173e158a80ec6d29a0371281d481d77611d6cf031c580",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkScene.class": "8e0d912697b3b9787767c138cf634493b4de9c4c053559993ff0db67bd4d6233",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkSceneKt.class": "a0c39b2427a9de2ff3f064f3ca25e721e12feedfea9b30d4a9100b946b33142f",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkSceneRasterCache$Companion.class": "38602b984160ec4053698ac9e91982d9638ab4af5ff123b6346c5041c621de31",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkSceneRasterCache$Raster.class": "a442e7349e4e6ee7afc4915946775eff98da3ac2cd1190d1b94d70892c128d00",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkSceneRasterCache$View.class": "fcec967dee6f84efa2df6e5dc03d8b448f6b8d628f76030b0640770806f43046",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkSceneRasterCache.class": "2388901ae8eff09c8dbc623e11bf97aacf309076a880512e4aadb8874f8bc599",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkSceneRasterCacheKt$rememberInkSceneRasterCache$lambda$1$0$$inlined$onDispose$1.class": "073331cddc57c88603fd529426f66cd024288fc957de1c49e29d7198b2d73487",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkSceneRasterCacheKt$rememberInkSceneRasterCache$lambda$3$0$$inlined$onDispose$1.class": "b30308d793de12d3c883678c167236da7574420b0dd709a9830e26274356493a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkSceneRasterCacheKt.class": "7d277fa547ff194059b035154d2e74dfef6db1c646fc7715b96d30e87eceaf8e",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkSceneStroke.class": "4f0c261f737109c37a945d10ff7e80d92b408cab188cc18501f811d188e14485",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/InkTextureStore.class": "93c552347313afd23d7eff5cc810bb2625194c38c10d5125e0edf1eb0a015cc3",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/MeshChunk.class": "eb5de79871d41e6ad4049dc0c7b7743aca3d5d8ecf41b02a70aabea8cb5d94bb",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/MeshColor.class": "6110bfff7492a5a7a781ab35ddbd3e5e350406f17a901fdf5a3433b8bf5229ca",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/MeshLinearTransform.class": "3e0f6f9fb5fad8335c4a27f01c18cce9bb6a56f92a1eb9620ff50c3e3ae09563",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/MeshVertexTemplate.class": "c941ec9e0452fcaaef8d426e5d47ef78eb384f1747a7e9d4e872d350675193f8",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkInputSource$subscribeWithTiming$focus$1.class": "d9a5f81fd272c599771d7e972120d275ca683aa7c4ccdeacc30379bb795846b5",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkInputSource$subscribeWithTiming$mouse$1.class": "f744b94c56336e2b83eb3a10cff3c418f98eb90519801765777ab8fb52bf8eb8",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkInputSource$subscribeWithTiming$windowFocus$1.class": "52a651357d6a8d34cebb24bbf13e71d87b2557c6a112cd049cb3ef2165e2f93a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkInputSource$WhenMappings.class": "7bd532cae13a7f791e4a8574dbf7ad70678087071717ead940c1deca8d2511d6",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkInputSource.class": "4d4bc5d8e17f042329f457479c15068cae82b574d00271f80bcb87b09f968806",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkInputSourceKt.class": "a9db645eae41f854e55d26fb8ceb19c111e22877f6340d7799deacbc6613e6df",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkPacketQueue$2.class": "51ddd257acbb30d14b67c846656a91c36db809844675486246ebb6e5ea6380d6",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkPacketQueue$Companion.class": "98d91fffc9ab8481a03adcd508454ff32d971a20f8e4d3df860b5b4b20477fe1",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkPacketQueue$drain$1$1.class": "3dd85ac9740d3b98574a66ebb6ecf16e83597986e3c5e79d6cb15633cffcf6c8",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkPacketQueue$enqueue$1$1.class": "9bd353f3de7d29a39b2de2d8cdc7054c3c0497e97574d318ac6bda40ba7dd77b",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkPacketQueue$TimedPacket.class": "4f566eb4670573f724936d041a9c6c506d358485ae0e0add0d794d1b2d1fd7c4",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkPacketQueue.class": "e7579ef1557b915b8af85d7c714cb27d8431b7d2114638ee97f9c86f59bf9e1e",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeInkReady.class": "9ece0d04613f1a51953615c85d3a9b61aa5a0c534bd93a5ffac566180a2b00cb",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeMonotonicClock.class": "75305aa38c47341a8b7ec0297290883ee00d58197337b34c92d88e0725b233ca",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativePenNormalizer.class": "7666c51f0e5523d3e3fbf7aefc808a83ed0baf9c24a007bd561b5dbfa5a557b0",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/NativeTickClock.class": "b11a2e70504f42b6d226435973eaefe9def07fde3d6114bfd01adaa2e0f1bc3d",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/PreparedMesh.class": "910305d1a6046dead38ff7c18b08c0e13e9cf3772604d99df95b264f410a4b1a",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/StampAnimation.class": "a410acb3a72a0e991233173c7392d647e9562a0c31f3c717bab1a0b838cf77c2",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/WaylandRuntime$WindowSurface.class": "dcba256185d38b23654623e09ff4b9c8a6af267c910c2e824d15c6debb85b2bb",
+      "$REPO/byteink-compose/build/classes/kotlin/main/com/vivenotes/byteink/compose/WaylandRuntime.class": "28cb367ad47ca3cf7ae32e1d3fa4ce14f66d0e1e9dccf9015d55174f5bb90039",
+      "$REPO/byteink-kit/build/libs/byteink-kit-0.1.0-SNAPSHOT.jar": "11577a922c129efa0b947ba58434d8b0643d137796e6ca7006a364b8fdd18224",
+      "$REPO/byteink-core/build/libs/byteink-core-0.1.0-SNAPSHOT.jar": "a663faadbf224bdc40f777b06c3aec9d3199d72e2fc7a3c8277fac0bd7fb8dbc",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.desktop/desktop-jvm/1.12.1/55722afc383641f44e5059e3a87e076436190826/desktop-jvm-1.12.1.jar": "adaea6ec630420712dcfd52a356b46aef603129ca7f76cba204569112fa80e1c",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.material/material-desktop/1.12.1/6d090e795e1575f46fcd5f993f38c2e34b976a32/material-desktop-1.12.1.jar": "0c1dd397b45a7cd830234ddf30d253b586259e726a5cd816cca2e79119a47fa2",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.animation/animation-core-desktop/1.12.1/a14cdb09ab8792b6b20d298d0a26530969228b0f/animation-core-desktop-1.12.1.jar": "d988b6b7d867146825a9da38e1522fc50580aa14986ab22a8b724fcdcef17875",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.material/material-ripple-desktop/1.12.1/b4b34a8be94b8c41526d448a58d7ce2256872df5/material-ripple-desktop-1.12.1.jar": "06ac72a5f57b2e724ea129efbc71973a27a9e1ceeb7f568281dcb0d1ef4448fd",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.animation/animation-desktop/1.12.1/4e815509a4bedbf3ff9f3ce292c548989a00ff53/animation-desktop-1.12.1.jar": "755ca81764d5aae7afb2d5f72e3253a44a1cc9c0f890d1dcc319f0eb8f00736b",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.foundation/foundation-layout-desktop/1.12.1/64d4f43ec090a85f3069762a5c39a147c6d2c9aa/foundation-layout-desktop-1.12.1.jar": "57b54c104bae9eea0e90bb26487f8b64ead09a473f1b32cbed8579084f485e7b",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.foundation/foundation-desktop/1.12.1/cb418f810ab36f9268c13816a6b21d9cd6ffa4b7/foundation-desktop-1.12.1.jar": "e1dc29cd9de2f1628a741866a112eedc62fec43bc548d0e4f434bf31207fd1e3",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-tooling-preview-desktop/1.12.1/9871d626c28849c2f353e15d7694e38d7996ddcc/ui-tooling-preview-desktop-1.12.1.jar": "19f5005baa27dfbf3f435feed44dfba9c938ba386ac6753d00a67a270cd72231",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-util-desktop/1.12.1/2d41b1dcda0c16efa86718f309fe2159a2890028/ui-util-desktop-1.12.1.jar": "bb81e9748c9bcadeaeb99bab647e21442e62e253a3a497a213c68e040cb2b385",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-unit-desktop/1.12.1/e0670f2fc4ace09368fdba41c15558e1fa79e866/ui-unit-desktop-1.12.1.jar": "7c4998f1224f241dbe88fa59701d697d598fe8979a4acaed717b8365d4cd9300",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-text-desktop/1.12.1/af2aab56220491e300daa1def6ce1e586f18d84/ui-text-desktop-1.12.1.jar": "672331d7e1440f2406f6a9b6d3d61475316cf622d0dbbe910e47bdbd69861c38",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-graphics-desktop/1.12.1/dc0dbaa823b75a72d2306459e0a118b65769aa22/ui-graphics-desktop-1.12.1.jar": "92fddd7609d77a803f7083b1b7dd5a651cba10be27c105361a5d0b3894932085",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-geometry-desktop/1.12.1/21ca5715bcde50586e57506f07b280ff8b626bdb/ui-geometry-desktop-1.12.1.jar": "2cde44d95ba21654dcced3a3098bdd171b3ef5b17ef7fc6cec0d25983dbc9fa0",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-test-desktop/1.12.1/3b714796fd24fa2508480f5b4fc5d69c90bfbc75/ui-test-desktop-1.12.1.jar": "660fa942dca3fad63d2436841eba124a8908b686961a912f4a0dcddd29469e52",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-desktop/1.12.1/a6d765fb5086ca7046af0172a7fc2ff3b32a3e59/ui-desktop-1.12.1.jar": "eaee42812c81cf1f1a925088bd7e847a343decbc3ccb1682f00f203123a51a17",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.runtime/runtime-desktop/1.12.1/d9b0c5277cd9ba7a116fbb06e1716d02d0b33401/runtime-desktop-1.12.1.jar": "9a40fb9ac9b98a1b2d8be51ce57dbcf733e768fa06a9e4859a1775cb52bf6806",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.compose.runtime/runtime-saveable-desktop/1.12.1/b4a48d211ac0281b049bf42cb21f715c71b69145/runtime-saveable-desktop-1.12.1.jar": "d81973dced223d6aea7bf9f6d4ead285494c656ea003b59072babefd25470c7b",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-runtime-desktop/2.11.0/c2b5e2f7d739375538c2a74757531a30607f85ff/lifecycle-runtime-desktop-2.11.0.jar": "09f75a4a8d763cee5d6af36f422139a0205d3f6df2e2c5288cae42836f0b36ea",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-runtime-compose-desktop/2.11.0/8a85615b7e4f5728106bf7bc3cfa95f429eb6264/lifecycle-runtime-compose-desktop-2.11.0.jar": "d5336753ea4d5881ccfb8b0613e034eb241f0d8b4349536df1cd0ec86cf63664",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.androidx.lifecycle/lifecycle-runtime-compose-desktop/2.9.6/7b6b6793f3c4c5996b20d1d99cf728e5fac00364/lifecycle-runtime-compose-desktop-2.9.6.jar": "31c3c4b6dea38f078c46829dee2c43abba2bf8757b7ee8a0f660f31217364898",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.androidx.savedstate/savedstate-compose-desktop/1.3.6/63692375ffe667f12cb3ea8aa1e605d659ed2add/savedstate-compose-desktop-1.3.6.jar": "0f3d045c5fd7e1301ab6c38cd0778067b0484cf39acac1233be71a723a6a8075",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.savedstate/savedstate-compose-desktop/1.4.0/d3d6e0e2108528eb6080dc250da925a572be4202/savedstate-compose-desktop-1.4.0.jar": "c02a98b0c2b35cdde245c0bfe6e7ff453c7b6d06a5eb8681d25b7f54b874ea48",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.savedstate/savedstate-desktop/1.4.0/3b049a0f81643d6b4b900de95bc23efc085c32d5/savedstate-desktop-1.4.0.jar": "e965ed7a011be83a271ac7d82249a776368479ee3a2b07948c3445b51d640856",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-common-jvm/2.11.0/2c4f7d92f1fd723121d394c93455f50158403ad9/lifecycle-common-jvm-2.11.0.jar": "e6a66e67b9f63a0fb6344f165c1d872376e5fe6d235bffb138af45122cf452a9",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-viewmodel-desktop/2.11.0/156dea0e0e4862b60bc14881891bae1e5df64f81/lifecycle-viewmodel-desktop-2.11.0.jar": "175c349266ccbb6a2036615725b7066ee3f3319665c98af42206ab3a582a43c3",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-viewmodel-savedstate-desktop/2.11.0/4e8025bc47a196b0ee403b8d915393ae7922c21a/lifecycle-viewmodel-savedstate-desktop-2.11.0.jar": "ca21720ce7f370cb21cabb5329b959eda624107ec06282e3bdc92582917b1d27",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-viewmodel-compose-desktop/2.11.0/29daa46bc0d2d574ee95309be1f325764f40b35b/lifecycle-viewmodel-compose-desktop-2.11.0.jar": "1b4c58125c7b3693444f40c8ab76881d17fa74726860c24872a3dec3e0fad34b",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.compose.runtime/runtime-saveable-desktop/1.12.1/8cacc17c590b2ac5fabf040c4f66d432092a821/runtime-saveable-desktop-1.12.1.jar": "069949667409ab6de21053f9fdbff0869ae2a1f70a7212cdb89e7d409fd2552c",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.androidx.navigationevent/navigationevent-compose-desktop/1.1.0/d4c4408fbc6ac4dbddaef91d82013f435c02a9c5/navigationevent-compose-desktop-1.1.0.jar": "0514f5d5c14de3b422c48a4eaf1d9dd2ce265041339e4c51ce30db8da1690874",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.navigationevent/navigationevent-compose-desktop/1.1.1/ef8d1270c6439178474691b1886e2c3dc97f9ce/navigationevent-compose-desktop-1.1.1.jar": "1d7d20d7826a2cc63ace9862cddd8a7085a11a3ea2cff258c28b3d58e57f143b",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.navigationevent/navigationevent-desktop/1.1.1/10a65e605d90c6dc98f3de9d32ae32824a7d0a1f/navigationevent-desktop-1.1.1.jar": "4c92508d4bd3b9cafb2785e8211057d39ed8465b529660223864a19625cedb5b",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.compose.runtime/runtime-annotation-jvm/1.12.1/4cf2b71ea98c0d69c95a2885e521ba28af5fa7a0/runtime-annotation-jvm-1.12.1.jar": "e291a6ae01ab71a7f48a568ec9744c6bf9b3f46ef72fbcdeb28c3407ae531c5e",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.compose.runtime/runtime-retain-desktop/1.12.1/3aa3ec26ef2a3d26bc556b51b33d09efc1a198e8/runtime-retain-desktop-1.12.1.jar": "9b7e62a7df333c33eff9e1a6d6c2508a4d8fe4b7a43778075538fe3da4bc4485",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.compose.runtime/runtime-desktop/1.12.1/82e40832ddf785e9c0c15c4186d32f8c894fd914/runtime-desktop-1.12.1.jar": "ed390d7bf7bdba951359d127f4c1ddd223f535f5a6a63078c5c5ac6b6924eb08",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-test-junit/2.4.20/7eb3289e802e4c6cdba3ad5488d125b8d74ed396/kotlin-test-junit-2.4.20.jar": "8a5c498fa3cc04f451498cd4ff9d5d81cc6e9f08d6b5ab1cb39f6db09ea69d1e",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-test/2.4.20/ccb0e2baa3fa3a572a753019ce0be5889c587803/kotlin-test-2.4.20.jar": "fa281d657898a34f6b0c7383f374f0a0161e61b6cea0095f135d917721d63f22",
+      "$REPO/ink-nativeloader/build/libs/ink-nativeloader-jvm-1.1.0-alpha06-byteink.4.jar": "f7b190bd99041c0351837b7d22a221acf90b92ad6f3d46fe29eaebde05d9bfa2",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-test-jvm/1.9.0/7227c0691a604e2b32f525b628014dda862d0eed/kotlinx-coroutines-test-jvm-1.9.0.jar": "68b87fa90db3dab1e794ff6078364087c07f87e5e4a4d0c8d3272a222ee8fe7e",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.skiko/skiko-awt-runtime-linux-x64/0.150.1/78745f9e9e70d6d5127e928cc9dd12909482bed/skiko-awt-runtime-linux-x64-0.150.1.jar": "920c1cb033abfb79202f9f455fb86491bec5e45c156f186c0125b10fce97e093",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.skiko/skiko-awt/0.150.1/e03fd8140c0e331c3c7018b00a9710ec98d78fc1/skiko-awt-0.150.1.jar": "bb610ada28509ebee3a623c0469aff3665689fbec73d118055f3dbf5a37211f5",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.9.0/9beade4c1c1569e4f36cbd2c37e02e3e41502601/kotlinx-coroutines-core-jvm-1.9.0.jar": "ad89c2892235e670f222d819cb3d81188143cb19a05b59df9889ae4269f5c70a",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.ink/ink-strokes-jvm/1.1.0-alpha06/428788877370a53e305d3ae4c34f5ff92dc0c623/ink-strokes-jvm-1.1.0-alpha06.jar": "1cd126545a318af442f0c957b4766445965cb6970540f4d315ce055f98369b60",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.ink/ink-storage-jvm/1.1.0-alpha06/381e5e5460afec3b98881e57b4c58ea2eba184c8/ink-storage-jvm-1.1.0-alpha06.jar": "c7ffce2d75c68afa3fb4ba075e71a5070503e9b27915cb4345e8ef67f48225a7",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.ink/ink-geometry-jvm/1.1.0-alpha06/2b7cd05ec091078f9857a7bcc54ff6ebd5b51557/ink-geometry-jvm-1.1.0-alpha06.jar": "a130db2fb3d28a1393767313dc83da2fff33cfe120f84ff002c35b585a75db8b",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.ink/ink-brush-jvm/1.1.0-alpha06/21e666541b013afa18348df7a30689a71af7c56f/ink-brush-jvm-1.1.0-alpha06.jar": "e7e5997ecfb6b02d7a55ff6b72f98eef2390fade8d19fc22969c0029a88f030d",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.collection/collection-jvm/1.5.0/7ba2c69414d46ebc2dd76598bdd0a75c54281a57/collection-jvm-1.5.0.jar": "70b35924e4babcdffa37d0e575ee039c56a2d97123342624c48b603233704341",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.arch.core/core-common/2.2.0/5e1b8b81dfd5f52c56a8d53b18ca759c19a301f3/core-common-2.2.0.jar": "65308a06b1c00ee186cb9e19321383f043b993813f1522c47f4a3e3303bdba41",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/androidx.annotation/annotation-jvm/1.9.1/b17951747e38bf3986a24431b9ba0d039958aa5f/annotation-jvm-1.9.1.jar": "1e343917ebf27ba96fe4dc52b1cad7fd32b738fbc6355bb6cd5b3b305d7212d0",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.kotlinx/atomicfu-jvm/0.28.0/6a9ac536f4b2144e57c176fd4e26821eb12084f4/atomicfu-jvm-0.28.0.jar": "39576ec46b83412ff7a2909d24cccbba90400e91f9aa67b250309bc0872ecf52",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-serialization-core-jvm/1.7.3/1f226780b845ff9206474c05159245d861556249/kotlinx-serialization-core-jvm-1.7.3.jar": "f0adde45864144475385cf4aa7e0b7feb27f61fcf9472665ed98cc971b06b1eb",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.20/94c1451890d164aed65d43b3db0b7ecef7c183e7/kotlin-stdlib-2.4.20.jar": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar": "7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jetbrains.runtime/jbr-api/1.9.0/2bc161f5472b5fd5610740e4d6ebe896c811cb0e/jbr-api-1.9.0.jar": "7e37284e33b5b304ee6174dcaa92db949b257cc4c8991ca865e7daf5113d8279",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar": "8e495b634469d64fb8acfa3495a065cbacc8a0fff55ce1e31007be4c16dc57d3",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar": "66fdef91e9739348df7a096aa384a5685f4e875584cce89386a7a47251c4d8e9",
+      "$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.jspecify/jspecify/1.0.0/7425a601c1c7ec76645a78d22b8c6a627edee507/jspecify-1.0.0.jar": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab"
+    }
+  }
+}

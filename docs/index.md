@@ -11,6 +11,7 @@ Use the real AndroidX Ink engine in Kotlin/JVM applications on **Linux x86_64 an
 | [Erase, select and transform](guides/operations.md) | Partial/Object erase, hit testing, lasso, copies |
 | [Notebook utilities](guides/notebooks.md) | Optional `.vive` fixtures and PNG output |
 | [Positioning and benchmarks](guides/benchmarks.md) | Drawing-engine comparisons, current evidence and the planned benchmark program |
+| [ByteInk vs Qt 6 and Electron](guides/toolkit-comparison.md) | Measured CPU raster/host resources, feature matrix, charts and reproducible evidence |
 | [API reference](reference/index.md) | Public declarations, every parameter and default |
 
 The header search indexes all guides, symbols and parameter tables. Search a name such as `encodeErase`, `rasterScale`, or `colorFollowsTheme`.

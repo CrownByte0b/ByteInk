@@ -1,0 +1,15 @@
+{
+  "evidence/chart-provenance.json": "cf920fea096ee7b1cf1f6cb92982715688dd8b8abc49baa8f14e0f1223bdac51",
+  "evidence/manifest.json": "0530e1a69e75a08803a52f3dbf84823ecb4dffa32800816e9e523ff31054738a",
+  "evidence/raw.json": "d74233d4bdb66d31134d250d6df6057c601cb54539227830ab1ac08ec9c88121",
+  "evidence/scene.bin": "4977c88dfdb0f1fc609497a4108e7181e70df7596ea519c1c836998150f8cd78",
+  "evidence/summary.json": "24ff1652951f2dba0b4c719be28f5d3becada4c0839033fbe45da21b38bab879",
+  "evidence/validation.json": "7132c4546b41dd55bd3f92e9b064f5a477a847437707e329a21ad61a15d09afa",
+  "evidence.zip": "5e29a17fea02469d0fa1c5e2d646b2c380fb9d4e2353b8d826a6b1c803dd22d3",
+  "host-resources.png": "ad876e80dace9aa4619e99ecd74831d5588b1173476725f2484ed767a2c11c7f",
+  "host-resources.svg": "bb14c7d127887b3758834f1042e0ec1a1d441a966c2976ad550cd465f72231ab",
+  "output-crop.png": "34808836f05d96974e382e4e09f73dcbe24ff942aecef6876064dd6d37ffbb2d",
+  "output-crop.svg": "8f6824df9acd4144a80c212bfcd03780227dd0f662eab0ff2cd25a6a4160244a",
+  "raster-times.png": "e55caf3454b402447ea2c154dbd914c3d5a95307f9df9b812cf6b12f50652f24",
+  "raster-times.svg": "bba6d30e607110232898883a2d507e67a5013f4ac266a65c4f8e70b03f3fab9b"
+}

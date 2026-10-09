@@ -28,7 +28,7 @@ def main():
     search_index = json.loads((site / "search/search_index.json").read_text())
     indexed = {entry["location"].split("#")[0] for entry in search_index["docs"]}
     pages = ["", "getting-started/", "guides/authoring/", "guides/rendering/",
-             "guides/storage/", "guides/operations/", "guides/notebooks/", "reference/",
+             "guides/storage/", "guides/operations/", "guides/notebooks/", "guides/toolkit-comparison/", "reference/",
              "reference/core/", "reference/authoring/", "reference/rendering/", "reference/brushes/",
              "reference/storage/", "reference/operations/", "reference/loader/", "reference/testing/",
              "troubleshooting/", "wiki/"]
@@ -68,7 +68,8 @@ def main():
                                             ("NativeInkInputSource", "reference/authoring/"),
                                             ("InkAuthoringSession", "reference/authoring/"),
                                             ("releaseLiveStroke", "reference/rendering/"),
-                                            ("tiltRadians", "reference/authoring/")]:
+                                            ("tiltRadians", "reference/authoring/"),
+                                            ("Electron", "guides/toolkit-comparison/")]:
                         page.goto(url, wait_until="networkidle")
                         if width < 600 and not page.locator("#__search").is_checked():
                             page.locator('label.md-header__button[for="__search"]').click()
@@ -100,6 +101,13 @@ def main():
                         assert expected in page.url, (query, page.url)
                         assert page.locator("article h1").is_visible()
                         results.append({"width": width, "query": query, "results": len(links)})
+                    page.goto(url + "guides/toolkit-comparison/", wait_until="networkidle")
+                    assert page.locator("article table").count() == 4
+                    images = page.locator("article img")
+                    assert images.count() == 3
+                    assert images.evaluate_all("nodes => nodes.every(n => n.complete && n.naturalWidth > 0)")
+                    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Comparison page overflows the viewport"
+                    page.screenshot(path=str(site.parent / f"wiki-comparison-{width}.png"), full_page=True)
                     assert not errors, errors
                     if width == 1280:
                         page.goto(url, wait_until="networkidle")

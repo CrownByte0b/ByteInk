@@ -7,10 +7,12 @@ ViveNotes-compatible Android storage and operation replay. Completing the
 optimization plan does not establish superiority over other drawing applications;
 comparative measurements must establish each performance claim.
 
-The benchmark program below is planned. Existing measurements compare ByteInk
-implementations and controls; no Xournal++, GIMP or Krita performance comparison
-has been run. Architecture references were reviewed on 2026-10-08 and are not pins
-for a measured competitor release.
+The application benchmark program below is planned; no Xournal++, GIMP or Krita
+performance comparison has been run. The separate
+[ByteInk / Qt 6 / Electron report](toolkit-comparison.md) now measures a shared CPU
+raster workload and minimal-host resources, with a feature matrix and raw evidence.
+Those measurements exclude complete applications and physical pen latency.
+Architecture references below were reviewed on 2026-10-08.
 
 ## What other applications use
 
