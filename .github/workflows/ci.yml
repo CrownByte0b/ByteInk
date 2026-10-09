@@ -2,19 +2,56 @@ name: ci
 
 on:
   push:
+    branches: ['**']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 0.1.0 or 0.2.0-rc.1); leave empty to run checks only'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ inputs.version && format('refs/tags/v{0}', inputs.version) || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') && !(github.event_name == 'workflow_dispatch' && inputs.version != '') }}
 
 jobs:
+  release:
+    name: Validate release coordinates
+    if: github.event_name != 'push' || github.event.deleted != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select and validate the requested version
+        id: release
+        env:
+          MANUAL_RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          release_tag=''
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && -n "$MANUAL_RELEASE_VERSION" ]]; then
+            release_tag="v$MANUAL_RELEASE_VERSION"
+          elif [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/v* ]]; then
+            release_tag="$GITHUB_REF_NAME"
+          fi
+          if [[ -n "$release_tag" ]]; then
+            bash .github/scripts/release-versions.sh "$release_tag"
+          fi
+          printf 'tag=%s\n' "$release_tag" >> "$GITHUB_OUTPUT"
+
   native-linux:
     name: Native Linux build and checks
+    needs: [release]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -73,6 +110,7 @@ jobs:
 
   native-windows:
     name: Native Windows cross-build and checks
+    needs: [release]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -127,6 +165,7 @@ jobs:
 
   native-linux-tests:
     name: google/ink's C++ tests
+    needs: [release]
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     steps:
@@ -146,6 +185,7 @@ jobs:
 
   native-pin:
     name: Native pin against google/ink history
+    needs: [release]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -171,7 +211,7 @@ jobs:
 
   jvm-linux:
     name: Linux / ${{ matrix.runtime }}
-    needs: [native-linux, native-windows]
+    needs: [release, native-linux, native-windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -186,8 +226,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Select exact release coordinates
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: bash .github/scripts/release-versions.sh "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+        if: needs.release.outputs.tag != ''
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        run: bash .github/scripts/release-versions.sh "$RELEASE_TAG" >> "$GITHUB_ENV"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: zulu
@@ -336,7 +378,7 @@ jobs:
 
   jvm-windows:
     name: Windows / ${{ matrix.runtime }}
-    needs: [jvm-linux]
+    needs: [release, jvm-linux]
     runs-on: windows-2025
     timeout-minutes: 60
     strategy:
@@ -351,8 +393,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Select exact release coordinates
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: bash .github/scripts/release-versions.sh "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+        if: needs.release.outputs.tag != ''
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        run: bash .github/scripts/release-versions.sh "$RELEASE_TAG" >> "$GITHUB_ENV"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: zulu
@@ -446,9 +490,9 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish tested tag to GitHub Packages
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [native-linux, native-windows, native-linux-tests, native-pin, jvm-linux, jvm-windows]
+    name: Publish tested version to GitHub Packages
+    if: needs.release.outputs.tag != ''
+    needs: [release, native-linux, native-windows, native-linux-tests, native-pin, jvm-linux, jvm-windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -459,7 +503,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Select the coordinates tested by the matrix
-        run: bash .github/scripts/release-versions.sh "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        run: bash .github/scripts/release-versions.sh "$RELEASE_TAG" >> "$GITHUB_ENV"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: zulu

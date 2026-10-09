@@ -10,7 +10,6 @@ Use the real AndroidX Ink engine in Kotlin/JVM applications on **Linux x86_64 an
 | [Save and load](guides/storage.md) | Stored rows, codecs, replay, unknown data |
 | [Erase, select and transform](guides/operations.md) | Partial/Object erase, hit testing, lasso, copies |
 | [Notebook utilities](guides/notebooks.md) | Optional `.vive` fixtures and PNG output |
-| [Positioning and benchmarks](guides/benchmarks.md) | Drawing-engine comparisons, current evidence and the planned benchmark program |
 | [API reference](reference/index.md) | Public declarations, every parameter and default |
 
 The header search indexes all guides, symbols and parameter tables. Search a name such as `encodeErase`, `rasterScale`, or `colorFollowsTheme`.
@@ -44,5 +43,3 @@ The ViveNotes desktop app now implements Normal partial-erase interaction, previ
 Page coordinates and brush widths use **dp**. Regular Compose pointer samples and viewports use **pixels**; native authoring panels use **AWT logical units** and apply device scale themselves. A transform connects the chosen input space to stroke units. Monotonic input timestamps use **milliseconds**; stored operation clocks normally use epoch milliseconds.
 
 The application owns database IDs, ordering, transactions and undo history. ByteInk returns values and geometry; it does not update your database.
-
-[Run the examples](wiki.md#verify-the-examples) or [preview this wiki](wiki.md).

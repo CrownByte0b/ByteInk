@@ -31,7 +31,7 @@ def main():
              "guides/storage/", "guides/operations/", "guides/notebooks/", "reference/",
              "reference/core/", "reference/authoring/", "reference/rendering/", "reference/brushes/",
              "reference/storage/", "reference/operations/", "reference/loader/", "reference/testing/",
-             "troubleshooting/", "wiki/"]
+             "troubleshooting/", "guides/publishing/"]
     for page in pages:
         assert page in indexed, f"Missing indexed page {page}"
         assert (site / page / "index.html").is_file(), f"Missing HTML page {page}"

@@ -115,7 +115,6 @@ Weston do not reproduce a physical display's scheduling.
 
 Measuring physical contact-to-visible-mark or moving-pen-to-ink lag still needs a
 real pen/tablet/display and an external timing method such as a high-speed camera,
-with capture resolution and uncertainty recorded. See the
-[benchmark measurement program](benchmarks.md#evidence-required-for-each-claim).
+with capture resolution and uncertainty recorded.
 
 [Full API reference](../reference/authoring.md#inklatencydiagnostics)

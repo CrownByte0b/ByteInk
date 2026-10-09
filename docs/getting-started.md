@@ -84,6 +84,8 @@ maven {
 
 GitHub's Maven registry requires authentication, including for public packages. Use a classic token with `read:packages`; keep it outside source control. [Registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-gradle-registry).
 
+Maintainers can [publish a version from a tag or a manual CI run](guides/publishing.md).
+
 Avoid adding Google's `androidx.ink:ink-nativeloader` or `ink-nativeloader-jvm` separately: they conflict with ByteInk's loader. See [troubleshooting](troubleshooting.md).
 
 ## Create, store and rebuild a stroke

@@ -92,10 +92,8 @@ Texture-free chunks retain their immutable runtime shaders until replacement, ev
 
 The renderer uses Compose `drawVertices` and Skia runtime shaders in batches of sixteen triangles; performance depends on mesh size and backend.
 
-Vertex preparation remains scalar on the renderer's drawing thread. The
-[CPU preparation experiments](cpu-preparation.md) compare optional SIMD and bounded
-workers after incremental caching; neither passes the combined complete-paint and
-fidelity promotion gates. They add no application runtime flags or dependencies.
+Vertex preparation runs on the renderer's drawing thread and requires no
+additional application runtime flags or dependencies.
 
 The [incremental wet-mesh performance report](https://github.com/CrownByte0b/ByteInk/blob/master/PERFORMANCE_WET_MESH.md) records six matched Linux/JBR 25 forks on real 8k+ vertex traces. Long retained paints allocate 88.4% fewer JVM bytes and show a modest retained-raster median improvement; complete Swing timing ranges overlap and P95 does not improve. Estimated retained wet geometry grows 85.7%, with deterministic release on retirement. These results describe that workload and exclude physical display latency.
 
