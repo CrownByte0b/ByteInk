@@ -6,6 +6,8 @@ pins=upstream/pins.properties
 pin() { sed -n "s/^$1=//p" "$pins"; }
 archive="jbrsdk-$(pin jbr25.version)-$platform-b$(pin jbr25.build).tar.gz"
 destination="$RUNNER_TEMP/byteink-jbr25"
+# Git Bash's tar treats a drive-letter archive path as a remote host.
+if [[ $platform == windows-* ]]; then destination=$(cygpath -u "$destination"); fi
 mkdir -p "$destination"
 curl --retry 3 -fsSL "https://cache-redirector.jetbrains.com/intellij-jbr/$archive" -o "$destination/archive.tar.gz"
 printf '%s  %s\n' "$(pin "jbr25.$platform.sha512")" "$destination/archive.tar.gz" | sha512sum --check --quiet -

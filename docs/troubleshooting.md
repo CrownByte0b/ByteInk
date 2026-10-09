@@ -33,6 +33,21 @@
 | Texture atlas stays on one frame | Advance the mesh renderer's nonnegative `animationTimeMillis`; live shape effects separately require `InProgressStroke.updateShape`. |
 | Decoded replay cuts or moves ink twice | Supply `LoadedInkPage.sourceStrokes` and active decoded operations to `ViveInkPage.replay`, rather than already replayed `strokes`. |
 
+## Windows CI setup and fixture checks
+
+`Android artifact checksum differs: capture-environment.json` can mean Git
+converted the Android capture files from LF to CRLF during checkout. The root
+`.gitattributes` disables text conversion for `conformance/android/fixtures/matrix/**`
+so every captured byte matches its committed SHA-256. Keep these attributes when
+copying the fixture into another repository; do not regenerate hashes to accept
+checkout changes. See Git's [text attribute documentation](https://git-scm.com/docs/gitattributes#_text).
+
+If JBR installation fails with `tar (child): Cannot connect to D: resolve failed`,
+Git Bash's `tar` interpreted the archive's drive-letter prefix as a remote host.
+The setup script converts the Windows extraction path with `cygpath -u` before
+download and extraction, then exports the JVM home in Windows form with `cygpath -w`.
+The pinned SDK's SHA-512 is still verified before extraction.
+
 ## CI graphics verification
 
 Linux CI discovers Mesa's installed lavapipe Vulkan manifest with

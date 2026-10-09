@@ -7,3 +7,6 @@
 *.txt text eol=lf
 gradlew text eol=lf
 gradlew.bat text eol=crlf
+
+# Android capture manifests hash the exact file bytes, including line endings.
+conformance/android/fixtures/matrix/** -text
