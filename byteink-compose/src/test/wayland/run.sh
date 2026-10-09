@@ -86,11 +86,12 @@ required = ({
     'penAndTouchBeginsBeforeReadinessStayIgnoredWhenTheirFramesArriveAfterIt',
     'immediateCloseBeforeDiscoveryCanBeRepeatedWithoutReaderOrDescriptorLeaks',
     'nativeSubscriptionReadinessResetsAndDropsContactsBeginningBeforeDiscovery',
+    'syntheticTabletDiagnosticsMeasureQueueRasterAndPaintReturnWithoutChangingOutput',
 } if suite == 'pen' else {
     'realNativeDestinationPresentsWetAlphaAndFinishedHandoff',
     'nativeHideResizeReconfigureAndDisabledFallbackPreserveFinishedPixels',
 })
-if (int(root.get('tests', 0)) < (16 if suite == 'pen' else 2) or
+if (int(root.get('tests', 0)) < (17 if suite == 'pen' else 2) or
         not required.issubset({case.get('name') for case in root.findall('testcase')}) or
         any(int(root.get(key, 0)) for key in ['skipped', 'failures', 'errors'])):
     raise SystemExit('All selected native Wayland cases must finish without errors or skips (toolkit termination is not a pass).')

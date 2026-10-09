@@ -62,6 +62,16 @@ public class NativeInkInputSource(
     }
 
     override public fun subscribe(listener: (InkInputEvent) -> Unit): AutoCloseable {
+        val expectedGeneration = generation + 1L
+        return subscribeWithTiming({ null }) { events, _ ->
+            events.forEach { if (subscribed && generation == expectedGeneration) listener(it) }
+        }
+    }
+
+    internal fun subscribeWithTiming(
+        diagnostics: () -> InkLatencyDiagnostics?,
+        listener: (List<InkInputEvent>, InkLatencyDelivery?) -> Unit,
+    ): AutoCloseable {
         check(EventQueue.isDispatchThread()) { "Subscribe on the AWT event thread" }
         check(!subscribed) { "Native input source already has a subscriber" }
         check(component.isDisplayable) { "Attach the drawing component before subscribing" }
@@ -102,23 +112,31 @@ public class NativeInkInputSource(
         var attached = true
         var bridge: NativePenBridge? = null
         lateinit var subscription: AutoCloseable
-        val queue = NativeInkPacketQueue(consume = { packet ->
+        lateinit var queue: NativeInkPacketQueue
+        queue = NativeInkPacketQueue(consume = { packet ->
             check(EventQueue.isDispatchThread())
             if (attached && generation == subscribedGeneration) try {
                 if (packet === NativeInkReady) isReady = true
                 else if (packet is Throwable) {
                     normalizer.clear()
-                    try { listener(InkInputEvent.Cancel) } finally { subscription.close() }
+                    try { listener(listOf(InkInputEvent.Cancel), null) } finally { subscription.close() }
                     onFailure(packet)
-                } else if (packet is InkInputEvent) listener(packet)
-                else if (isReady) localFrame(packet as NativePenBridge.Frame)?.let { local ->
-                    normalizer.events(local).forEach { if (attached) listener(it) }
+                } else if (packet is InkInputEvent || isReady) {
+                    val collector = diagnostics()
+                    val epoch = collector?.epoch
+                    val start = collector?.nanoTime()
+                    val events = if (packet is InkInputEvent) listOf(packet)
+                        else localFrame(packet as NativePenBridge.Frame)?.let(normalizer::events) ?: emptyList()
+                    val timing = if (collector == null) null else InkLatencyDelivery(
+                        collector, epoch!!, queue.deliveryArrival?.takeIf { it.isCurrent(collector) }, start!!,
+                        elapsed(collector.nanoTime(), start))
+                    if (attached && events.isNotEmpty()) listener(events, timing)
                 }
             } catch (failure: Throwable) {
                 try { subscription.close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
                 throw failure
             }
-        })
+        }, diagnostics = diagnostics)
         fun enqueue(packet: Any) = queue.enqueue(packet)
         val mouse = object : MouseAdapter() {
             fun sample(event: MouseEvent): InkPointerSample {
@@ -152,7 +170,7 @@ public class NativeInkInputSource(
         val hierarchy = HierarchyListener { event ->
             if (attached && (event.changeFlags and HierarchyEvent.DISPLAYABILITY_CHANGED.toLong() != 0L && !component.isDisplayable ||
                         wayland != null && event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L && !component.isShowing)) {
-                try { listener(InkInputEvent.Cancel) } finally { subscription.close() }
+                try { listener(listOf(InkInputEvent.Cancel), null) } finally { subscription.close() }
             }
         }
         subscription = AutoCloseable {

@@ -13,6 +13,8 @@ import org.junit.Assume.assumeTrue
 import java.awt.Dimension
 import java.awt.EventQueue
 import java.util.concurrent.FutureTask
+import java.nio.file.Files
+import java.nio.file.Path
 import javax.swing.JFrame
 import kotlin.math.PI
 import kotlin.test.*
@@ -120,6 +122,7 @@ class DesktopPenIntegrationTest {
         try {
             ui { window.panel.drawContent = { canvas, _, _ -> finished.forEach { renderer.render(canvas, it) } } }
             await("initial direct frame") { window.panel.renderedFrameCount > 0 }
+            val diagnostics = ui { InkLatencyDiagnostics(8).also { window.panel.latencyDiagnostics = it } }
             ui { source.send(InkInputEvent.Begin(InkPointerSample(10f, 60f, 1000), 1)) }
             await("first dot was not rendered") { renderer.wetCount > 0 }
             val before = ui { window.panel.session.revision }
@@ -130,9 +133,24 @@ class DesktopPenIntegrationTest {
             ui {
                 assertEquals(before + 1, window.panel.session.revision, "one engine update for the entire queued burst")
                 assertTrue(window.panel.lastInputToRenderNanos in 1L..1_000_000_000L)
+                val snapshot = diagnostics.snapshot()
+                assertTrue(snapshot.inputs.all { it.oldestQueueWaitNanos == null && it.normalizationNanos == null })
+                assertTrue(snapshot.overwrittenInputs > 0L, "Burst diagnostics stay bounded")
+                val burst = snapshot.frames.first { it.inputEventCount == 32 }
+                assertEquals(32, burst.realSampleCount)
+                assertEquals(InkLatencyInputOrigin.LISTENER, burst.inputOrigin)
+                assertEquals(InkLatencyRenderPath.SKIA_LAYER, burst.path)
+                assertNull(burst.swingTransferAndDrawNanos)
+                assertNotNull(burst.frameRequestNanos)
                 source.send(InkInputEvent.Finish(InkPointerSample(120f, 60f, 1040), 1))
             }
             await("canonical finish did not reach the finished scene") { renderer.dryCount > 0 }
+            val snapshot = ui { diagnostics.snapshot() }
+            val directory = Path.of(System.getProperty("byteink.test.latencyReports", "build/reports/software-latency"))
+            Files.createDirectories(directory)
+            Files.writeString(directory.resolve("desktop-synthetic-listener.json"),
+                "{\"workload\":\"32-event listener burst\",\"syntheticInput\":true,\"physicalInputDevice\":false," +
+                    "\"diagnostics\":${snapshot.toJson()}}")
             ui { assertEquals(34, finished.single().inputs.size); assertTrue(window.panel.session.activePointerIds.isEmpty()) }
             ui { window.panel.authoringEnabled = false }
             assertEquals(1, ui { source.closes })

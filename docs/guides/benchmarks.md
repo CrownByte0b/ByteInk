@@ -161,6 +161,13 @@ Protocol acknowledgments, buffer release, Java counters and presentation feedbac
 can explain scheduling. They do not replace physical display measurement. Publish
 missing measurements as missing; an unsupported feature has no invented timing.
 
+The opt-in [software latency diagnostics](software-latency.md) now capture native
+queue wait through synchronous immediate request return, with synthetic native
+Wayland and custom-source controls. They label software raster versus recording,
+report transfer/Java2D drawing together, and leave deferred presentation and
+physical latency null. These verification captures do not establish a speedup
+or complete the physical comparison program above.
+
 ## Publication after the improvements
 
 Freeze the accepted release and rerun its quality/conformance gates before timing.

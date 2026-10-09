@@ -124,6 +124,15 @@ or establish physical input-to-display latency. `lastInputToRenderNanos` measure
 to Skia recording only. Skia's heavyweight Swing integration also has the usual SwingPanel z-order
 and clipping constraints; use the regular canvas surface when those constraints matter.
 
+Opt in to bounded software timings with `panel.latencyDiagnostics = InkLatencyDiagnostics()`
+on EDT, or the Compose surface's `latencyDiagnostics` parameter. Snapshot on EDT and serialize
+the immutable result off-thread using `snapshot.toJson()`. Records cover native queue wait,
+normalization, handling, engine advances, drawing and immediate request return; Wayland also
+measures Skiko transfer/Java2D drawing together. Custom sources leave unknown queue timing null.
+The [software diagnostics guide](../docs/guides/software-latency.md) explains the boundaries,
+capacity/overwrites and tablet-free synthetic verification. Deferred presentation completion
+and physical pen-to-photon remain unmeasured.
+
 Native Wayland retains finished content and a composed frame in physical sRGB rasters. Triangle
 mesh paints restore the engine's damaged area from the finished background and redraw intersecting
 wet strokes in order. Filled outlines (`InkPathRenderer` and mesh-renderer DISCARD coats such as

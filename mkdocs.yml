@@ -58,6 +58,7 @@ nav:
       - Notebook utilities: guides/notebooks.md
       - Positioning and benchmarks: guides/benchmarks.md
       - CPU preparation experiments: guides/cpu-preparation.md
+      - Software latency diagnostics: guides/software-latency.md
   - API reference:
       - Reference conventions: reference/index.md
       - Engine and geometry: reference/core.md

@@ -683,7 +683,7 @@ public class InkLowLatencyPanel( public var brush: Brush, public var onStrokeFin
 | `drawContent` | `(Canvas, Int, Int) -> Unit` | `{ _, _, _ -> }` | Compose Canvas callback drawn before wet ink; width/height and canvas coordinates use AWT component-local logical units. |
 | `centimetersPerNativePixel` | `Float?` | `null` | Optional calibrated finite positive centimeters per native pixel; logical display DPI is not physical calibration. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L42)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L43)
 
 ### `InkLowLatencyPanel.session`
 
@@ -693,7 +693,7 @@ public val session: InkAuthoringSession
 
 Panel-owned simultaneous-pointer session; mutate/read only on the AWT EDT.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L52)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L53)
 
 ### `InkLowLatencyPanel.renderer`
 
@@ -703,7 +703,7 @@ public val renderer: InkRenderer
 
 Actual drawing renderer; owned when constructed by the panel, borrowed when supplied by the caller.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L53)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L54)
 
 ### `InkLowLatencyPanel.drawContent`
 
@@ -711,7 +711,7 @@ Actual drawing renderer; owned when constructed by the panel, borrowed when supp
 public var drawContent: (Canvas, Int, Int) -> Unit
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L54)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L55)
 
 ### `InkLowLatencyPanel.clearColorArgb`
 
@@ -721,7 +721,7 @@ public var clearColorArgb: Int
 
 Writable EDT panel clear color, initially opaque white; call requestInkRender after changing it.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L56)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L57)
 
 ### `InkLowLatencyPanel.retainedPixelBudgetBytes`
 
@@ -731,7 +731,7 @@ public var retainedPixelBudgetBytes: Long
 
 Writable EDT combined background/frame N32 pixel budget on native Wayland, initially 64 MiB. Zero disables retention. Oversized views and custom renderers use full redraw; changing the budget releases existing rasters.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L62)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L63)
 
 ### `InkLowLatencyPanel.retainedPixelBytes`
 
@@ -741,7 +741,7 @@ public val retainedPixelBytes: Long
 
 Retained N32 raster bytes, bounded by pixelBudgetBytes; zero after clear/close.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L70)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L71)
 
 ### `InkLowLatencyPanel.retainedBackgroundBuildCount`
 
@@ -751,7 +751,7 @@ public val retainedBackgroundBuildCount: Long
 
 Cumulative finished-background raster builds, including full-redraw fallback; zero on Windows/X11.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L71)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L72)
 
 ### `InkLowLatencyPanel.retainedFullRedrawCount`
 
@@ -761,7 +761,7 @@ public val retainedFullRedrawCount: Long
 
 Cumulative full-frame raster rebuilds, including fallback; zero on Windows/X11.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L72)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L73)
 
 ### `InkLowLatencyPanel.retainedDirtyRedrawCount`
 
@@ -771,7 +771,7 @@ public val retainedDirtyRedrawCount: Long
 
 Cumulative dirty-region raster redraws that reuse finished content; zero on Windows/X11.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L73)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L74)
 
 ### `InkLowLatencyPanel.retainedLastRedrawnPixelCount`
 
@@ -781,7 +781,7 @@ public val retainedLastRedrawnPixelCount: Long
 
 Physical pixels restored/rasterized in the most recent paint; zero for unchanged re-presentation. Excludes full-window presentation copies; zero on Windows/X11.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L75)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L76)
 
 ### `InkLowLatencyPanel.lastInputToRenderNanos`
 
@@ -791,7 +791,7 @@ public var lastInputToRenderNanos: Long
 
 Last processed-handler-to-Skia-recording interval in nanoseconds; excludes device latency and presentation completion. Private setter.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L77)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L78)
 
 ### `InkLowLatencyPanel.renderedFrameCount`
 
@@ -801,7 +801,7 @@ public var renderedFrameCount: Long
 
 Cumulative recorded authoring frames; useful for checking idle rendering. Private setter.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L79)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L80)
 
 ### `InkLowLatencyPanel.processedPacketCount`
 
@@ -811,7 +811,17 @@ public var processedPacketCount: Long
 
 Cumulative input event packets delivered to the session; a Batch may contain many observations. Private setter.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L81)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L82)
+
+### `InkLowLatencyPanel.latencyDiagnostics`
+
+```kotlin
+public var latencyDiagnostics: InkLatencyDiagnostics?
+```
+
+Writable EDT opt-in software collector, null by default. Replacing/disabling it invalidates pending attribution; use a distinct collector per panel. Snapshot and export after the workload.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L86)
 
 ### `InkLowLatencyPanel.isInputReady`
 
@@ -821,7 +831,7 @@ public val isInputReady: Boolean
 
 Read on EDT. True when the panel has a ready subscription. Native Wayland waits for asynchronous discovery; supplied custom sources are assumed ready after subscribe returns. False on detach, disable, close or native failure.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L84)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L96)
 
 ### `InkLowLatencyPanel.nativeWindowHandle`
 
@@ -831,7 +841,7 @@ public val nativeWindowHandle: Long
 
 Matching HWND/XID or configured top-level Wayland wl_surface; query on the EDT only after attachment.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L86)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L98)
 
 ### `InkLowLatencyPanel.authoringEnabled`
 
@@ -841,7 +851,7 @@ public var authoringEnabled: Boolean
 
 Writable EDT input switch; disabling cancels active gestures and closes capture, enabling reacquires it.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L113)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L126)
 
 ### `InkLowLatencyPanel.addNotify`
 
@@ -849,7 +859,7 @@ Writable EDT input switch; disabling cancels active gestures and closes capture,
 override public fun addNotify()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L179)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L208)
 
 ### `InkLowLatencyPanel.removeNotify`
 
@@ -857,7 +867,7 @@ override public fun addNotify()
 override public fun removeNotify()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L187)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L216)
 
 ### `InkLowLatencyPanel.requestInkRender`
 
@@ -867,7 +877,7 @@ Invalidates retained finished content and coalesces an EDT render request. Scene
 public fun requestInkRender()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L193)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L222)
 
 ### `InkLowLatencyPanel.close`
 
@@ -877,7 +887,7 @@ Terminal EDT cleanup: cancels input, retires wet caches, releases retained raste
 override public fun close()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L228)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L270)
 
 ### `InkLowLatencySurface`
 
@@ -901,4 +911,170 @@ public fun InkLowLatencySurface( brush: Brush, modifier: Modifier = Modifier, st
 | `onStrokeFinished` | `(Long, Stroke) -> Unit` | `Required` | Captured (pointerId, canonical real-input Stroke) callback; update finished content synchronously and enqueue persistence. |
 | `drawContent` | `(Canvas, Int, Int) -> Unit` | `{ _, _, _ -> }` | Compose Canvas callback drawn before wet ink; width/height and canvas coordinates use AWT component-local logical units. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L298)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L355)
+
+### `InkLowLatencySurface`
+
+Compose wrapper around InkLowLatencyPanel. Uses native input by default, AWT logical coordinates, an owned mesh renderer when omitted, and automatic panel disposal. A caller-supplied renderer remains caller-owned. Native Wayland needs a compatible SwingGraphics ComposePanel host.
+
+Composable: call within a Compose composition.
+
+```kotlin
+public fun InkLowLatencySurface( brush: Brush, modifier: Modifier = Modifier, strokeToView: AffineTransform = AffineTransform.IDENTITY, renderer: InkRenderer? = null, enabled: Boolean = true, inputSource: InkInputSource? = null, centimetersPerNativePixel: Float? = null, latencyDiagnostics: InkLatencyDiagnostics?, onStrokeFinished: (Long, Stroke) -> Unit, drawContent: (Canvas, Int, Int) -> Unit = { _, _, _ -> }, )
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `brush` | `Brush` | `Required` | Native brush captured at gesture start; keep stored metadata consistent with it. |
+| `modifier` | `Modifier` | `Modifier` | Compose layout, sizing and drawing modifiers. |
+| `strokeToView` | `AffineTransform` | `AffineTransform.IDENTITY` | Finite invertible stroke/page-to-AWT-local-logical-unit transform, captured per pointer at Begin; the panel applies device scale itself. |
+| `renderer` | `InkRenderer?` | `null` | Borrowed caller-owned renderer, or null for an owned InkMeshRenderer; the panel closes only its own default renderer. |
+| `enabled` | `Boolean` | `true` | Whether to acquire input; false cancels all active pointers and closes capture. |
+| `inputSource` | `InkInputSource?` | `null` | Optional caller-supplied serial input source; null acquires built-in native input, with explicit acquisition failures. |
+| `centimetersPerNativePixel` | `Float?` | `null` | Optional calibrated finite positive centimeters per native pixel; logical display DPI is not physical calibration. |
+| `latencyDiagnostics` | `InkLatencyDiagnostics?` | `Required` | Optional bounded software-timing collector; null disables instrumentation. Construct, attach and snapshot on AWT EDT; use a distinct collector per panel. |
+| `onStrokeFinished` | `(Long, Stroke) -> Unit` | `Required` | Captured (pointerId, canonical real-input Stroke) callback; update finished content synchronously and enqueue persistence. |
+| `drawContent` | `(Canvas, Int, Int) -> Unit` | `{ _, _, _ -> }` | Compose Canvas callback drawn before wet ink; width/height and canvas coordinates use AWT component-local logical units. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLowLatencyPanel.kt#L372)
+
+## InkLatencyDiagnostics
+
+### `InkLatencyRenderPath`
+
+SWING_SOFTWARE measures delegate raster work; SKIA_LAYER measures delegate recording on the heavyweight backend. GPU execution and physical display timing are not inferred from recording duration.
+
+```kotlin
+public enum class InkLatencyRenderPath
+```
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L8)
+
+### `InkLatencyInputOrigin`
+
+NATIVE_QUEUE starts at our native enqueue; LISTENER starts at delivered input; MIXED marks a frame combining different start boundaries. Device-event clocks are not used for these elapsed times.
+
+```kotlin
+public enum class InkLatencyInputOrigin
+```
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L11)
+
+### `InkLatencyInput`
+
+```kotlin
+public data class InkLatencyInput( public val id: Long, public val origin: InkLatencyInputOrigin, public val packetCount: Int, public val eventCount: Int, public val realSampleCount: Int, public val oldestQueueWaitNanos: Long?, public val newestQueueWaitNanos: Long?, public val normalizationNanos: Long?, public val handlingNanos: Long, )
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `id` | `Long` | `Required` | Increasing input/frame record number within the collector epoch; overwritten records are not renumbered. |
+| `origin` | `InkLatencyInputOrigin` | `Required` | Input age starts at our native queue enqueue boundary, or custom/listener delivery; device sampling is excluded. |
+| `packetCount` | `Int` | `Required` | Original queue packets merged into this delivery; one for a custom listener callback. |
+| `eventCount` | `Int` | `Required` | Normalized events delivered together; a native begin/finish with history can produce several events. |
+| `realSampleCount` | `Int` | `Required` | Supplied real observations, excluding predictions; this is not an accepted-engine-input count. |
+| `oldestQueueWaitNanos` | `Long?` | `Required` | Oldest original packet enqueue to merged consumer entry; null when queue arrival is unavailable. |
+| `newestQueueWaitNanos` | `Long?` | `Required` | Newest original packet enqueue to merged consumer entry; null when queue arrival is unavailable. |
+| `normalizationNanos` | `Long?` | `Required` | EDT coordinate/axis/time mapping before delivery; null for custom listener sources or control callbacks. |
+| `handlingNanos` | `Long` | `Required` | Grouped listener handling, including session work, completion callbacks and scheduling the redraw. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L14)
+
+### `InkLatencyFrame`
+
+```kotlin
+public data class InkLatencyFrame( public val id: Long, public val path: InkLatencyRenderPath, public val inputEventCount: Int, public val realSampleCount: Int, public val inputOrigin: InkLatencyInputOrigin?, public val renderQueueNanos: Long?, public val engineAdvanceNanos: Long, public val drawNanos: Long, public val swingTransferAndDrawNanos: Long?, public val frameRequestNanos: Long?, public val oldestInputToDrawNanos: Long?, public val newestInputToDrawNanos: Long?, public val oldestInputToRequestReturnNanos: Long?, public val newestInputToRequestReturnNanos: Long?, public val completed: Boolean, )
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `id` | `Long` | `Required` | Increasing input/frame record number within the collector epoch; overwritten records are not renumbered. |
+| `path` | `InkLatencyRenderPath` | `Required` | SWING_SOFTWARE means delegate raster work; SKIA_LAYER means delegate recording on the selected heavyweight backend. |
+| `inputEventCount` | `Int` | `Required` | Supplied events since the previous delegate invocation, including events the session ignores. |
+| `realSampleCount` | `Int` | `Required` | Supplied real observations, excluding predictions; this is not an accepted-engine-input count. |
+| `inputOrigin` | `InkLatencyInputOrigin?` | `Required` | Common start boundary for the frame's input ages, MIXED for different origins, or null for an input-free frame. |
+| `renderQueueNanos` | `Long?` | `Required` | First coalesced render request enqueue to delegate entry; null for incidental or invalidated requests. |
+| `engineAdvanceNanos` | `Long` | `Required` | Scheduled session advances since the previous delegate, including timer advances; begin/finish modeling is in input handling. |
+| `drawNanos` | `Long` | `Required` | Delegate drawing duration: software raster on Wayland, recording on SkiaLayer; includes renderer preparation and background drawing. |
+| `swingTransferAndDrawNanos` | `Long?` | `Required` | Delegate return to SkiaSwingLayer.paint return, including Skiko pixel copies, Java2D drawing and cleanup; null on SkiaLayer. |
+| `frameRequestNanos` | `Long?` | `Required` | Complete synchronous renderImmediately/paintImmediately request duration, including caller-side work after delegate return; null for incidental paints. |
+| `oldestInputToDrawNanos` | `Long?` | `Required` | Oldest supplied input arrival/delivery to delegate drawing completion; null when no new input is attributed. |
+| `newestInputToDrawNanos` | `Long?` | `Required` | Newest supplied input arrival/delivery to delegate drawing completion; null when no new input is attributed. |
+| `oldestInputToRequestReturnNanos` | `Long?` | `Required` | Oldest supplied input arrival/delivery to immediate request return; excludes deferred submission, compositor and physical display timing. |
+| `newestInputToRequestReturnNanos` | `Long?` | `Required` | Newest supplied input arrival/delivery to immediate request return; null when that boundary is unavailable. |
+| `completed` | `Boolean` | `Required` | Observed drawing and enclosing synchronous scopes returned normally; does not establish presentation success/completion. False frames are excluded from JSON statistics. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L34)
+
+### `InkLatencyDiagnostics`
+
+Opt-in software collector for one panel. Construct, attach, clear and snapshot on AWT EDT. Independent input/frame rings retain at most capacity records; no coordinates, pressures, strokes or handles are retained. Null panel diagnostics disables instrumentation.
+
+```kotlin
+public class InkLatencyDiagnostics
+```
+
+| Property | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `capacity` | `Int` | `Returned value` | Maximum records in each independent input/frame ring, within 1..65,536; default 512. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L58)
+
+### `InkLatencyDiagnostics.constructor`
+
+```kotlin
+public constructor(capacity: Int = 512)
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `capacity` | `Int` | `512` | Maximum records in each independent input/frame ring, within 1..65,536; default 512. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L62)
+
+### `InkLatencyDiagnostics.snapshot`
+
+Copies immutable chronological records and overwrite counts. Serialize/export the result off EDT; capture excludes device sampling, deferred presentation and physical screen response.
+
+```kotlin
+public fun snapshot(): InkLatencySnapshot
+```
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L78)
+
+### `InkLatencyDiagnostics.clear`
+
+Clears both rings/counters and increments the epoch, invalidating pending queue/frame attribution. Input itself is still delivered; unavailable arrival timing becomes null.
+
+```kotlin
+public fun clear()
+```
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L84)
+
+### `InkLatencySnapshot`
+
+```kotlin
+public class InkLatencySnapshot
+```
+
+| Property | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `capacity` | `Int` | `Returned value` | Maximum records in each independent input/frame ring, within 1..65,536; default 512. |
+| `epoch` | `Long` | `Returned value` | Collector generation incremented by clear; invalidates previously captured queue/frame timestamps. |
+| `inputs` | `List<InkLatencyInput>` | `Returned value` | Immutable chronological copy of retained input observations, at most capacity entries. |
+| `frames` | `List<InkLatencyFrame>` | `Returned value` | Immutable chronological copy of retained frame observations, at most capacity entries. |
+| `overwrittenInputs` | `Long` | `Returned value` | Input observations evicted by capacity since the last clear; exported statistics cover retained observations only. |
+| `overwrittenFrames` | `Long` | `Returned value` | Frame observations evicted by capacity since the last clear; exported statistics cover retained observations only. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L106)
+
+### `InkLatencySnapshot.toJson`
+
+Schema 1 raw observations and unweighted retained-record median/P95/P99 statistics, in nanoseconds. Nearest-rank percentiles; even medians round down. Failed frames and absent values are excluded. Presentation completion and physical pen-to-photon fields are null. Runs off EDT after capture without file I/O.
+
+```kotlin
+public fun toJson(): String
+```
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkLatencyDiagnostics.kt#L119)

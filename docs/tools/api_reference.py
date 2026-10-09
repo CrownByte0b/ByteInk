@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GROUPS = {
     "core": ("Engine and geometry", "byteink-core", ["InkRuntime", "InkMeshes", "StrokeMesh", "SpatialIndex"]),
-    "authoring": ("Input and authoring", "byteink-compose", ["InkPointerSample", "InkInputPredictor", "InkAuthoringController", "InkAuthoringSession", "InkDrawingSurface", "NativeInkInputSource", "InkLowLatencyPanel"]),
+    "authoring": ("Input and authoring", "byteink-compose", ["InkPointerSample", "InkInputPredictor", "InkAuthoringController", "InkAuthoringSession", "InkDrawingSurface", "NativeInkInputSource", "InkLowLatencyPanel", "InkLatencyDiagnostics"]),
     "rendering": ("Rendering and caches", "byteink-compose", ["InkRenderer", "InkMeshRenderer", "InkTextureStore", "InkPathRenderer", "InkScene", "InkSceneRasterCache"]),
     "brushes": ("Brushes and tools", "byteink-kit", ["ViveBrushes", "ViveInkTool", "InkColors"]),
     "storage": ("Stored rows and codecs", "byteink-kit", ["StoredInk", "ViveInkCodec", "ViveInkPage", "DecodedInkOperation"]),
@@ -74,6 +74,7 @@ PARAMETERS = {
     "textureCacheCapacity": "Positive maximum number of retained texture shader entries; provider-owned images are outside this limit.",
     "enabled": "Whether to accept input; false cancels the active gesture.",
     "inputSource": "Optional native adapter; null uses Compose primary-pointer gestures.",
+    "latencyDiagnostics": "Optional bounded software-timing collector; null disables instrumentation. Construct, attach and snapshot on AWT EDT; use a distinct collector per panel.",
     "onStrokeFinished": "Completion callback captured at pointer down; retain/store the returned stroke.",
     "drawContent": "DrawScope block drawn before live ink, usually for finished ink and paper.",
     "cacheCapacity": "Nonnegative retained-entry limit; zero disables retention.",
@@ -169,6 +170,12 @@ PARAMETERS = {
 }
 
 NOTES = {
+    "InkLatencyDiagnostics": "Opt-in software collector for one panel. Construct, attach, clear and snapshot on AWT EDT. Independent input/frame rings retain at most capacity records; no coordinates, pressures, strokes or handles are retained. Null panel diagnostics disables instrumentation.",
+    "InkLatencyDiagnostics.snapshot": "Copies immutable chronological records and overwrite counts. Serialize/export the result off EDT; capture excludes device sampling, deferred presentation and physical screen response.",
+    "InkLatencyDiagnostics.clear": "Clears both rings/counters and increments the epoch, invalidating pending queue/frame attribution. Input itself is still delivered; unavailable arrival timing becomes null.",
+    "InkLatencySnapshot.toJson": "Schema 1 raw observations and unweighted retained-record median/P95/P99 statistics, in nanoseconds. Nearest-rank percentiles; even medians round down. Failed frames and absent values are excluded. Presentation completion and physical pen-to-photon fields are null. Runs off EDT after capture without file I/O.",
+    "InkLatencyRenderPath": "SWING_SOFTWARE measures delegate raster work; SKIA_LAYER measures delegate recording on the heavyweight backend. GPU execution and physical display timing are not inferred from recording duration.",
+    "InkLatencyInputOrigin": "NATIVE_QUEUE starts at our native enqueue; LISTENER starts at delivered input; MIXED marks a frame combining different start boundaries. Device-event clocks are not used for these elapsed times.",
     "InkRuntime": "load() verifies that ByteInk's loader supplies the native engine; call before importing ink.",
     "TriangleMesh": "Geometry exports return independent snapshots; this constructor retains supplied arrays without copying or layout validation. vertexCount = positions.size / 2; triangleCount = triangles.size / 3.",
     "StrokeMesh": "Owned rendering snapshot. Vertex floats: position XY (0–1), opacity shift (2), HSL shift (3–5), side derivative XY/label (6–8), forward derivative XY/label (9–11), surface UV (12–13), animation offset (14). Missing attributes are zero; indices are unsigned native values widened to Int. Constructor retains supplied arrays.",
@@ -234,6 +241,7 @@ NOTES = {
 }
 
 PROPERTIES = {
+    "latencyDiagnostics": "Writable EDT opt-in software collector, null by default. Replacing/disabling it invalidates pending attribution; use a distinct collector per panel. Snapshot and export after the workload.",
     "vertexCount": "Number of copied x/y vertex pairs.",
     "StrokeMesh.vertexCount": "Number of canonical vertices: vertices.size / VERTEX_STRIDE.",
     "hasSurfaceUv": "Whether attributeMask bit 7 is set.",
@@ -451,6 +459,39 @@ def declarations(path: Path) -> list[dict]:
 
 
 def meaning(name: str, param: str) -> str:
+    if name.startswith("InkLatency"):
+        latency_parameters = {
+            "id": "Increasing input/frame record number within the collector epoch; overwritten records are not renumbered.",
+            "capacity": "Maximum records in each independent input/frame ring, within 1..65,536; default 512.",
+            "epoch": "Collector generation incremented by clear; invalidates previously captured queue/frame timestamps.",
+            "origin": "Input age starts at our native queue enqueue boundary, or custom/listener delivery; device sampling is excluded.",
+            "path": "SWING_SOFTWARE means delegate raster work; SKIA_LAYER means delegate recording on the selected heavyweight backend.",
+            "packetCount": "Original queue packets merged into this delivery; one for a custom listener callback.",
+            "eventCount": "Normalized events delivered together; a native begin/finish with history can produce several events.",
+            "inputEventCount": "Supplied events since the previous delegate invocation, including events the session ignores.",
+            "realSampleCount": "Supplied real observations, excluding predictions; this is not an accepted-engine-input count.",
+            "inputOrigin": "Common start boundary for the frame's input ages, MIXED for different origins, or null for an input-free frame.",
+            "oldestQueueWaitNanos": "Oldest original packet enqueue to merged consumer entry; null when queue arrival is unavailable.",
+            "newestQueueWaitNanos": "Newest original packet enqueue to merged consumer entry; null when queue arrival is unavailable.",
+            "normalizationNanos": "EDT coordinate/axis/time mapping before delivery; null for custom listener sources or control callbacks.",
+            "handlingNanos": "Grouped listener handling, including session work, completion callbacks and scheduling the redraw.",
+            "renderQueueNanos": "First coalesced render request enqueue to delegate entry; null for incidental or invalidated requests.",
+            "engineAdvanceNanos": "Scheduled session advances since the previous delegate, including timer advances; begin/finish modeling is in input handling.",
+            "drawNanos": "Delegate drawing duration: software raster on Wayland, recording on SkiaLayer; includes renderer preparation and background drawing.",
+            "swingTransferAndDrawNanos": "Delegate return to SkiaSwingLayer.paint return, including Skiko pixel copies, Java2D drawing and cleanup; null on SkiaLayer.",
+            "frameRequestNanos": "Complete synchronous renderImmediately/paintImmediately request duration, including caller-side work after delegate return; null for incidental paints.",
+            "oldestInputToDrawNanos": "Oldest supplied input arrival/delivery to delegate drawing completion; null when no new input is attributed.",
+            "newestInputToDrawNanos": "Newest supplied input arrival/delivery to delegate drawing completion; null when no new input is attributed.",
+            "oldestInputToRequestReturnNanos": "Oldest supplied input arrival/delivery to immediate request return; excludes deferred submission, compositor and physical display timing.",
+            "newestInputToRequestReturnNanos": "Newest supplied input arrival/delivery to immediate request return; null when that boundary is unavailable.",
+            "completed": "Observed drawing and enclosing synchronous scopes returned normally; does not establish presentation success/completion. False frames are excluded from JSON statistics.",
+            "inputs": "Immutable chronological copy of retained input observations, at most capacity entries.",
+            "frames": "Immutable chronological copy of retained frame observations, at most capacity entries.",
+            "overwrittenInputs": "Input observations evicted by capacity since the last clear; exported statistics cover retained observations only.",
+            "overwrittenFrames": "Frame observations evicted by capacity since the last clear; exported statistics cover retained observations only.",
+        }
+        if param in latency_parameters:
+            return latency_parameters[param]
     if name in ("InkLowLatencyPanel", "InkLowLatencySurface"):
         native_surface_parameters = {
             "strokeToView": "Finite invertible stroke/page-to-AWT-local-logical-unit transform, captured per pointer at Begin; the panel applies device scale itself.",

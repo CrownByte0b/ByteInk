@@ -39,6 +39,7 @@ tasks.register<Test>("waylandPenTest") {
     systemProperty("java.awt.headless", "false")
     systemProperty("awt.toolkit.name", "WLToolkit")
     systemProperty("sun.java2d.vulkan", providers.gradleProperty("byteinkWaylandTestVulkan").getOrElse("false"))
+    systemProperty("byteink.test.latencyReports", layout.buildDirectory.dir("reports/software-latency").get().asFile.absolutePath)
     jvmArgs("--add-opens=java.desktop/sun.awt.wl=ALL-UNNAMED")
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Wayland verification depends on the current compositor and runtime") { true }
@@ -77,6 +78,7 @@ tasks.register<Test>("desktopPenTest") {
     filter.includeTestsMatching("com.vivenotes.byteink.compose.DesktopPenIntegrationTest")
     systemProperty("java.awt.headless", "false")
     systemProperty("byteink.test.nativePen", "true")
+    systemProperty("byteink.test.latencyReports", layout.buildDirectory.dir("reports/software-latency").get().asFile.absolutePath)
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Native input and presentation depend on the current desktop") { true }
 }

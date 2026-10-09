@@ -21,6 +21,7 @@ import org.jetbrains.skiko.GraphicsApi
 import org.jetbrains.skiko.swing.SkiaSwingLayer
 import java.awt.BorderLayout
 import java.awt.EventQueue
+import java.awt.Graphics
 import java.awt.event.HierarchyEvent
 import javax.swing.JPanel
 import javax.swing.Timer
@@ -80,6 +81,17 @@ public class InkLowLatencyPanel(
         private set
     public var processedPacketCount: Long = 0L
         private set
+    /** Optional bounded software observations. Attach/snapshot on EDT; null disables instrumentation. */
+    @Volatile
+    public var latencyDiagnostics: InkLatencyDiagnostics? = null
+        set(value) {
+            checkUiThread()
+            if (field === value) return
+            latencyTracker?.reset()
+            field = value
+            latencyTracker = value?.let { InkLatencyTracker(it,
+                if (wayland) InkLatencyRenderPath.SWING_SOFTWARE else InkLatencyRenderPath.SKIA_LAYER) }
+        }
     /** EDT-owned subscription readiness; native Wayland becomes ready after asynchronous discovery. */
     public val isInputReady: Boolean get() = subscription != null && (nativeSource?.isReady ?: true)
     /** Live HWND/XID, or JBR's top-level wl_surface on Wayland (available after window configuration). */
@@ -95,6 +107,7 @@ public class InkLowLatencyPanel(
     private var queuedRenderNeedsAdvance = false
     private var skipSessionAdvance = false
     private var pendingInputNanos: Long? = null
+    private var latencyTracker: InkLatencyTracker? = null
     private val wayland = WaylandRuntime.isWayland()
     private val retainedRaster = if (wayland) InkRetainedAuthoringRaster() else null
     private var layer: SkiaLayer? = null
@@ -102,7 +115,7 @@ public class InkLowLatencyPanel(
     private val contentScale: Float get() = layer?.contentScale ?: graphicsConfiguration.defaultTransform.scaleX.toFloat()
     private val timer = Timer(4) {
         if (!closed && isDisplayable) {
-            if (session.advanceNow()) requestInkRender(advanceSession = false)
+            if (advanceSession()) requestInkRender(advanceSession = false)
             scheduleAnimationTick()
         }
     }.also { it.isRepeats = false }
@@ -127,30 +140,38 @@ public class InkLowLatencyPanel(
         }
         val delegate = SkikoRenderDelegate { canvas, width, height, nanoTime ->
             if (!closed) {
-                if (!skipSessionAdvance) session.advanceNow(nanoTime)
-                val scale = contentScale
-                val retained = retainedRaster
-                if (retained != null) {
-                    // An explicit/queued paint can still run after disconnect released the pixels.
-                    retained.pixelBudgetBytes = if (authoringEnabled && isShowing) retainedPixelBudgetBytes else 0L
-                    retained.draw(canvas, width, height, scale, clearColorArgb, this.renderer, session.liveStrokes, this.drawContent)
-                } else {
-                    canvas.clear(clearColorArgb)
-                    canvas.save()
-                    try {
-                        canvas.scale(scale, scale)
-                        val logicalWidth = (width / scale).toInt()
-                        val logicalHeight = (height / scale).toInt()
-                        val composeCanvas = canvas.asComposeCanvas()
-                        this.drawContent(composeCanvas, logicalWidth, logicalHeight)
-                        val viewport = Rect(0f, 0f, logicalWidth.toFloat(), logicalHeight.toFloat())
-                        session.liveStrokes.forEach { live -> this.renderer.render(composeCanvas, live.stroke, live.strokeToView, viewport) }
-                    } finally { canvas.restore() }
-                }
+                val trace = latencyTracker
+                val frame = trace?.beginFrame()
+                var success = false
+                try {
+                    if (!skipSessionAdvance) advanceSession(nanoTime)
+                    if (frame != null) trace.beginDraw(frame)
+                    val scale = contentScale
+                    val retained = retainedRaster
+                    if (retained != null) {
+                        // An explicit/queued paint can still run after disconnect released the pixels.
+                        retained.pixelBudgetBytes = if (authoringEnabled && isShowing) retainedPixelBudgetBytes else 0L
+                        retained.draw(canvas, width, height, scale, clearColorArgb, this.renderer, session.liveStrokes, this.drawContent)
+                    } else {
+                        canvas.clear(clearColorArgb)
+                        canvas.save()
+                        try {
+                            canvas.scale(scale, scale)
+                            val logicalWidth = (width / scale).toInt()
+                            val logicalHeight = (height / scale).toInt()
+                            val composeCanvas = canvas.asComposeCanvas()
+                            this.drawContent(composeCanvas, logicalWidth, logicalHeight)
+                            val viewport = Rect(0f, 0f, logicalWidth.toFloat(), logicalHeight.toFloat())
+                            session.liveStrokes.forEach { live -> this.renderer.render(composeCanvas, live.stroke, live.strokeToView, viewport) }
+                        } finally { canvas.restore() }
+                    }
+                    success = true
+                } finally { if (frame != null) trace.endFrame(frame, success) }
                 renderedFrameCount++
                 pendingInputNanos?.let { lastInputToRenderNanos = (System.nanoTime() - it).coerceAtLeast(0L) }
                 pendingInputNanos = null
                 scheduleAnimationTick()
+                if (frame != null) trace.delegateReturned(frame)
             }
         }
         val properties = SkiaLayerProperties(
@@ -159,7 +180,15 @@ public class InkLowLatencyPanel(
             renderApi = if (wayland) GraphicsApi.SOFTWARE_COMPAT else SkiaLayerProperties().renderApi,
         )
         if (wayland) {
-            swingLayer = SkiaSwingLayer(delegate, properties = properties).also {
+            swingLayer = object : SkiaSwingLayer(delegate, properties = properties) {
+                override fun paint(g: Graphics) {
+                    val trace = latencyTracker
+                    val paint = trace?.beginPaint()
+                    var success = false
+                    try { super.paint(g); success = true }
+                    finally { if (paint != null) trace.endPaint(paint, success) }
+                }
+            }.also {
                 it.isDoubleBuffered = false
                 add(it, BorderLayout.CENTER)
             }
@@ -202,6 +231,7 @@ public class InkLowLatencyPanel(
         queuedRenderNeedsAdvance = queuedRenderNeedsAdvance || advanceSession
         if (renderQueued) return
         renderQueued = true
+        val ticket = latencyTracker?.queued()
         EventQueue.invokeLater {
             renderQueued = false
             val advance = queuedRenderNeedsAdvance
@@ -210,11 +240,23 @@ public class InkLowLatencyPanel(
                 // Both pinned Skiko presentation paths record synchronously on EDT. A timer has
                 // already advanced geometry, while new input or an external redraw still needs it.
                 skipSessionAdvance = !advance
+                val trace = latencyTracker
+                val request = trace?.beginRequest(ticket)
+                var success = false
                 try {
                     layer?.renderImmediately() ?: swingLayer?.let { if (isShowing) it.paintImmediately(0, 0, it.width, it.height) }
-                } finally { skipSessionAdvance = false }
+                    success = true
+                } finally {
+                    skipSessionAdvance = false
+                    if (request != null) trace.endRequest(request, success)
+                }
             }
         }
+    }
+
+    private fun advanceSession(nanoTime: Long = System.nanoTime()): Boolean {
+        val trace = latencyTracker
+        return if (trace == null) session.advanceNow(nanoTime) else trace.advance { session.advanceNow(nanoTime) }
     }
 
     private fun scheduleAnimationTick() {
@@ -235,6 +277,7 @@ public class InkLowLatencyPanel(
         layer?.dispose()
         swingLayer?.dispose()
         if (ownsRenderer) (this.renderer as InkMeshRenderer).close()
+        latencyDiagnostics = null
     }
 
     private fun connect() {
@@ -249,7 +292,7 @@ public class InkLowLatencyPanel(
         val component = layer?.canvas ?: swingLayer!!
         val source = inputSource ?: NativeInkInputSource(component, if (wayland) handle else nativeWindowHandle, { contentScale }, centimetersPerNativePixel)
         try {
-            val acquired = source.subscribe { event ->
+            fun handle(event: InkInputEvent) {
                 if (attached && authoringEnabled && !closed) {
                     checkUiThread()
                     pendingInputNanos = pendingInputNanos ?: System.nanoTime()
@@ -262,6 +305,19 @@ public class InkLowLatencyPanel(
                     processedPacketCount++
                     requestInkRender(advanceSession = true)
                 }
+            }
+            fun receive(events: List<InkInputEvent>, delivery: InkLatencyDelivery?) {
+                if (!attached || !authoringEnabled || closed) return
+                checkUiThread()
+                val trace = latencyTracker
+                val input = trace?.beginInput(events.size, events.sumOf { it.realSampleCount() }, delivery)
+                try { events.forEach(::handle) }
+                catch (failure: Throwable) { trace?.reset(); throw failure }
+                if (input != null) trace.endInput(input)
+            }
+            val acquired = if (source is NativeInkInputSource) source.subscribeWithTiming({ latencyDiagnostics }, ::receive)
+            else source.subscribe { event ->
+                if (latencyTracker == null) handle(event) else receive(listOf(event), null)
             }
             if (closed || !authoringEnabled || !isDisplayable) {
                 attached = false
@@ -279,6 +335,7 @@ public class InkLowLatencyPanel(
     }
     private fun disconnect() {
         checkUiThread()
+        latencyTracker?.reset()
         timer.stop()
         connectTimer.stop()
         val old = subscription
@@ -306,6 +363,24 @@ public fun InkLowLatencySurface(
     onStrokeFinished: (Long, Stroke) -> Unit,
     drawContent: (Canvas, Int, Int) -> Unit = { _, _, _ -> },
 ) {
+    InkLowLatencySurface(brush, modifier, strokeToView, renderer, enabled, inputSource,
+        centimetersPerNativePixel, latencyDiagnostics = null, onStrokeFinished, drawContent)
+}
+
+/** Dedicated authoring surface with opt-in software timing; see [InkLatencyDiagnostics]. */
+@Composable
+public fun InkLowLatencySurface(
+    brush: Brush,
+    modifier: Modifier = Modifier,
+    strokeToView: AffineTransform = AffineTransform.IDENTITY,
+    renderer: InkRenderer? = null,
+    enabled: Boolean = true,
+    inputSource: InkInputSource? = null,
+    centimetersPerNativePixel: Float? = null,
+    latencyDiagnostics: InkLatencyDiagnostics?,
+    onStrokeFinished: (Long, Stroke) -> Unit,
+    drawContent: (Canvas, Int, Int) -> Unit = { _, _, _ -> },
+) {
     val holder = remember(renderer, inputSource, centimetersPerNativePixel) { InkPanelHolder() }
     DisposableEffect(holder) { onDispose {
         holder.panel?.let { panel ->
@@ -317,6 +392,7 @@ public fun InkLowLatencySurface(
             InkLowLatencyPanel(brush, onStrokeFinished, strokeToView, renderer, inputSource,
                 drawContent = drawContent, centimetersPerNativePixel = centimetersPerNativePixel).also {
                 it.authoringEnabled = enabled
+                it.latencyDiagnostics = latencyDiagnostics
                 holder.panel = it
             }
         }, update = { panel ->
@@ -325,6 +401,7 @@ public fun InkLowLatencySurface(
             panel.onStrokeFinished = onStrokeFinished
             panel.drawContent = drawContent
             panel.authoringEnabled = enabled
+            panel.latencyDiagnostics = latencyDiagnostics
             panel.requestInkRender()
         })
     }

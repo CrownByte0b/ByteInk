@@ -129,6 +129,13 @@ The private compositor tests cover delayed replies, disconnects during setup, ra
 hide/show and hotplug at both 1× and 2× scaling. The queue and wrapper ownership follow the
 [libwayland client API](https://wayland.freedesktop.org/docs/html/apb.html).
 
+The direct panel and Compose surface can capture bounded, opt-in
+[software latency diagnostics](software-latency.md): queue wait, normalization,
+handling, scheduled engine advances, drawing, Swing transfer/drawing and immediate
+request return. Use `InkLatencyDiagnostics` on EDT and export its immutable
+snapshot off-thread. Unknown boundaries stay null; physical pen/display latency
+and deferred compositor completion remain unmeasured.
+
 ## Controller lifecycle
 
 For application-managed input, use the same controller directly:

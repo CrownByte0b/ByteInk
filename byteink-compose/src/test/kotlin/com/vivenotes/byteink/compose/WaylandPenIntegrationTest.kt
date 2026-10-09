@@ -117,6 +117,83 @@ class WaylandPenIntegrationTest {
         }
     }
 
+    @Test fun syntheticTabletDiagnosticsMeasureQueueRasterAndPaintReturnWithoutChangingOutput() {
+        val window = window(predictorFactory = null)
+        try {
+            ui { window.panel.drawContent = { canvas, _, _ -> window.finished.forEach { window.panel.renderer.render(canvas, it) } } }
+            injector(window).use { input ->
+                fun trace(): Stroke {
+                    val count = ui { window.finished.size }
+                    send(window, input, 0, x = 20.0, time = 4000)
+                    await("synthetic diagnostic down is rendered") {
+                        window.panel.session.liveStrokes.singleOrNull()?.stroke?.getRealInputCount() == 1
+                    }
+                    repeat(32) { index ->
+                        send(window, input, 1, x = 24.0 + index * 4.0, time = 4001 + index)
+                        await("synthetic diagnostic observation ${index + 1} is rendered") {
+                            window.panel.session.liveStrokes.singleOrNull()?.stroke?.getRealInputCount() == index + 2
+                        }
+                    }
+                    send(window, input, 2, x = 152.0, time = 4033)
+                    await("synthetic diagnostic finish is painted") {
+                        window.finished.size == count + 1 && window.panel.session.liveStrokes.isEmpty()
+                    }
+                    // A queued immediate paint runs before this barrier, without forcing an internal commit.
+                    ui { }
+                    return ui { window.finished.last() }
+                }
+                val control = trace()
+                val controlPixels = painterPixels(window)
+                val diagnostics = ui {
+                    window.finished.clear()
+                    window.panel.requestInkRender()
+                    InkLatencyDiagnostics(512).also { window.panel.latencyDiagnostics = it }
+                }
+                val measured = trace()
+                val measuredPixels = painterPixels(window)
+                assertEquals(control.inputs.size, measured.inputs.size)
+                assertEquals(34, measured.inputs.size)
+                repeat(measured.inputs.size) { index ->
+                    assertEquals(control.inputs[index], measured.inputs[index], "diagnostics preserve real observation $index")
+                }
+                assertContentEquals(controlPixels, measuredPixels, "diagnostics preserve exact finished pixels")
+                val snapshot = ui { diagnostics.snapshot() }
+                assertEquals(34, snapshot.inputs.sumOf { it.realSampleCount })
+                assertTrue(snapshot.inputs.all { it.origin == InkLatencyInputOrigin.NATIVE_QUEUE })
+                assertTrue(snapshot.inputs.all { it.oldestQueueWaitNanos!! >= it.newestQueueWaitNanos!! })
+                assertTrue(snapshot.inputs.all { it.normalizationNanos != null })
+                val timed = snapshot.frames.filter { it.inputEventCount > 0 && it.frameRequestNanos != null }
+                assertTrue(timed.isNotEmpty(), "Capture normal immediate requests without a test-only peer commit")
+                assertTrue(timed.all { it.path == InkLatencyRenderPath.SWING_SOFTWARE && it.completed })
+                assertTrue(timed.all { it.swingTransferAndDrawNanos != null && it.renderQueueNanos != null })
+                assertTrue(timed.all { it.oldestInputToRequestReturnNanos!! >= it.oldestInputToDrawNanos!! })
+                assertTrue(timed.all { it.oldestInputToDrawNanos!! >= it.newestInputToDrawNanos!! })
+                assertEquals(0L, snapshot.overwrittenInputs)
+                writeLatencyReport(snapshot, "wayland-synthetic-tablet")
+                val oldInputCount = snapshot.inputs.size
+                ui { window.panel.authoringEnabled = false; diagnostics.clear() }
+                send(window, input, 0, time = 5000)
+                Thread.sleep(50)
+                ui {
+                    assertTrue(diagnostics.snapshot().inputs.isEmpty())
+                    assertTrue(diagnostics.snapshot().frames.all { it.inputEventCount == 0 })
+                    assertTrue(oldInputCount > 0)
+                }
+            }
+        } finally { ui { window.close() } }
+        awaitReadersStopped()
+    }
+
+    private fun writeLatencyReport(snapshot: InkLatencySnapshot, name: String) {
+        val directory = Path.of(System.getProperty("byteink.test.latencyReports", "build/reports/software-latency"))
+        Files.createDirectories(directory)
+        val scale = ui { java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX }
+        val report = "{\"workload\":\"$name\",\"syntheticInput\":true,\"physicalInputDevice\":false," +
+            "\"compositor\":\"private headless Weston\",\"scale\":$scale," +
+            "\"prediction\":false,\"runtime\":\"${System.getProperty("java.runtime.version")}\",\"diagnostics\":${snapshot.toJson()}}"
+        Files.writeString(directory.resolve("$name-scale$scale.json"), report)
+    }
+
     @Test fun nativeDirtyFramesRetainFinishedContentAndMatchFullPainterThroughEraseAndReconnect() {
         val window = window(predictorFactory = null)
         var contentCalls = 0
