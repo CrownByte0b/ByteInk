@@ -313,9 +313,15 @@ jobs:
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
           __EGL_VENDOR_LIBRARY_FILENAMES: /usr/share/glvnd/egl_vendor.d/50_mesa.json
-          VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
-          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
         run: |
+          # Mesa packages use either an architecture-qualified or a plain ICD filename.
+          lavapipe_icd=$(dpkg -L mesa-vulkan-drivers | sed -n '/\/lvp_icd\(\.x86_64\)\?\.json$/p')
+          [[ -n "$lavapipe_icd" && -f "$lavapipe_icd" ]] || {
+            echo 'Expected one installed Mesa lavapipe ICD manifest.' >&2
+            exit 1
+          }
+          printf 'Mesa lavapipe ICD: %s\n' "$lavapipe_icd"
+          export VK_DRIVER_FILES="$lavapipe_icd" VK_ICD_FILENAMES="$lavapipe_icd"
           for vulkan in false true; do
             for scale in 1 2; do
               BYTEINK_WAYLAND_TEST_SUITE=presentation BYTEINK_WAYLAND_TEST_VULKAN="$vulkan" \
@@ -372,6 +378,7 @@ jobs:
             byteink-testing/build/reports/performance/
             byteink-testing/build/reports/android-matrix*/
             consumer-tests/build/reports/consumer/
+            **/hs_err_pid*.log
             build/wayland-pen/fixture/*.xml
             build/wayland-pen/fixture/*.log
           if-no-files-found: error

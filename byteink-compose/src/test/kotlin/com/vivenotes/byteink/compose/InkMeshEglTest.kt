@@ -38,6 +38,7 @@ import org.jetbrains.skia.DirectContext
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
+import org.jetbrains.skia.Pixmap
 import org.jetbrains.skia.Surface
 import kotlin.math.abs
 import kotlin.math.sin
@@ -47,7 +48,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Explicit opt-in: a missing EGL driver is a failed investigation, never an assumed/skipped pass. */
@@ -92,8 +92,12 @@ class InkMeshEglTest {
         val imageInfo = info(width, height)
         return Surface.makeRenderTarget(context, false, imageInfo).use { gpu ->
             Surface.makeRaster(imageInfo).use { cpu ->
-                assertNotNull(gpu.recordingContext, "The EGL control draws into a real Skia GPU render target")
-                assertNull(cpu.recordingContext, "The paired reference is a software raster surface")
+                // Skiko 0.150.1 wraps the borrowed recordingContext in an owning DirectContext;
+                // its cleaner can free the live context. Probe direct pixel access instead.
+                Pixmap().use { pixels ->
+                    assertFalse(gpu.peekPixels(pixels), "The EGL control draws into a GPU surface without direct CPU pixels")
+                    assertTrue(cpu.peekPixels(pixels), "The paired reference exposes its software raster pixels")
+                }
                 listOf(gpu, cpu).forEach { surface ->
                     surface.canvas.clear(0)
                     surface.canvas.scale(scale, scale)

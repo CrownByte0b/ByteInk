@@ -33,6 +33,24 @@
 | Texture atlas stays on one frame | Advance the mesh renderer's nonnegative `animationTimeMillis`; live shape effects separately require `InProgressStroke.updateShape`. |
 | Decoded replay cuts or moves ink twice | Supply `LoadedInkPage.sourceStrokes` and active decoded operations to `ViveInkPage.replay`, rather than already replayed `strokes`. |
 
+## CI graphics verification
+
+Linux CI discovers Mesa's installed lavapipe Vulkan manifest with
+`dpkg -L mesa-vulkan-drivers` before setting `VK_DRIVER_FILES` and
+`VK_ICD_FILENAMES`. Ubuntu packages can use `lvp_icd.json` or
+`lvp_icd.x86_64.json`; a stale filename makes JBR fall back to shared memory.
+A missing or ambiguous manifest fails the step. The presentation tests still
+require the actual Vulkan destination at both scales; fallback is tested separately.
+
+The EGL controls distinguish GPU surfaces from software rasters with
+`Surface.peekPixels`. Avoid `Surface.recordingContext` with pinned Skiko 0.150.1:
+its [native getter](https://github.com/JetBrains/skiko/blob/v0.150.1/skiko/src/jvmMain/cpp/common/Surface.cc)
+returns a borrowed pointer, while the
+[Kotlin getter](https://github.com/JetBrains/skiko/blob/v0.150.1/skiko/src/commonMain/kotlin/org/jetbrains/skia/Surface.kt)
+creates an owning `DirectContext`. Garbage collection of that temporary wrapper
+can free the active context and crash later rendering. Linux CI report artifacts
+include `hs_err_pid*.log` when the JVM writes a native crash report.
+
 ## Inspect native provenance
 
 ```kotlin
