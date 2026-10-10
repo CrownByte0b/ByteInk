@@ -1,6 +1,7 @@
 package com.vivenotes.byteink.consumer
 
 import java.io.File
+import java.net.URI
 import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -46,10 +47,13 @@ class PublishedConsumerSmokeTest {
             "-PbyteinkVersion=${property("version")}",
             "-PbyteinkNativeLoaderVersion=${property("nativeloaderVersion")}",
         )
+        val included = if (composite) temporary.newFolder("byteink") else null
         if (composite) {
             // Deliberately omit the local Maven repository. Every ByteInk module must come from the
-            // included build, which models includeBuild("../byteink") in a neighboring application.
-            arguments += "-PbyteinkCompositePath=${File(property("root")).absolutePath}"
+            // included build. Its sources and outputs are private to this test, so recompilation
+            // cannot remove classes that the outer build's parallel suites are still loading.
+            assertTrue(File(property("compositeSource")).copyRecursively(checkNotNull(included)))
+            arguments += "-PbyteinkCompositePath=${included.absolutePath}"
         } else {
             arguments += "-PbyteinkRepository=${File(property("repository")).toURI()}"
         }
@@ -74,7 +78,13 @@ class PublishedConsumerSmokeTest {
         assertEquals("2", report.getProperty("codec.rows"))
         assertEquals("marker,highlighter,empty", report.getProperty("hit.test.results"))
         assertTrue(report.getProperty("visible.pixels").toInt() > 1000)
-        if (!composite) {
+        if (composite) {
+            assertTrue(
+                File(URI(report.getProperty("loader.source"))).canonicalFile.toPath()
+                    .startsWith(checkNotNull(included).canonicalFile.toPath()),
+                "Composite consumer must load its private included build's loader",
+            )
+        } else {
             assertContains(report.getProperty("loader.source"), "ink-nativeloader-jvm-${property("nativeloaderVersion")}.jar")
             assertFalse(report.getProperty("loader.source").contains("/ink-nativeloader/build/"))
         }

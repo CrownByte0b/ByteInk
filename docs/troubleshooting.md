@@ -33,6 +33,16 @@
 | Texture atlas stays on one frame | Advance the mesh renderer's nonnegative `animationTimeMillis`; live shape effects separately require `InProgressStroke.updateShape`. |
 | Decoded replay cuts or moves ink twice | Supply `LoadedInkPage.sourceStrokes` and active decoded operations to `ViveInkPage.replay`, rather than already replayed `strokes`. |
 
+## Classes disappear during a parallel build
+
+If tests report `NoClassDefFoundError` for ByteInk classes after compilation succeeds,
+check whether a nested consumer build includes the checkout that is running the tests.
+Gradle [does not share the project lock between concurrent composite builds](https://docs.gradle.org/current/userguide/composite_builds.html),
+so a second build can replace compiled files while the first build is loading them.
+The consumer smoke test stages the current source and selected native binaries,
+then runs `includeBuild` against a private temporary copy. Published-artifact and
+composite dependency checks both remain enabled.
+
 ## Windows CI setup and fixture checks
 
 `Android artifact checksum differs: capture-environment.json` can mean Git
