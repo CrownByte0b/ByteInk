@@ -9,6 +9,7 @@ final class DesktopInputInjection implements AutoCloseable {
     private final NativeCalls api;
     private final boolean windows = System.getProperty("os.name").startsWith("Windows");
     private MemorySegment display = MemorySegment.NULL, pen = MemorySegment.NULL;
+    private boolean foregroundLocked;
     DesktopInputInjection() {
         api = new NativeCalls(arena, windows ? new String[]{"user32.dll", "kernel32.dll"}
                 : new String[]{"libX11.so.6", "libXtst.so.6"});
@@ -47,19 +48,45 @@ final class DesktopInputInjection implements AutoCloseable {
             throw new IllegalStateException("InjectSyntheticPointerInput: " + api.integer("GetLastError"));
     }
     void penAt(long hwnd, int phase, int clientX, int clientY, int pressure, int tiltX, int tiltY) {
+        if (phase == 0 && !foregroundLocked) lockForeground(hwnd);
         MemorySegment point = arena.allocate(8, 4);
         point.set(JAVA_INT, 0, clientX); point.set(JAVA_INT, 4, clientY);
         if (api.integer("ClientToScreen", MemorySegment.ofAddress(hwnd), point) == 0)
             throw new IllegalStateException("ClientToScreen failed");
         pen(phase, point.get(JAVA_INT, 0), point.get(JAVA_INT, 4), pressure, tiltX, tiltY);
     }
+    private void lockForeground(long hwnd) {
+        MemorySegment root = api.pointer("GetAncestor", MemorySegment.ofAddress(hwnd), 2); // GA_ROOT
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        do {
+            // A console can activate after AWT reports focus. Acquire the OS lock only while our
+            // window really is foreground, and hold it across the complete synthetic pen gesture.
+            if (api.pointer("GetForegroundWindow").address() == root.address() &&
+                    api.integer("LockSetForegroundWindow", 1) != 0) { // LSFW_LOCK
+                foregroundLocked = true;
+                return;
+            }
+            api.integer("SetForegroundWindow", root);
+            try { Thread.sleep(10); }
+            catch (InterruptedException failure) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while acquiring the pen test foreground", failure);
+            }
+        } while (System.nanoTime() < deadline);
+        throw new IllegalStateException("Cannot acquire the pen test foreground: " + api.pointer("GetForegroundWindow").address());
+    }
     void cancelInput(long hwnd) {
         // The system owns pointer-capture notifications; WM_CANCELMODE is a sendable cancellation.
         api.longValue("SendMessageW", MemorySegment.ofAddress(hwnd), 0x1f, 0L, 0L);
     }
     @Override public void close() {
-        if (pen.address() != 0) api.procedure("DestroySyntheticPointerDevice", pen);
-        if (display.address() != 0) api.integer("XCloseDisplay", display);
-        arena.close();
+        try {
+            if (foregroundLocked) api.integer("LockSetForegroundWindow", 2); // LSFW_UNLOCK
+        } finally {
+            try {
+                if (pen.address() != 0) api.procedure("DestroySyntheticPointerDevice", pen);
+                if (display.address() != 0) api.integer("XCloseDisplay", display);
+            } finally { arena.close(); }
+        }
     }
 }

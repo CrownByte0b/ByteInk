@@ -58,6 +58,22 @@ The setup script converts the Windows extraction path with `cygpath -u` before
 download and extraction, then exports the JVM home in Windows form with `cygpath -w`.
 The pinned SDK's SHA-512 is still verified before extraction.
 
+The Windows native pen tests need an interactive desktop. A first painted frame
+does not establish keyboard focus or input readiness. The fixture keeps its window
+above other windows and waits for native capture and focus on the Skia drawing
+canvas before injecting input. Live VM reproduction also caught Windows Terminal
+taking foreground focus after that readiness check. The test injector acquires
+[LockSetForegroundWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-locksetforegroundwindow)
+while its own window is foreground and releases it on close. A separate GUI
+process verifies that activation is blocked during the gesture and allowed after
+cleanup. Missing movement still fails the test; pressure, tilt, completion and
+cancellation checks remain required.
+
+Windows CI also runs `gradlew.bat --stop` before the cache action's cleanup.
+This releases daemon-owned compiler cache locks that can make Git Bash's `tar`
+report `javaCompile.lock: Device or resource busy` when saving the Gradle cache.
+See Gradle's [daemon shutdown documentation](https://docs.gradle.org/current/userguide/gradle_daemon.html#sec:stopping_an_existing_daemon).
+
 ## CI graphics verification
 
 Linux CI discovers Mesa's installed lavapipe Vulkan manifest with

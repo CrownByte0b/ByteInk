@@ -478,6 +478,9 @@ jobs:
             compare --reference linux-reference/conformance/oracle/build/oracle/oracleProduction.tsv \
             --candidate conformance/oracle/build/oracle/oracleProduction.tsv \
             --report conformance/oracle/build/reports/windows-vs-linux-production.md
+      - name: Stop Gradle daemons before saving the Windows cache
+        if: always()
+        run: ./gradlew.bat --stop
       - name: Upload Windows reports and parity results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
