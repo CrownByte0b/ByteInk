@@ -16,8 +16,6 @@ import java.util.concurrent.FutureTask
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.swing.JFrame
-import org.jetbrains.skiko.ExperimentalSkikoApi
-import org.jetbrains.skiko.SkiaLayer
 import kotlin.math.PI
 import kotlin.test.*
 
@@ -29,13 +27,13 @@ class DesktopPenIntegrationTest {
         if (EventQueue.isDispatchThread()) task.run() else EventQueue.invokeAndWait(task)
         return task.get()
     }
-    private fun await(message: String, check: () -> Boolean) {
+    private fun await(message: String, details: (() -> String)? = null, check: () -> Boolean) {
         val deadline = System.nanoTime() + 10_000_000_000L
         while (System.nanoTime() < deadline) {
             if (ui(check)) return
             Thread.sleep(10)
         }
-        fail(message)
+        fail(if (details == null) message else "$message (${details()})")
     }
     private class Source : InkInputSource {
         var listener: ((InkInputEvent) -> Unit)? = null
@@ -68,31 +66,27 @@ class DesktopPenIntegrationTest {
     private class Window(val frame: JFrame, val panel: InkLowLatencyPanel) : AutoCloseable {
         override fun close() { panel.close(); frame.dispose() }
     }
-    @OptIn(ExperimentalSkikoApi::class)
     private fun window(source: InkInputSource? = null, renderer: InkRenderer? = null,
         onFinish: (Long, Stroke) -> Unit = { _, _ -> }): Window {
         val window = ui {
             val frame = JFrame("ByteInk native pen verification")
             frame.isUndecorated = true
-            if (windows) frame.isAlwaysOnTop = true
+            if (windows) {
+                // Windows routes pointer input by screen position, not focus. CI desktops can activate
+                // other windows at any time, and losing focus correctly cancels live ink. A topmost
+                // window that never activates (WS_EX_NOACTIVATE) keeps the gesture independent of that.
+                frame.isAlwaysOnTop = true
+                frame.focusableWindowState = false
+            }
             val panel = InkLowLatencyPanel(brush, onFinish, renderer = renderer, inputSource = source, predictorFactory = null)
             panel.preferredSize = Dimension(192, 128)
             frame.contentPane.add(panel); frame.pack(); frame.setLocation(120, 100)
             frame.isVisible = true
-            if (windows) {
-                frame.toFront()
-                (panel.components.single() as SkiaLayer).canvas.requestFocusInWindow()
-            }
             panel.requestInkRender()
             Window(frame, panel)
         }
         try {
-            // A painted frame can precede native focus/activation. Injecting then can target another
-            // window, or activation can cancel a contact between DOWN and UPDATE.
-            await("native test window was not ready for input") {
-                window.panel.isInputReady && (!windows || window.frame.isFocused &&
-                    (window.panel.components.single() as SkiaLayer).canvas.isFocusOwner)
-            }
+            await("native test window was not ready for input") { window.panel.isInputReady }
         } catch (failure: Throwable) {
             ui { window.close() }
             throw failure
@@ -187,38 +181,39 @@ class DesktopPenIntegrationTest {
         val window = window(onFinish = { _, stroke -> completed.add(stroke) })
         try {
             await("initial direct frame") { window.panel.renderedFrameCount > 0 }
-            DesktopForegroundCompetitor().use { competitor ->
-                DesktopInputInjection().use { injection ->
-                    val hwnd = ui { window.panel.nativeWindowHandle }
-                    val scale = ui { window.panel.graphicsConfiguration.defaultTransform.scaleX }
-                    fun pen(phase: Int, x: Int, pressure: Int) = injection.penAt(hwnd, phase,
-                        (x * scale).toInt(), (60 * scale).toInt(), pressure, 45, 0)
-                    pen(0, 20, 256)
-                    await("WM_POINTERDOWN was not captured") { window.panel.session.activePointerIds.isNotEmpty() }
-                    assertFalse(competitor.activate(), "Another process must not interrupt the native pen contact")
-                    pen(1, 80, 768)
-                    await("WM_POINTERUPDATE was not captured") { (window.panel.session.liveStrokes.singleOrNull()?.stroke?.getRealInputCount() ?: 0) >= 2 }
-                    pen(2, 140, 512)
-                    await("WM_POINTERUP was not captured") { completed.size == 1 }
-                    ui {
-                        val inputs = completed.single().inputs
-                        assertEquals(InputToolType.STYLUS, inputs.getToolType())
-                        assertEquals(.25f, inputs[0].pressure)
-                        assertTrue((0 until inputs.size).any { inputs[it].pressure == .75f })
-                        assertEquals((PI / 4).toFloat(), inputs[0].tiltRadians, .000001f)
-                        assertEquals(0f, inputs[0].orientationRadians)
-                        assertEquals(20f, inputs[0].x, 1f)
-                        assertEquals(0, window.panel.session.liveStrokes.size)
-                    }
-                    pen(0, 30, 256)
-                    await("second native pen down was not captured") { window.panel.session.activePointerIds.isNotEmpty() }
-                    injection.cancelInput(hwnd)
-                    await("sent cancel-mode notification did not cancel the pen") { window.panel.session.activePointerIds.isEmpty() }
-                    pen(2, 100, 256)
-                    Thread.sleep(100)
-                    ui { assertEquals(1, completed.size, "cancelled native pen was never published: ${completed.map { it.inputs.getToolType() }}") }
+            DesktopInputInjection().use { injection ->
+                val hwnd = ui { window.panel.nativeWindowHandle }
+                val scale = ui { window.panel.graphicsConfiguration.defaultTransform.scaleX }
+                fun pen(phase: Int, x: Int, pressure: Int) = injection.penAt(hwnd, phase,
+                    (x * scale).toInt(), (60 * scale).toInt(), pressure, 45, 0)
+                val state = {
+                    val session = ui { "active=${window.panel.session.activePointerIds} live inputs=" +
+                        "${window.panel.session.liveStrokes.map { it.stroke.getRealInputCount() }} completed=${completed.size}" }
+                    "$session; ${injection.describeDesktop()}"
                 }
-                assertTrue(competitor.activate(), "Closing the injector must restore foreground activation")
+                pen(0, 20, 256)
+                await("WM_POINTERDOWN was not captured", state) { window.panel.session.activePointerIds.isNotEmpty() }
+                pen(1, 80, 768)
+                await("WM_POINTERUPDATE was not captured", state) { (window.panel.session.liveStrokes.singleOrNull()?.stroke?.getRealInputCount() ?: 0) >= 2 }
+                pen(2, 140, 512)
+                await("WM_POINTERUP was not captured", state) { completed.size == 1 }
+                ui {
+                    val inputs = completed.single().inputs
+                    assertEquals(InputToolType.STYLUS, inputs.getToolType())
+                    assertEquals(.25f, inputs[0].pressure)
+                    assertTrue((0 until inputs.size).any { inputs[it].pressure == .75f })
+                    assertEquals((PI / 4).toFloat(), inputs[0].tiltRadians, .000001f)
+                    assertEquals(0f, inputs[0].orientationRadians)
+                    assertEquals(20f, inputs[0].x, 1f)
+                    assertEquals(0, window.panel.session.liveStrokes.size)
+                }
+                pen(0, 30, 256)
+                await("second native pen down was not captured", state) { window.panel.session.activePointerIds.isNotEmpty() }
+                injection.cancelInput(hwnd)
+                await("sent cancel-mode notification did not cancel the pen", state) { window.panel.session.activePointerIds.isEmpty() }
+                pen(2, 100, 256)
+                Thread.sleep(100)
+                ui { assertEquals(1, completed.size, "cancelled native pen was never published: ${completed.map { it.inputs.getToolType() }}") }
             }
         } finally { ui { window.close() } }
     }

@@ -58,15 +58,21 @@ The setup script converts the Windows extraction path with `cygpath -u` before
 download and extraction, then exports the JVM home in Windows form with `cygpath -w`.
 The pinned SDK's SHA-512 is still verified before extraction.
 
-The Windows native pen tests need an interactive desktop. A first painted frame
-does not establish keyboard focus or input readiness. The fixture keeps its window
-above other windows and waits for native capture and focus on the Skia drawing
-canvas before injecting input. Live VM reproduction also caught Windows Terminal
-taking foreground focus after that readiness check. The test injector acquires
-[LockSetForegroundWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-locksetforegroundwindow)
-while its own window is foreground and releases it on close. A separate GUI
-process verifies that activation is blocked during the gesture and allowed after
-cleanup. Missing movement still fails the test; pressure, tilt, completion and
+The Windows native pen tests need an interactive desktop, but not the foreground.
+Windows routes pen input by screen position and hit-tests it against the composed
+desktop. A contact injected right after a window appears can therefore reach the
+window that was there in the previous composition, although `WindowFromPoint`
+already returns the new one. The test injector calls
+[DwmFlush](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmflush)
+before each pen-down. It fails with the covering process and window class if
+another window would receive the contact.
+
+Losing focus correctly cancels live ink, so the fixture must not depend on which
+window a CI desktop activates. Consoles, runner start-up windows and other
+processes can take the foreground at any time. Its window is always on top and
+never activates: `focusableWindowState = false` makes AWT use `WS_EX_NOACTIVATE`.
+Failure messages include the session state, the foreground window and the pen
+target. Missing movement still fails the test; pressure, tilt, completion and
 cancellation checks remain required.
 
 Windows CI also runs `gradlew.bat --stop` before the cache action's cleanup.
