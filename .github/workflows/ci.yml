@@ -1,5 +1,7 @@
 name: ci
 
+# The complete pipeline. Each job is a reusable workflow in its own file, which can also be
+# started alone from the Actions tab.
 on:
   push:
     branches: ['**']
@@ -22,526 +24,55 @@ concurrency:
 
 jobs:
   release:
-    name: Validate release coordinates
     if: github.event_name != 'push' || github.event.deleted != true
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      tag: ${{ steps.release.outputs.tag }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Select and validate the requested version
-        id: release
-        env:
-          MANUAL_RELEASE_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          release_tag=''
-          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && -n "$MANUAL_RELEASE_VERSION" ]]; then
-            release_tag="v$MANUAL_RELEASE_VERSION"
-          elif [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/v* ]]; then
-            release_tag="$GITHUB_REF_NAME"
-          fi
-          if [[ -n "$release_tag" ]]; then
-            bash .github/scripts/release-versions.sh "$release_tag"
-          fi
-          printf 'tag=%s\n' "$release_tag" >> "$GITHUB_OUTPUT"
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ inputs.version }}
 
   native-linux:
-    name: Native Linux build and checks
     needs: [release]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # gradle/gradle-daemon-jvm.properties asks for an Azul JDK 27 for the Gradle daemon.
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: zulu
-          java-version: 27
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        with:
-          cache-provider: basic
-      # Bazel unpacks an 8 GB LLVM toolchain; the runner's preinstalled SDKs, unused here, make room.
-      - name: Free disk space
-        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
-      # Bazel's downloads (native/common.sh), which the pins and patches decide. Its disk cache of
-      # compiled actions would exceed GitHub's cache quota across the native jobs, so builds are cold.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/byteink/bazel/repository
-          key: bazel-repository-linux-${{ hashFiles('upstream/pins.properties', 'native/*.sh', 'native/patches/*.patch') }}
-          restore-keys: bazel-repository-linux-
-      - name: Build libink.so
-        run: native/build-linux.sh
-      - name: Build unshipped platform-math oracle baseline
-        run: native/build-oracle-baseline.sh linux
-      - name: Check it
-        run: ./gradlew :upstream:checkLinuxLibrary
-      - name: Upload libink.so
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: libink-linux-x86_64
-          # The files keep their path below the wildcard, <commit>/linux-x86_64/.
-          path: |
-            native/build/out/*/linux-x86_64/libink.so
-            native/build/out/*/linux-x86_64/build.properties
-          if-no-files-found: error
-
-      - name: Upload Linux debug symbols separately
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: libink-linux-x86_64-debug-symbols
-          path: native/build/out/*/linux-x86_64/libink.so.debug
-          if-no-files-found: error
-
-      - name: Upload unshipped oracle baseline
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: oracle-baseline-linux-x64
-          path: |
-            native/build/oracle-linux-x64/libink.so
-            native/build/oracle-linux-x64/build.properties
-          if-no-files-found: error
+    uses: ./.github/workflows/native-linux.yml
 
   native-windows:
-    name: Native Windows cross-build and checks
     needs: [release]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # gradle/gradle-daemon-jvm.properties asks for an Azul JDK 27 for the Gradle daemon.
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: zulu
-          java-version: 27
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        with:
-          cache-provider: basic
-      # Bazel unpacks an 8 GB LLVM toolchain; the runner's preinstalled SDKs, unused here, make room.
-      - name: Free disk space
-        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/byteink/bazel/repository
-          key: bazel-repository-windows-${{ hashFiles('upstream/pins.properties', 'native/*.sh', 'native/patches/*.patch') }}
-          restore-keys: bazel-repository-windows-
-      - name: Build ink.dll
-        run: native/build-windows.sh
-      - name: Verify reproducibility across independent checkouts
-        run: native/check-windows-reproducibility.sh
-      - name: Build Windows C++ tests
-        run: native/build-windows-tests.sh
-      - name: Check it
-        run: ./gradlew :upstream:checkWindowsLibrary
-      - name: Upload ink.dll
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ink-windows-x86_64
-          path: |
-            native/build/out/*/windows-x86_64/ink.dll
-            native/build/out/*/windows-x86_64/build.properties
-          if-no-files-found: error
-
-      - name: Upload Windows C++ tests
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: native-windows-tests
-          path: native/build/windows-tests/
-          if-no-files-found: error
-      - name: Upload reproducibility proof
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: windows-reproducibility
-          path: native/build/reproducibility/windows-sha256.txt
-          if-no-files-found: error
+    uses: ./.github/workflows/native-windows.yml
 
   native-linux-tests:
-    name: google/ink's C++ tests
     needs: [release]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 150
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # Bazel unpacks an 8 GB LLVM toolchain; the runner's preinstalled SDKs, unused here, make room.
-      - name: Free disk space
-        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/byteink/bazel/repository
-          key: bazel-repository-tests-${{ hashFiles('upstream/pins.properties', 'native/*.sh', 'native/patches/*.patch') }}
-          restore-keys: bazel-repository-tests-
-      - name: Test google/ink at the pinned commit
-        run: native/test-linux.sh
+    uses: ./.github/workflows/native-linux-tests.yml
 
   native-pin:
-    name: Native pin against google/ink history
     needs: [release]
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # gradle/gradle-daemon-jvm.properties asks for an Azul JDK 27 for the Gradle daemon.
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: zulu
-          java-version: 27
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        with:
-          cache-provider: basic
-      - name: Scan google/ink
-        run: ./gradlew :upstream:scanGoogleInk
-      - name: Upload scan report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: google-ink-jni-scan
-          path: upstream/build/reports/google-ink-jni-scan.md
-          if-no-files-found: ignore
+    uses: ./.github/workflows/native-pin.yml
 
+  # The JVM and publish jobs request actions: read to download another run's artifacts when
+  # started alone. A caller must grant every permission its called jobs request.
   jvm-linux:
-    name: Linux / ${{ matrix.runtime }}
     needs: [release, native-linux, native-windows]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        runtime: [zulu25, zulu27, jbr25]
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Select exact release coordinates
-        if: needs.release.outputs.tag != ''
-        env:
-          RELEASE_TAG: ${{ needs.release.outputs.tag }}
-        run: bash .github/scripts/release-versions.sh "$RELEASE_TAG" >> "$GITHUB_ENV"
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: zulu
-          java-version: |
-            25
-            27
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        with:
-          cache-provider: basic
-      - name: Select Zulu test runtime
-        if: matrix.runtime != 'jbr25'
-        run: |
-          if [[ '${{ matrix.runtime }}' == zulu25 ]]; then
-            echo "BYTEINK_TEST_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
-          else
-            echo "BYTEINK_TEST_JAVA_HOME=$JAVA_HOME_27_X64" >> "$GITHUB_ENV"
-          fi
-      - name: Install pinned JBR 25 SDK
-        if: matrix.runtime == 'jbr25'
-        run: bash .github/scripts/setup-jbr.sh linux-x64
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: libink-linux-x86_64
-          path: native/build/out
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: libink-linux-x86_64-debug-symbols
-          path: native/build/out
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ink-windows-x86_64
-          path: native/build/out
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: oracle-baseline-linux-x64
-          path: native/build/oracle-linux-x64
-      - name: Build, consumer smoke, full suites, engine oracle and synthetic fidelity reports
-        run: >-
-          ./gradlew build :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary
-          :conformance:oracle:oracleCompare :conformance:oracle:oracleProduction :conformance:oracle:installDist
-          :byteink-testing:desktopParityDump :byteink-testing:androidFidelityMatrix --continue
-          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
-          -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }}
-          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
-          -Porg.gradle.java.installations.auto-download=false
-      - name: Install offscreen OpenGL and EGL test dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libvulkan1 mesa-vulkan-drivers libxi6 libxtst6
-      - name: Verify mesh shaders on OpenGL
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: >-
-          xvfb-run -a ./gradlew :byteink-compose:meshGpuTest :byteink-compose:desktopPenTest
-          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
-          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
-          -Porg.gradle.java.installations.auto-download=false
-      - name: Verify mesh shaders on EGL without X11
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          __EGL_VENDOR_LIBRARY_FILENAMES: /usr/share/glvnd/egl_vendor.d/50_mesa.json
-        run: >-
-          env -u DISPLAY ./gradlew :byteink-compose:meshEglTest
-          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
-          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
-          -Porg.gradle.java.installations.auto-download=false
-      - name: Install native Wayland test dependencies
-        if: matrix.runtime == 'jbr25'
-        run: sudo apt-get install -y weston libwayland-dev libweston-13-dev build-essential pkg-config
-      - name: Verify native Wayland tablet and immediate authoring
-        if: matrix.runtime == 'jbr25'
-        run: |
-          for scale in 1 2; do
-            BYTEINK_WAYLAND_TEST_SCALE="$scale" bash byteink-compose/src/test/wayland/run.sh \
-              "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME" \
-              -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64 \
-              -Porg.gradle.java.installations.auto-download=false
-          done
-      - name: Verify native Wayland shared-memory and Mesa Vulkan presentation
-        if: matrix.runtime == 'jbr25'
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          __EGL_VENDOR_LIBRARY_FILENAMES: /usr/share/glvnd/egl_vendor.d/50_mesa.json
-        run: |
-          # Mesa packages use either an architecture-qualified or a plain ICD filename.
-          lavapipe_icd=$(dpkg -L mesa-vulkan-drivers | sed -n '/\/lvp_icd\(\.x86_64\)\?\.json$/p')
-          [[ -n "$lavapipe_icd" && -f "$lavapipe_icd" ]] || {
-            echo 'Expected one installed Mesa lavapipe ICD manifest.' >&2
-            exit 1
-          }
-          printf 'Mesa lavapipe ICD: %s\n' "$lavapipe_icd"
-          export VK_DRIVER_FILES="$lavapipe_icd" VK_ICD_FILENAMES="$lavapipe_icd"
-          for vulkan in false true; do
-            for scale in 1 2; do
-              BYTEINK_WAYLAND_TEST_SUITE=presentation BYTEINK_WAYLAND_TEST_VULKAN="$vulkan" \
-                BYTEINK_WAYLAND_TEST_SCALE="$scale" \
-                BYTEINK_WAYLAND_TEST_OUTPUT="$PWD/build/wayland-presentation/vulkan-$vulkan-scale-$scale" \
-                bash byteink-compose/src/test/wayland/run.sh \
-                "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME" \
-                -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64 \
-                -Porg.gradle.java.installations.auto-download=false
-            done
-          done
-      - name: Verify unavailable Vulkan falls back to shared memory
-        if: matrix.runtime == 'jbr25'
-        env:
-          VK_DRIVER_FILES: /tmp/byteink-deliberately-no-such-vulkan-icd.json
-          VK_ICD_FILENAMES: /tmp/byteink-deliberately-no-such-vulkan-icd.json
-          BYTEINK_WAYLAND_TEST_SUITE: presentation
-          BYTEINK_WAYLAND_TEST_VULKAN: "true"
-          BYTEINK_WAYLAND_TEST_BACKEND: shm
-        run: >-
-          BYTEINK_WAYLAND_TEST_OUTPUT="$PWD/build/wayland-presentation/unavailable-vulkan"
-          bash byteink-compose/src/test/wayland/run.sh
-          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
-          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
-          -Porg.gradle.java.installations.auto-download=false
-      - name: Upload Linux reference geometry and notebook bytes
-        if: matrix.runtime == 'zulu27'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: linux-parity-reference
-          path: |
-            conformance/oracle/build/oracle/
-            byteink-testing/build/desktop-parity/
-          if-no-files-found: error
-      - name: Upload oracle application for VM comparisons
-        if: matrix.runtime == 'zulu27'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: oracle-application
-          path: conformance/oracle/build/install/oracle/
-          if-no-files-found: error
-      - name: Upload reports
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: linux-${{ matrix.runtime }}-reports
-          path: |
-            **/build/reports/tests/
-            **/build/test-results/
-            byteink-compose/build/reports/wayland-gpu/
-            build/wayland-presentation/
-            conformance/oracle/build/reports/
-            byteink-compose/build/reports/performance/
-            byteink-testing/build/reports/performance/
-            byteink-testing/build/reports/android-matrix*/
-            consumer-tests/build/reports/consumer/
-            **/hs_err_pid*.log
-            build/wayland-pen/fixture/*.xml
-            build/wayland-pen/fixture/*.log
-          if-no-files-found: error
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/jvm-linux.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
 
   jvm-windows:
-    name: Windows / ${{ matrix.runtime }}
     needs: [release, jvm-linux]
-    runs-on: windows-2025
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        runtime: [zulu25, zulu27, jbr25]
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Select exact release coordinates
-        if: needs.release.outputs.tag != ''
-        env:
-          RELEASE_TAG: ${{ needs.release.outputs.tag }}
-        run: bash .github/scripts/release-versions.sh "$RELEASE_TAG" >> "$GITHUB_ENV"
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: zulu
-          java-version: |
-            25
-            27
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        with:
-          cache-provider: basic
-      - name: Select Zulu test runtime
-        if: matrix.runtime != 'jbr25'
-        run: |
-          if [[ '${{ matrix.runtime }}' == zulu25 ]]; then
-            echo "BYTEINK_TEST_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
-          else
-            echo "BYTEINK_TEST_JAVA_HOME=$JAVA_HOME_27_X64" >> "$GITHUB_ENV"
-          fi
-      - name: Install pinned JBR 25 SDK
-        if: matrix.runtime == 'jbr25'
-        run: bash .github/scripts/setup-jbr.sh windows-x64
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: libink-linux-x86_64
-          path: native/build/out
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: libink-linux-x86_64-debug-symbols
-          path: native/build/out
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ink-windows-x86_64
-          path: native/build/out
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: native-windows-tests
-          path: native/build/windows-tests
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: linux-parity-reference
-          path: linux-reference
-      - name: Run upstream Windows C++ subset
-        run: |
-          shopt -s nullglob
-          tests=(native/build/windows-tests/*.exe)
-          [[ ${#tests[@]} == 5 ]]
-          mkdir -p native/build/windows-tests/results
-          for test in "${tests[@]}"; do
-            "$test" "--gtest_output=xml:native/build/windows-tests/results/$(basename "$test").xml"
-          done
-      - name: Build, consumer smoke, full suites and synthetic fidelity comparison
-        run: |
-          reference=$(cygpath -w "$PWD/linux-reference/byteink-testing/build/desktop-parity")
-          ./gradlew.bat build :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary \
-            :conformance:oracle:oracleProduction :byteink-testing:desktopParityCompare \
-            :byteink-testing:androidFidelityMatrix --continue \
-            "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME" \
-            "-PbyteinkParityFixtures=$reference\fixtures" "-PbyteinkParityReference=$reference" \
-            -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }} \
-            -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64 \
-            -Porg.gradle.java.installations.auto-download=false
-      - name: Verify native Windows input and immediate Skia authoring
-        run: >-
-          ./gradlew.bat :byteink-compose:desktopPenTest --no-daemon
-          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
-          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
-          -Porg.gradle.java.installations.auto-download=false
-      - name: Compare shipped Windows and Linux engine geometry strictly
-        run: |
-          java=$(cygpath -u "$BYTEINK_TEST_JAVA_HOME")/bin/java.exe
-          ./gradlew.bat :conformance:oracle:installDist
-          "$java" -cp 'conformance/oracle/build/install/oracle/lib/*' com.vivenotes.byteink.oracle.OracleKt \
-            compare --reference linux-reference/conformance/oracle/build/oracle/oracleProduction.tsv \
-            --candidate conformance/oracle/build/oracle/oracleProduction.tsv \
-            --report conformance/oracle/build/reports/windows-vs-linux-production.md
-      - name: Stop Gradle daemons before saving the Windows cache
-        if: always()
-        run: ./gradlew.bat --stop
-      - name: Upload Windows reports and parity results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: windows-${{ matrix.runtime }}-reports
-          path: |
-            **/build/reports/tests/
-            **/build/test-results/
-            conformance/oracle/build/oracle/
-            conformance/oracle/build/reports/
-            byteink-testing/build/desktop-parity/
-            byteink-compose/build/reports/performance/
-            byteink-testing/build/reports/performance/
-            byteink-testing/build/reports/android-matrix*/
-            native/build/windows-tests/results/
-            consumer-tests/build/reports/consumer/
-          if-no-files-found: error
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/jvm-windows.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
 
   publish:
-    name: Publish tested version to GitHub Packages
-    if: needs.release.outputs.tag != ''
+    if: needs.release.outputs.version != ''
     needs: [release, native-linux, native-windows, native-linux-tests, native-pin, jvm-linux, jvm-windows]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Select the coordinates tested by the matrix
-        env:
-          RELEASE_TAG: ${{ needs.release.outputs.tag }}
-        run: bash .github/scripts/release-versions.sh "$RELEASE_TAG" >> "$GITHUB_ENV"
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: zulu
-          java-version: 27
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        with:
-          cache-provider: basic
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: libink-linux-x86_64
-          path: native/build/out
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: libink-linux-x86_64-debug-symbols
-          path: native/build/out
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ink-windows-x86_64
-          path: native/build/out
-      - name: Publish libraries, sources, metadata and separate Linux symbols
-        run: >-
-          ./gradlew :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary
-          :ink-nativeloader:publishAllPublicationsToGitHubPackagesRepository
-          :byteink-core:publishAllPublicationsToGitHubPackagesRepository
-          :byteink-kit:publishAllPublicationsToGitHubPackagesRepository
-          :byteink-compose:publishAllPublicationsToGitHubPackagesRepository
-          :byteink-testing:publishAllPublicationsToGitHubPackagesRepository
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      actions: read
+    uses: ./.github/workflows/publish.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+      upload: true

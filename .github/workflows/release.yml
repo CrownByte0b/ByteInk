@@ -1,0 +1,52 @@
+name: Release coordinates
+
+# Called by ci before any build. Run it alone to check a version's coordinates.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version requested by a manual ci run; tag pushes supply their own
+        required: false
+        default: ''
+        type: string
+    outputs:
+      version:
+        description: Validated release version, or empty for development coordinates
+        value: ${{ jobs.release.outputs.version }}
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to validate (e.g. 0.1.0 or 0.2.0-rc.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Validate release coordinates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select and validate the requested version
+        id: release
+        env:
+          MANUAL_RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          release_tag=''
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && -n "$MANUAL_RELEASE_VERSION" ]]; then
+            release_tag="v$MANUAL_RELEASE_VERSION"
+          elif [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/v* ]]; then
+            release_tag="$GITHUB_REF_NAME"
+          fi
+          if [[ -n "$release_tag" ]]; then
+            bash .github/scripts/release-versions.sh "$release_tag"
+          fi
+          printf 'version=%s\n' "${release_tag#v}" >> "$GITHUB_OUTPUT"

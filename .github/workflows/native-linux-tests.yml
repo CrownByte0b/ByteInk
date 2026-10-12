@@ -1,0 +1,29 @@
+name: Native C++ tests
+
+# Called by ci; can also run alone.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-linux-tests:
+    name: google/ink's C++ tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Bazel unpacks an 8 GB LLVM toolchain; the runner's preinstalled SDKs, unused here, make room.
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/byteink/bazel/repository
+          key: bazel-repository-tests-${{ hashFiles('upstream/pins.properties', 'native/*.sh', 'native/patches/*.patch') }}
+          restore-keys: bazel-repository-tests-
+      - name: Test google/ink at the pinned commit
+        run: native/test-linux.sh
