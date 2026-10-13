@@ -191,10 +191,15 @@ class DesktopPenIntegrationTest {
                         "${window.panel.session.liveStrokes.map { it.stroke.getRealInputCount() }} completed=${completed.size}" }
                     "$session; ${injection.describeDesktop()}"
                 }
+                // A held pen repeats its frame, so look for the moved sample rather than counting inputs.
+                fun hasLiveSample(pressure: Float) = window.panel.session.liveStrokes.singleOrNull()?.stroke?.let { stroke ->
+                    val input = StrokeInput()
+                    (0 until stroke.getRealInputCount()).any { stroke.populateInput(input, it).pressure == pressure }
+                } == true
                 pen(0, 20, 256)
                 await("WM_POINTERDOWN was not captured", state) { window.panel.session.activePointerIds.isNotEmpty() }
                 pen(1, 80, 768)
-                await("WM_POINTERUPDATE was not captured", state) { (window.panel.session.liveStrokes.singleOrNull()?.stroke?.getRealInputCount() ?: 0) >= 2 }
+                await("WM_POINTERUPDATE was not captured", state) { hasLiveSample(.75f) }
                 pen(2, 140, 512)
                 await("WM_POINTERUP was not captured", state) { completed.size == 1 }
                 ui {

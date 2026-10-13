@@ -3,14 +3,24 @@ package com.vivenotes.byteink.compose;
 import java.lang.foreign.*;
 import static java.lang.foreign.ValueLayout.*;
 import static java.nio.charset.StandardCharsets.UTF_16LE;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 /** Test-only OS input injection; no fabricated pen samples pass through production APIs. */
 final class DesktopInputInjection implements AutoCloseable {
-    private final Arena arena = Arena.ofConfined();
+    // Windows releases an injected contact that gets no frames for about half a second with an
+    // ordinary pointer up: the stroke finishes and the next frame starts a new contact. Like a
+    // digitizer reporting a resting pen, the current frame repeats, from a thread a busy EDT can't stall.
+    private static final long REPEAT_NANOS = 50_000_000L;
+    private final Arena arena = Arena.ofShared();
     private final NativeCalls api;
     private final boolean windows = System.getProperty("os.name").startsWith("Windows");
+    private final MemorySegment frame = arena.allocate(152, 8); // POINTER_TYPE_INFO
     private MemorySegment display = MemorySegment.NULL, pen = MemorySegment.NULL;
     private long target;
+    private boolean down;
+    private long lastFrame;
+    private Thread repeater;
+    private RuntimeException repeatFailure;
     DesktopInputInjection() {
         api = new NativeCalls(arena, windows ? new String[]{"user32.dll", "kernel32.dll", "dwmapi.dll"}
                 : new String[]{"libX11.so.6", "libXtst.so.6"});
@@ -31,22 +41,44 @@ final class DesktopInputInjection implements AutoCloseable {
             api.integer("XFlush", display);
         }
     }
-    void pen(int phase, int screenX, int screenY, int pressure, int tiltX, int tiltY) {
+    synchronized void pen(int phase, int screenX, int screenY, int pressure, int tiltX, int tiltY) {
         if (!windows) throw new UnsupportedOperationException("Synthetic pen injection is Win32 only");
+        if (repeatFailure != null) throw new IllegalStateException("Repeating the held pen frame failed", repeatFailure);
         if (pen.address() == 0) {
             pen = api.pointer("CreateSyntheticPointerDevice", 3, 1, 3); // POINTER_FEEDBACK_NONE
             if (pen.address() == 0) throw new IllegalStateException("CreateSyntheticPointerDevice: " + api.integer("GetLastError"));
         }
-        MemorySegment info = arena.allocate(152, 8);
-        info.set(JAVA_INT, 0, 3); // POINTER_TYPE_INFO.type
-        MemorySegment data = info.asSlice(8, 120);
+        frame.fill((byte) 0);
+        frame.set(JAVA_INT, 0, 3); // POINTER_TYPE_INFO.type
+        MemorySegment data = frame.asSlice(8, 120);
         data.set(JAVA_INT, 0, 3); data.set(JAVA_INT, 4, 1);
         data.set(JAVA_INT, 12, phase == 0 ? 0x10000 | 2 | 4 : phase == 2 ? 0x40000 : 0x20000 | 2 | 4);
         data.set(JAVA_INT, 32, screenX); data.set(JAVA_INT, 36, screenY);
         data.set(JAVA_INT, 100, 1 | 4 | 8);
         data.set(JAVA_INT, 104, pressure); data.set(JAVA_INT, 112, tiltX); data.set(JAVA_INT, 116, tiltY);
-        if (api.integer("InjectSyntheticPointerInput", pen, info, 1) == 0)
+        inject();
+        down = phase != 2;
+        if (down) {
+            data.set(JAVA_INT, 12, 0x20000 | 2 | 4); // A repeat is an in-contact update at the same place.
+            if (repeater == null) repeater = Thread.ofPlatform().daemon().name("byteink-test-pen-repeat").start(this::repeatWhileDown);
+        }
+        notifyAll();
+    }
+    private void inject() {
+        if (api.integer("InjectSyntheticPointerInput", pen, frame, 1) == 0)
             throw new IllegalStateException("InjectSyntheticPointerInput: " + api.integer("GetLastError"));
+        lastFrame = System.nanoTime();
+    }
+    private synchronized void repeatWhileDown() {
+        try {
+            while (down) {
+                long wait = REPEAT_NANOS - (System.nanoTime() - lastFrame);
+                if (wait > 0) NANOSECONDS.timedWait(this, wait); else inject();
+            }
+        } catch (InterruptedException ignored) {
+        } catch (RuntimeException failure) {
+            repeatFailure = failure; down = false;
+        } finally { repeater = null; }
     }
     void penAt(long hwnd, int phase, int clientX, int clientY, int pressure, int tiltX, int tiltY) {
         MemorySegment point = arena.allocate(8, 4);
@@ -90,9 +122,15 @@ final class DesktopInputInjection implements AutoCloseable {
         api.longValue("SendMessageW", MemorySegment.ofAddress(hwnd), 0x1f, 0L, 0L);
     }
     @Override public void close() {
+        Thread thread;
+        synchronized (this) { down = false; notifyAll(); thread = repeater; }
+        try {
+            if (thread != null) thread.join();
+        } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
         try {
             if (pen.address() != 0) api.procedure("DestroySyntheticPointerDevice", pen);
             if (display.address() != 0) api.integer("XCloseDisplay", display);
         } finally { arena.close(); }
+        if (repeatFailure != null) throw new IllegalStateException("Repeating the held pen frame failed", repeatFailure);
     }
 }

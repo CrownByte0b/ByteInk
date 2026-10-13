@@ -18,8 +18,10 @@ tasks.test {
     val seed = providers.gradleProperty("byteinkFuzzSeed")
     inputs.property("fuzzIterations", iterations.orElse(""))
     inputs.property("fuzzSeed", seed.orElse(""))
+    // A crashed fuzzer JVM's hs_err report, which CI uploads with the other reports.
+    val fuzzReports = layout.buildDirectory.dir("reports/fuzz")
     jvmArgumentProviders.add(CommandLineArgumentProvider {
-        listOf("-Dbyteink.test.classpath=${runtime.asPath}") +
+        listOf("-Dbyteink.test.classpath=${runtime.asPath}", "-Dbyteink.test.fuzzReports=${fuzzReports.get().asFile.path}") +
             iterations.map { listOf("-Dbyteink.test.fuzzIterations=$it") }.getOrElse(emptyList()) +
             seed.map { listOf("-Dbyteink.test.fuzzSeed=$it") }.getOrElse(emptyList())
     })

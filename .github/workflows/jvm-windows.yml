@@ -182,4 +182,5 @@ jobs:
             byteink-testing/build/reports/android-matrix*/
             native/build/windows-tests/results/
             consumer-tests/build/reports/consumer/
+            **/hs_err_pid*.log
           if-no-files-found: error

@@ -6,6 +6,12 @@ primarily for ViveNotes’ Kotlin Multiplatform desktop app.
 The goal is to generate and render strokes using the same engine and brush definitions as the Android app, preserving stroke geometry, stabilization
 behaviour and stored ink compatibility across platforms.
 
+## Why use ?
+
+- 1 to 1 compatibility with Androidx Ink
+- Wayland native support.
+- Only choice for Kotlin Multi platform on desktop
+
 ## Technical approach
 
 ByteInk uses AndroidX Ink’s published JVM APIs, backed by native C++ code through JNI. It builds and packages `libink.so` for Linux and `ink.dll`
