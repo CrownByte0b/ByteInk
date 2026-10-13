@@ -10,6 +10,7 @@
 | Bundled native missing while building | Build both pinned native outputs or supply `-PbyteinkLinuxLibrary` / `-PbyteinkWindowsLibrary`; use matching ABI/pins. |
 | Native cache cannot be written | Default loading falls back to a private temp directory. An explicit `byteink.ink.cache` is used as supplied and has no default-location fallback. |
 | Windows native path fails under Zulu | Try an ASCII cache path such as `-Dbyteink.ink.cache=C:/byteink-cache`; pinned JBR 25 supports broader Unicode paths. |
+| Native memory outlives collection, or a `byteink native frees` thread appears | Expected: Ink objects free their native memory 250 ms after finalization, on that daemon thread. A native call still using an object the collector found unreachable would have to stall that long to read freed memory. |
 | Drawing disappears at pointer release | Add the completed stroke to finished content and keep it in `drawContent`. |
 | Pointer samples arrive but wet shape stalls | Schedule frames from `hasPendingInputs` and `isUpdateNeeded`; call `advance`, not only `append`. |
 | Speculative tail remains when the pen stops | A custom session loop must schedule while `needsAnimationTick()` is true, then advance to expire predictions. Custom controller loops retract forecasts explicitly. |

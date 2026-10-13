@@ -1,0 +1,29 @@
+--- a/jvmAndAndroidMain/kotlin/androidx/ink/nativeloader/NativePointer.jvmAndAndroid.kt
++++ b/jvmAndAndroidMain/kotlin/androidx/ink/nativeloader/NativePointer.jvmAndAndroid.kt
+@@ -12,11 +12,14 @@
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
++ *
++ * Modified for byteink: frees the native pointer a grace period after finalization (see PATCHES.md).
+  */
+ 
+ package androidx.ink.nativeloader
+ 
+ import androidx.annotation.RestrictTo
++import com.vivenotes.byteink.nativeloader.DeferredFree
+ import kotlin.reflect.KProperty
+ 
+ @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP) // NonPublicApi
+@@ -50,7 +53,10 @@
+         // happens after base class initialization. This does ensure that the class is finalizable
+         // before the pointer is allocated.
+         if (pointer != 0L) {
+-            pointerFree(pointer)
++            // byteink: a native call may still be using the pointer; DeferredFree frees it later and
++            // then notifies this observer.
++            DeferredFree.free(pointer, pointerFree, NativePointerObserver.onCleanup)
++            return
+         }
+         // This observer is used for tests to wait until cleanup is done, so it should happen after
+         // pointerFree is called.

@@ -14,7 +14,9 @@ The Android and iOS source sets are left out. Everything under `com/vivenotes/by
 own. The build compiles upstream's `jvmAndAndroidMain` into `jvmMain` and keeps upstream's Kotlin
 module name, `ink-nativeloader`.
 
-## The patch
+## The patches
+
+### Loading byteink's natives
 
 `patches/0001-load-byteink-natives.patch` changes `jvmMain/…/NativeLoader.jvm.kt` so that it
 hands loading to `InkNativeLibrary`. Upstream's version has four problems for byteink:
@@ -27,6 +29,24 @@ hands loading to `InkNativeLibrary`. Upstream's version has four problems for by
   classpath wins.
 
 The patched file notes the change in its licence header, as Apache 2.0 requires.
+
+### Freeing native objects after a grace period
+
+`patches/0002-defer-native-pointer-frees.patch` changes `jvmAndAndroidMain/…/NativePointer.jvmAndAndroid.kt`.
+Upstream's `finalize()` frees the native object at once, but Google's classes read the pointer and
+pass only that number to native methods. A garbage collection during such a call can find its
+object unreachable, and the finalizer then frees the native object while the call still reads it.
+`MutableStrokeInputBatch.toImmutable()` is one such call: under Windows full page heap, a loop of
+them faults in `newCopy` reading the freed batch. Without page heap the same race left hosted CI
+runners with heap corruption or an escaped C++ exception.
+
+The patched `finalize()` hands the pointer to
+`com.vivenotes.byteink.nativeloader.DeferredFree` instead. Its daemon thread frees each pointer
+250 ms after finalization. It then reports the cleanup to the `NativePointerObserver` callback of
+the moment of finalization, as upstream's `finalize()` does, if that callback is still installed.
+A native call would now have to stall for the whole grace period to see a freed object. Upstream's
+tests wait up to a second for cleanups, which leaves room for the delay. The patched file notes
+the change in its licence header.
 
 ## What byteink adds
 
@@ -98,5 +118,8 @@ Both run as part of `./gradlew :ink-nativeloader:check`:
        src/jvmMain/kotlin/androidx/ink/nativeloader/NativeLoader.jvm.kt \
        > patches/0001-load-byteink-natives.patch
      ```
+
+     The same with `jvmAndAndroidMain/kotlin/androidx/ink/nativeloader/NativePointer.jvmAndAndroid.kt`
+     regenerates `patches/0002-defer-native-pointer-frees.patch`.
 4. Review `git diff`, then run `./gradlew check`. `verifyUpstreamAbi` compares against the new
    release's jar.

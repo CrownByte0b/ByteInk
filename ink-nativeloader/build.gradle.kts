@@ -1,6 +1,7 @@
 // The narrow fork of androidx.ink:ink-nativeloader for the JVM. The pinned release's sources are
 // copied verbatim from AndroidX; only NativeLoader.jvm.kt is patched, to load the native libraries
-// this jar bundles (see PATCHES.md). Google's other Ink JVM jars bind to these classes unchanged.
+// this jar bundles, and NativePointer.jvmAndAndroid.kt, to free native objects after a grace period
+// (see PATCHES.md). Google's other Ink JVM jars bind to these classes unchanged.
 
 import com.vivenotes.byteink.build.BundleNativeLibraries
 import com.vivenotes.byteink.build.GitSparseCheckout
