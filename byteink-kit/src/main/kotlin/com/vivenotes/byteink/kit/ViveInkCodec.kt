@@ -8,14 +8,16 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.UUID
 import java.util.zip.GZIPInputStream
 
 /**
  * ViveNotes' stored ink rows, read and written as the Android app does (its `ink/InkCodec.kt`).
  *
  * Reading never throws and never guesses: a row this build cannot read yields null, which costs
- * that one stroke rather than its page. Writing makes new rows only. The caller supplies ids, draw
- * order and clocks, which belong to the app's database.
+ * that one stroke rather than its page. Writing makes new rows only. [encode] matches the Android
+ * app's pen/highlighter entry points, generating a row id and defaulting the creation clock.
+ * [encodeStroke] and the other explicit writers accept application-owned ids, draw order and clocks.
  */
 public object ViveInkCodec {
 
@@ -24,6 +26,9 @@ public object ViveInkCodec {
 
     /** A little-endian point count, then that many x/y float pairs, all in page dp. */
     public const val MOVE_ENCODING: String = "ink/lasso-f32le1"
+
+    /** The pinned brush version recorded by Android's codec and all new stroke rows. */
+    public const val BRUSH_VERSION: Int = ViveBrushes.BRUSH_VERSION
 
     /**
      * How far a point blob may decompress before it is refused. AndroidX decompresses without a
@@ -55,6 +60,64 @@ public object ViveInkCodec {
     /** Whether a point blob is one AndroidX Ink reads, without building a mesh from it. */
     public fun hasValidInputData(points: ByteArray): Boolean = readOrNull { decodeInputs(points) } != null
 
+    /** The brush for an Android-style pen preset, including its stabilization input model. */
+    public fun brushFor(pen: PenPreset): Brush = ViveBrushes.brush(
+        familyId = familyId(pen),
+        stabilization = pen.stabilization,
+        colorArgb = pen.colorArgb,
+        size = pen.thickness,
+    )
+
+    /** The highlighter brush, preserving the preset's color alpha. */
+    public fun brushFor(highlighter: HighlighterSettings): Brush =
+        ViveBrushes.highlighter(highlighter.colorArgb, highlighter.thickness.toFloat())
+
+    /**
+     * A round, opaque eraser mask built directly from [inputs], as on Android. This does not
+     * quantize inputs through storage. Use [reloadedEraseMask] when proving persisted erase targets.
+     * Invalid brush sizes throw, as they do when constructing an Android Ink stroke directly.
+     */
+    public fun eraseMask(inputs: StrokeInputBatch, sizeDp: Float): Stroke =
+        ViveBrushes.eraseMask(inputs, sizeDp)
+
+    /**
+     * Android's pen encoding entry point. Generates a time-ordered UUIDv7 id; [now] is the row's
+     * creation time in epoch milliseconds. Family, stabilization and theme intent come from [pen],
+     * while size, color, epsilon, bounds and inputs come from [stroke], as in the Android codec.
+     * The returned portable row maps column-for-column to the application's database entity.
+     */
+    public fun encode(
+        stroke: Stroke,
+        pageId: String,
+        seq: Int,
+        pen: PenPreset,
+        now: Long = System.currentTimeMillis(),
+    ): StoredInkStroke = encodeStroke(
+        stroke = stroke,
+        id = newId(),
+        pageId = pageId,
+        seq = seq,
+        brushFamily = familyId(pen),
+        stabilization = pen.stabilization,
+        colorFollowsTheme = pen.colorFollowsTheme,
+        createdAt = now,
+    )
+
+    /** Android's highlighter encoding entry point: no stabilization or automatic theme color. */
+    public fun encode(
+        stroke: Stroke,
+        pageId: String,
+        seq: Int,
+        highlighter: HighlighterSettings,
+        now: Long = System.currentTimeMillis(),
+    ): StoredInkStroke = encodeHighlighter(
+        stroke = stroke,
+        id = newId(),
+        pageId = pageId,
+        seq = seq,
+        createdAt = now,
+    )
+
     /**
      * A new row for [stroke], drawn with the family [brushFamily] at [stabilization]. Its bounds are
      * the mesh's, and zeros for a stroke with no geometry, which has nothing to draw.
@@ -76,7 +139,7 @@ public object ViveInkCodec {
             pageId = pageId,
             seq = seq,
             brushFamily = brushFamily,
-            brushVersion = ViveBrushes.BRUSH_VERSION,
+            brushVersion = BRUSH_VERSION,
             sizeDp = stroke.brush.size,
             colorArgb = stroke.brush.colorIntArgb,
             colorFollowsTheme = colorFollowsTheme,
@@ -176,7 +239,7 @@ public object ViveInkCodec {
     /** An erase row's mask, rebuilt, or null if it cannot be read. */
     public fun decodeErase(row: StoredInkErase): Stroke? {
         if (row.enc != ENCODING) return null
-        return readOrNull { ViveBrushes.eraseMask(decodeInputs(row.points), row.sizeDp) }
+        return readOrNull { eraseMask(decodeInputs(row.points), row.sizeDp) }
     }
 
     /**
@@ -185,7 +248,22 @@ public object ViveInkCodec {
      * form that will actually be applied on the next load.
      */
     public fun reloadedEraseMask(inputs: StrokeInputBatch, sizeDp: Float): Stroke? =
-        readOrNull { ViveBrushes.eraseMask(decodeInputs(encodeInputs(inputs)), sizeDp) }
+        readOrNull { eraseMask(decodeInputs(encodeInputs(inputs)), sizeDp) }
+
+    private fun familyId(pen: PenPreset): String = ViveBrushes.penFamilyId(
+        solidLine = pen.lineType == LineType.Solid,
+        fountain = pen.kind == PenKind.Fountain,
+        pressure = pen.pressure,
+    )
+
+    // Match the Android app's newId(): wall-clock milliseconds and 74 random UUID bits.
+    // The optional encode(now) overrides the stored timestamp, not the id's generation clock.
+    private fun newId(): String {
+        val now = System.currentTimeMillis()
+        val random = UUID.randomUUID()
+        val hi = (now shl 16) or ((random.mostSignificantBits ushr 48) and 0x0FFFL or 0x7000L)
+        return UUID(hi, random.leastSignificantBits).toString()
+    }
 
     /** A new move row for a lasso drag. */
     public fun encodeMove(move: InkLassoMove, id: String, pageId: String, createdAt: Long): StoredInkMove =

@@ -10,7 +10,9 @@ import com.vivenotes.byteink.core.InkRuntime
 import com.vivenotes.byteink.nativeloader.LoadedInkLibrary
 import com.vivenotes.byteink.kit.InkPageIndex
 import com.vivenotes.byteink.kit.InkPoint
+import com.vivenotes.byteink.kit.HighlighterSettings
 import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.PenPreset
 import com.vivenotes.byteink.kit.StoredInkStroke
 import com.vivenotes.byteink.kit.ViveBrushes
 import com.vivenotes.byteink.kit.ViveInkCodec
@@ -34,7 +36,8 @@ fun main(args: Array<String>) {
     val renderer = InkPathRenderer()
     try {
         InkAuthoringController().use { controller ->
-            val markerBrush = ViveBrushes.brush(ViveBrushes.MARKER, 0, 0xff000000.toInt(), 12f)
+            val pen = PenPreset(thickness = 12f, stabilization = 0, colorFollowsTheme = true)
+            val markerBrush = ViveInkCodec.brushFor(pen)
             controller.begin(markerBrush, InkPointerSample(20f, 32f, 1000L))
             check(controller.append(InkPointerSample(64f, 32f, 1100L)))
             controller.advance(1100L)
@@ -46,16 +49,23 @@ fun main(args: Array<String>) {
             val markerRow = ViveInkCodec.encodeStroke(
                 marker, "marker", "page", 0, ViveBrushes.MARKER, 0, true, 1234L,
             )
+            check(ViveInkCodec.encode(marker, "page", 0, pen, 1234L).copy(id = "marker") == markerRow)
+            check(markerRow.brushVersion == ViveInkCodec.BRUSH_VERSION)
+            val mask: Stroke = ViveInkCodec.eraseMask(marker.inputs, sizeDp = 12f)
+            check(mask.inputs.size == marker.inputs.size && mask.brush.size == 12f)
             val restoredMarker = restore(markerRow, marker)
             val meshes = InkMeshes.triangles(restoredMarker.shape, 0)
             check(meshes.sumOf { it.triangleCount } > 0) { "Published engine generated no marker triangles" }
 
-            controller.begin(ViveBrushes.highlighter(0x80ff0000.toInt(), 14f), InkPointerSample(20f, 64f, 2000L))
+            val highlighterSettings = HighlighterSettings(0x80ff0000.toInt(), 14)
+            controller.begin(ViveInkCodec.brushFor(highlighterSettings), InkPointerSample(20f, 64f, 2000L))
             controller.append(InkPointerSample(108f, 112f, 2100L))
             controller.append(InkPointerSample(20f, 112f, 2200L))
             controller.append(InkPointerSample(108f, 64f, 2300L))
             val highlighter = checkNotNull(controller.finish())
             val highlighterRow = ViveInkCodec.encodeHighlighter(highlighter, "highlighter", "page", 1, 1235L)
+            check(ViveInkCodec.encode(highlighter, "page", 1, highlighterSettings, 1235L)
+                .copy(id = "highlighter") == highlighterRow)
             val restoredHighlighter = restore(highlighterRow, highlighter)
 
             val page = listOf(PageStroke("marker", restoredMarker), PageStroke("highlighter", restoredHighlighter))

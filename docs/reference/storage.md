@@ -126,7 +126,7 @@ Nullable decoders isolate unreadable rows. Input decompression is capped at 64 M
 public object ViveInkCodec
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L20)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L22)
 
 ### `ViveInkCodec.ENCODING`
 
@@ -134,7 +134,7 @@ public object ViveInkCodec
 public const val ENCODING: String = "ink/androidx1"
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L23)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L25)
 
 ### `ViveInkCodec.MOVE_ENCODING`
 
@@ -142,7 +142,15 @@ public const val ENCODING: String = "ink/androidx1"
 public const val MOVE_ENCODING: String = "ink/lasso-f32le1"
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L26)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L28)
+
+### `ViveInkCodec.BRUSH_VERSION`
+
+```kotlin
+public const val BRUSH_VERSION: Int = ViveBrushes.BRUSH_VERSION
+```
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L31)
 
 ### `ViveInkCodec.MAX_DECOMPRESSED_BYTES`
 
@@ -150,7 +158,7 @@ public const val MOVE_ENCODING: String = "ink/lasso-f32le1"
 public const val MAX_DECOMPRESSED_BYTES: Int = 64 * 1024 * 1024
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L32)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L37)
 
 ### `ViveInkCodec.decode`
 
@@ -162,7 +170,7 @@ public fun decode(row: StoredInkStroke): Stroke?
 | --- | --- | --- | --- |
 | `row` | `StoredInkStroke` | `Required` | Original stored row; nullable decoders return null for unsupported or damaged data. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L42)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L47)
 
 ### `ViveInkCodec.hasValidInputData`
 
@@ -174,7 +182,82 @@ public fun hasValidInputData(points: ByteArray): Boolean
 | --- | --- | --- | --- |
 | `points` | `ByteArray` | `Required` | Original encoded bytes; keep unknown or unreadable blobs unchanged. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L56)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L61)
+
+### `ViveInkCodec.brushFor`
+
+```kotlin
+public fun brushFor(pen: PenPreset): Brush
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `pen` | `PenPreset` | `Required` | Android-style pen settings captured at gesture start; family/stabilization/theme intent come from this value. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L64)
+
+### `ViveInkCodec.brushFor`
+
+```kotlin
+public fun brushFor(highlighter: HighlighterSettings): Brush
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `highlighter` | `HighlighterSettings` | `Required` | Android-style highlighter settings; brushFor uses its color/width, encode records the actual stroke style with fixed highlighter metadata. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L72)
+
+### `ViveInkCodec.eraseMask`
+
+Constructs a non-null marker Stroke directly from the supplied inputs without storage quantization. Invalid sizes throw. Use reloadedEraseMask when verifying persisted erase geometry.
+
+```kotlin
+public fun eraseMask(inputs: StrokeInputBatch, sizeDp: Float): Stroke
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `inputs` | `StrokeInputBatch` | `Required` | Native input batch in page/stroke units, with ordered relative timestamps. |
+| `sizeDp` | `Float` | `Required` | Finite positive brush width or eraser diameter in page dp, at least epsilon. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L80)
+
+### `ViveInkCodec.encode`
+
+Android's argument order/names/default clock for pen and highlighter overloads. Generates a UUIDv7 row ID. Returns StoredInkStroke, the portable column-for-column counterpart of the app-owned Room entity; map it at the database boundary. Size/color/epsilon/bounds/inputs come from the actual stroke.
+
+```kotlin
+public fun encode( stroke: Stroke, pageId: String, seq: Int, pen: PenPreset, now: Long = System.currentTimeMillis(), ): StoredInkStroke
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `stroke` | `Stroke` | `Required` | Native finished or live stroke, as specified by the type. |
+| `pageId` | `String` | `Required` | Identifier of the page owning all supplied rows/targets. |
+| `seq` | `Int` | `Required` | Caller-allocated stroke draw-order sequence; loading sorts by seq then ID. |
+| `pen` | `PenPreset` | `Required` | Android-style pen settings captured at gesture start; family/stabilization/theme intent come from this value. |
+| `now` | `Long` | `System.currentTimeMillis()` | Stored creation timestamp in epoch milliseconds; defaults to the current wall clock. Generated UUIDv7 IDs use the actual generation clock independently. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L89)
+
+### `ViveInkCodec.encode`
+
+Android's argument order/names/default clock for pen and highlighter overloads. Generates a UUIDv7 row ID. Returns StoredInkStroke, the portable column-for-column counterpart of the app-owned Room entity; map it at the database boundary. Size/color/epsilon/bounds/inputs come from the actual stroke.
+
+```kotlin
+public fun encode( stroke: Stroke, pageId: String, seq: Int, highlighter: HighlighterSettings, now: Long = System.currentTimeMillis(), ): StoredInkStroke
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `stroke` | `Stroke` | `Required` | Native finished or live stroke, as specified by the type. |
+| `pageId` | `String` | `Required` | Identifier of the page owning all supplied rows/targets. |
+| `seq` | `Int` | `Required` | Caller-allocated stroke draw-order sequence; loading sorts by seq then ID. |
+| `highlighter` | `HighlighterSettings` | `Required` | Android-style highlighter settings; brushFor uses its color/width, encode records the actual stroke style with fixed highlighter metadata. |
+| `now` | `Long` | `System.currentTimeMillis()` | Stored creation timestamp in epoch milliseconds; defaults to the current wall clock. Generated UUIDv7 IDs use the actual generation clock independently. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L107)
 
 ### `ViveInkCodec.encodeStroke`
 
@@ -194,7 +277,7 @@ public fun encodeStroke( stroke: Stroke, id: String, pageId: String, seq: Int, b
 | `createdAt` | `Long` | `Required` | Creation clock in the application's stored timestamp units, normally epoch milliseconds. |
 | `groupId` | `String?` | `null` | Optional logical group ID; grouped ink selects together. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L62)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L125)
 
 ### `ViveInkCodec.encodeHighlighter`
 
@@ -211,7 +294,7 @@ public fun encodeHighlighter( stroke: Stroke, id: String, pageId: String, seq: I
 | `createdAt` | `Long` | `Required` | Creation clock in the application's stored timestamp units, normally epoch milliseconds. |
 | `groupId` | `String?` | `null` | Optional logical group ID; grouped ink selects together. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L101)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L164)
 
 ### `ViveInkCodec.encodeCopy`
 
@@ -229,7 +312,7 @@ public fun encodeCopy( source: PageStroke, stroke: Stroke, id: String, pageId: S
 | `createdAt` | `Long` | `Required` | Creation clock in the application's stored timestamp units, normally epoch milliseconds. |
 | `groupId` | `String?` | `null` | Optional logical group ID; grouped ink selects together. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L125)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L188)
 
 ### `ViveInkCodec.encodeErase`
 
@@ -246,7 +329,7 @@ public fun encodeErase( mask: Stroke, id: String, pageId: String, mode: InkErase
 | `createdAt` | `Long` | `Required` | Creation clock in the application's stored timestamp units, normally epoch milliseconds. |
 | `targetIds` | `List<String>` | `Required` | Stored stroke-row IDs the operation applies to; preserve exact same-page targets. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L158)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L221)
 
 ### `ViveInkCodec.decodeErase`
 
@@ -258,7 +341,7 @@ public fun decodeErase(row: StoredInkErase): Stroke?
 | --- | --- | --- | --- |
 | `row` | `StoredInkErase` | `Required` | Original stored row; nullable decoders return null for unsupported or damaged data. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L177)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L240)
 
 ### `ViveInkCodec.reloadedEraseMask`
 
@@ -271,7 +354,7 @@ public fun reloadedEraseMask(inputs: StrokeInputBatch, sizeDp: Float): Stroke?
 | `inputs` | `StrokeInputBatch` | `Required` | Native input batch in page/stroke units, with ordered relative timestamps. |
 | `sizeDp` | `Float` | `Required` | Finite positive brush width or eraser diameter in page dp, at least epsilon. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L187)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L250)
 
 ### `ViveInkCodec.encodeMove`
 
@@ -286,7 +369,7 @@ public fun encodeMove(move: InkLassoMove, id: String, pageId: String, createdAt:
 | `pageId` | `String` | `Required` | Identifier of the page owning all supplied rows/targets. |
 | `createdAt` | `Long` | `Required` | Creation clock in the application's stored timestamp units, normally epoch milliseconds. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L191)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L269)
 
 ### `ViveInkCodec.encodeResize`
 
@@ -301,7 +384,7 @@ public fun encodeResize(resize: InkLassoResize, id: String, pageId: String, crea
 | `pageId` | `String` | `Required` | Identifier of the page owning all supplied rows/targets. |
 | `createdAt` | `Long` | `Required` | Creation clock in the application's stored timestamp units, normally epoch milliseconds. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L204)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L282)
 
 ### `ViveInkCodec.decodeMove`
 
@@ -313,7 +396,7 @@ public fun decodeMove(row: StoredInkMove): List<InkPoint>?
 | --- | --- | --- | --- |
 | `row` | `StoredInkMove` | `Required` | Original stored row; nullable decoders return null for unsupported or damaged data. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L221)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveInkCodec.kt#L299)
 
 ## ViveInkPage
 

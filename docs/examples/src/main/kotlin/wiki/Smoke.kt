@@ -13,6 +13,10 @@ import kotlin.math.abs
 /** Executable checks of the wiki's examples using synthetic ink only. */
 fun main(args: Array<String>) {
     val output = File(args.single()).apply { mkdirs() }
+    val androidRow = androidCodecStroke()
+    check(androidRow.brushVersion == ViveInkCodec.BRUSH_VERSION)
+    check(androidRow.brushFamily == "calligraphy-v1-p3")
+    check(requireNotNull(ViveInkCodec.decode(androidRow)).inputs.size == 2)
     val authored = firstStroke()
     check(ViveInkCodec.hasValidInputData(authored.row.points))
     check(authored.canonicalStroke.inputs.size == 2)

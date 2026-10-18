@@ -4,6 +4,33 @@
 
 Prefer `ViveInkTool.complete` for authored strokes: it keeps the captured brush and storage metadata together. Use `encodeStroke` when you already manage metadata, `encodeHighlighter` for the fixed highlighter metadata, or `encodeCopy` to preserve a source projection's family/version/theme settings.
 
+For the Android app's `InkCodec` call shape, use `ViveInkCodec.brushFor(pen)` and
+`ViveInkCodec.encode(stroke, pageId, seq, pen, now)`. The kit's `PenPreset`, `PenKind`,
+`LineType` and `HighlighterSettings` use Android's drawing fields and defaults:
+
+```kotlin
+--8<-- "docs/examples/src/main/kotlin/wiki/AndroidCodec.kt"
+```
+
+To keep the Android codec's spelling in Kotlin call sites, import
+`com.vivenotes.byteink.kit.ViveInkCodec as InkCodec`.
+
+Capture the preset at gesture start. `encode` chooses family, stabilization and theme intent
+from that preset, and records size, color, epsilon, bounds and inputs from the actual stroke,
+as Android does. The highlighter overload is `encode(stroke, pageId, seq, highlighter, now)`;
+it stores stabilization `0` and `colorFollowsTheme = false`. Both overloads generate a UUIDv7
+ID and default `now` to `System.currentTimeMillis()`. An explicit `now` changes `createdAt`;
+the generated ID uses the actual generation clock. `ViveInkCodec.BRUSH_VERSION` is the same
+pinned constant as `ViveBrushes.BRUSH_VERSION`.
+
+These entry points return `StoredInkStroke`, the portable counterpart of the Android app's
+Room `InkStrokeEntity`. Keep the field-for-field entity mapping at your repository boundary.
+The library's settings are also portable values; applications with their own preference models
+map them once when a gesture begins. Preference persistence, UI actions and theme resolution
+remain application responsibilities.
+
+Use the existing explicit writers when the application allocates row IDs, timestamps or groups:
+
 ```kotlin
 val row = ViveInkCodec.encodeStroke(
     stroke = finished,
@@ -19,7 +46,16 @@ val row = ViveInkCodec.encodeStroke(
 val restored = ViveInkCodec.decode(row) // Stroke?, null if unreadable
 ```
 
-Allocate IDs and `seq` in the database transaction. Supply family/stabilization matching the stroke's actual brush: codecs record those values and reload uses them to rebuild geometry. Persist original source rows plus operations; projections are display state.
+Allocate `seq` in the database transaction, and supply IDs when using the explicit writers.
+Supply family/stabilization matching the stroke's actual brush: codecs record those values and
+reload uses them to rebuild geometry. Persist original source rows plus operations; projections
+are display state.
+
+`ViveInkCodec.eraseMask(inputs, sizeDp): Stroke` constructs the round opaque marker mask
+directly, without a codec round trip, and throws for invalid brush sizes as Android does.
+`ViveBrushes.eraseMask` remains available with the same behavior. For erase target proofs and
+save/reload-consistent previews, use `reloadedEraseMask` instead: storage quantizes inputs, so
+that nullable helper deliberately tests the mask that replay will rebuild.
 
 ## Replay a page
 
