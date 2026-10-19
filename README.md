@@ -34,8 +34,41 @@ and in-progress strokes, affine transforms, viewport culling and bounded geometr
 
 ```bash
 ./gradlew :samples:viewer:run
-
 ```
+
+## How to use
+
+1. settings.gradle.kts: add the repositories
+
+```kotlin
+  dependencyResolutionManagement {
+      repositories {
+          google()        // androidx.ink comes from Google's Maven
+          mavenCentral()  // Kotlin, Compose
+          maven("https://maven.pkg.github.com/crownbyte0b/byteink") {
+              content { includeGroup("com.vivenotes.byteink") }
+              credentials {
+                  username = providers.gradleProperty("gpr.user").orElse(providers.environmentVariable("GITHUB_ACTOR")).orNull
+                  password = providers.gradleProperty("gpr.key").orElse(providers.environmentVariable("GITHUB_TOKEN")).orNull
+              }
+          }
+      }
+  }
+```
+
+2. build.gradle.kts: add the dependencies
+
+```kotlin
+  dependencies {   // or kotlin { sourceSets.jvmMain.dependencies { … } } in multiplatform
+      implementation("com.vivenotes.byteink:byteink-compose:0.1.0-alpha.1")
+      implementation("com.vivenotes.byteink:byteink-kit:0.1.0-alpha.1")
+      testImplementation("com.vivenotes.byteink:byteink-testing:0.1.0-alpha.1") // optional test helpers
+  }
+```
+
+byteink-core, the native loader with libink.so and ink.dll and the androidx.ink modules come in automatically.
+
+# Dev
 
 ## Publish local package
 
