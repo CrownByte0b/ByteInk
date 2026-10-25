@@ -24,7 +24,7 @@ The header search indexes all guides, symbols and parameter tables. Search a nam
 | `byteink-testing` | Optional notebook fixtures and image utilities |
 | `ink-nativeloader` | Transitive Linux/Windows native bundle |
 
-Current development coordinates use group `com.vivenotes.byteink`, module version `0.1.0-SNAPSHOT`, and loader `1.1.0-alpha06-byteink.4`. AndroidX Ink is pinned to `1.1.0-alpha06`; Java **25+** is required. Use `jvmMain` in a multiplatform application.
+The current release is `0.1.0-alpha.1` on [GitHub Packages](getting-started.md#add-byteink-to-your-project), group `com.vivenotes.byteink`. A source checkout builds module version `0.1.0-SNAPSHOT` and loader `1.1.0-alpha06-byteink.4`. AndroidX Ink is pinned to `1.1.0-alpha06`; Java **25+** is required. Use `jvmMain` in a multiplatform application.
 
 The ViveNotes desktop app now implements Normal partial-erase interaction, preview, persistence and undo/redo with reload verification. ByteInk supplies the mask, codec and replay APIs; applications own gesture handling and database/history integration. [The erase guide](guides/operations.md#partial-erasing) explains that workflow.
 

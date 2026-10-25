@@ -1,5 +1,12 @@
 # ByteInk — AndroidX Ink for Kotlin Desktop
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.4.20-blue.svg?logo=kotlin)](https://kotlinlang.org)
+[![Compose Multiplatform](https://img.shields.io/badge/Compose%20Multiplatform-1.12.1-4285F4.svg)](https://www.jetbrains.com/compose-multiplatform/)
+[![GitHub Packages](https://img.shields.io/badge/GitHub%20Packages-0.1.0--alpha.1-2ea44f.svg?logo=github)](https://github.com/orgs/CrownByte0b/packages)
+[![CI](https://github.com/CrownByte0b/ByteInk/actions/workflows/ci.yml/badge.svg)](https://github.com/CrownByte0b/ByteInk/actions/workflows/ci.yml)
+[![Wiki](https://img.shields.io/badge/docs-wiki-8A2BE2.svg)](https://crownbyte0b.github.io/ByteInk/)
+
 ByteInk is a reusable Kotlin/JVM library that brings the real **AndroidX Ink / `google/ink` stroke engine** to **Linux x86_64 and Windows x86_64**,
 primarily for ViveNotes’ Kotlin Multiplatform desktop app.
 
@@ -11,6 +18,134 @@ behaviour and stored ink compatibility across platforms.
 - 1 to 1 compatibility with Androidx Ink
 - Wayland native support.
 - Only choice for Kotlin Multi platform on desktop
+
+## 🌍 Supported platforms
+
+| Platform | Architecture | Notes                                                       |
+| -------- | ------------ | ----------------------------------------------------------- |
+| Linux    | `x86_64`     | X11, XWayland, and native Wayland pen/touch input on JBR 25 |
+| Windows  | `x86_64`     | `WM_POINTER` pen input                                      |
+
+Requires **Java 25+**. Tested with Kotlin 2.4.20 and Compose Multiplatform 1.12.1. The native `libink.so` and `ink.dll` ship inside the
+dependency, so you don't build anything native.
+
+## Add ByteInk to your project
+
+### 1. Add a GitHub token
+
+ByteInk is published to [GitHub Packages](https://github.com/orgs/CrownByte0b/packages). GitHub's Maven registry requires a
+login even for public packages. Create a [classic personal access token](https://github.com/settings/tokens/new?scopes=read:packages&description=ByteInk)
+with the `read:packages` scope, then add it to `~/.gradle/gradle.properties` (not your project, so it stays out of source control):
+
+```properties
+gpr.user=your-github-username
+gpr.key=ghp_yourToken
+```
+
+In CI, the `GITHUB_ACTOR` and `GITHUB_TOKEN` environment variables work instead.
+
+### 2. Add the repository
+
+In `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()        // androidx.ink comes from Google's Maven
+        mavenCentral()  // Kotlin, Compose
+        maven("https://maven.pkg.github.com/crownbyte0b/byteink") {
+            content { includeGroup("com.vivenotes.byteink") }
+            credentials {
+                username = providers.gradleProperty("gpr.user").orElse(providers.environmentVariable("GITHUB_ACTOR")).orNull
+                password = providers.gradleProperty("gpr.key").orElse(providers.environmentVariable("GITHUB_TOKEN")).orNull
+            }
+        }
+    }
+}
+```
+
+### 3. Add the dependencies
+
+In a Compose Desktop app's `build.gradle.kts`:
+
+```kotlin
+plugins {
+    kotlin("jvm") version "2.4.20"
+    kotlin("plugin.compose") version "2.4.20"
+    id("org.jetbrains.compose") version "1.12.1"
+}
+
+kotlin { jvmToolchain(25) }
+
+dependencies {
+    implementation(compose.desktop.currentOs)
+    implementation("com.vivenotes.byteink:byteink-compose:0.1.0-alpha.1")
+    implementation("com.vivenotes.byteink:byteink-kit:0.1.0-alpha.1")
+    testImplementation("com.vivenotes.byteink:byteink-testing:0.1.0-alpha.1") // optional test helpers
+}
+
+compose.desktop {
+    application {
+        mainClass = "MainKt"
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
+    }
+}
+```
+
+In a Kotlin Multiplatform project, put the two ByteInk dependencies in `jvmMain`:
+
+```kotlin
+kotlin {
+    jvm()
+    sourceSets.jvmMain.dependencies {
+        implementation("com.vivenotes.byteink:byteink-compose:0.1.0-alpha.1")
+        implementation("com.vivenotes.byteink:byteink-kit:0.1.0-alpha.1")
+    }
+}
+```
+
+`byteink-core`, the native loader (with `libink.so` and `ink.dll`) and the `androidx.ink` modules come in automatically. Don't add Google's
+`androidx.ink:ink-nativeloader` yourself; it conflicts with ByteInk's loader.
+
+### 4. Draw
+
+```kotlin
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.application
+import androidx.ink.strokes.Stroke
+import com.vivenotes.byteink.compose.InkDrawingSurface
+import com.vivenotes.byteink.compose.drawInk
+import com.vivenotes.byteink.compose.rememberInkAuthoringController
+import com.vivenotes.byteink.compose.rememberInkMeshRenderer
+import com.vivenotes.byteink.kit.ViveInkTool
+
+fun main() = application {
+    Window(onCloseRequest = ::exitApplication, title = "ByteInk") {
+        val tool = remember { ViveInkTool(sizeDp = 3f) }
+        val controller = rememberInkAuthoringController()
+        val renderer = rememberInkMeshRenderer()
+        val strokes = remember { mutableStateListOf<Stroke>() }
+        DisposableEffect(controller) { onDispose { controller.close() } }
+
+        InkDrawingSurface(
+            controller = controller,
+            brush = tool.brush,
+            modifier = Modifier.fillMaxSize(),
+            renderer = renderer,
+            onStrokeFinished = { strokes += it },
+            drawContent = { strokes.forEach { drawInk(renderer, it) } },
+        )
+    }
+}
+```
+
+Next: saving strokes in the Android format, pen and Wayland input, erasing and selection are covered in the
+**[wiki](https://crownbyte0b.github.io/ByteInk/)**, starting with [Get started](https://crownbyte0b.github.io/ByteInk/getting-started/).
 
 ## Technical approach
 
@@ -35,38 +170,6 @@ and in-progress strokes, affine transforms, viewport culling and bounded geometr
 ```bash
 ./gradlew :samples:viewer:run
 ```
-
-## How to use
-
-1. settings.gradle.kts: add the repositories
-
-```kotlin
-  dependencyResolutionManagement {
-      repositories {
-          google()        // androidx.ink comes from Google's Maven
-          mavenCentral()  // Kotlin, Compose
-          maven("https://maven.pkg.github.com/crownbyte0b/byteink") {
-              content { includeGroup("com.vivenotes.byteink") }
-              credentials {
-                  username = providers.gradleProperty("gpr.user").orElse(providers.environmentVariable("GITHUB_ACTOR")).orNull
-                  password = providers.gradleProperty("gpr.key").orElse(providers.environmentVariable("GITHUB_TOKEN")).orNull
-              }
-          }
-      }
-  }
-```
-
-2. build.gradle.kts: add the dependencies
-
-```kotlin
-  dependencies {   // or kotlin { sourceSets.jvmMain.dependencies { … } } in multiplatform
-      implementation("com.vivenotes.byteink:byteink-compose:0.1.0-alpha.1")
-      implementation("com.vivenotes.byteink:byteink-kit:0.1.0-alpha.1")
-      testImplementation("com.vivenotes.byteink:byteink-testing:0.1.0-alpha.1") // optional test helpers
-  }
-```
-
-byteink-core, the native loader with libink.so and ink.dll and the androidx.ink modules come in automatically.
 
 # Dev
 
