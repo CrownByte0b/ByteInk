@@ -3,7 +3,7 @@
 # Wayland runtime is JBR 25, and this library matches it. Builds run on the daemon's JDK 27.
 jvmTarget = "25"
 kotlin = "2.4.20"
-composeMultiplatform = "1.12.1"
+composeMultiplatform = "1.12.2"
 # AndroidX Ink as Google publishes it. Pinned to the Android app's version and never ahead of it:
 # stored ink has to mean the same on both. The rest of the pin (source and native commits, build
 # toolchain) is in upstream/pins.properties; see upstream/README.md before changing this.
