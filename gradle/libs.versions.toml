@@ -2,28 +2,28 @@
 # JVM bytecode and JDK API level. The ViveNotes desktop app compiles to Java 25 because its native
 # Wayland runtime is JBR 25, and this library matches it. Builds run on the daemon's JDK 27.
 jvmTarget = "25"
-kotlin = "2.4.20"
-composeMultiplatform = "1.12.1"
+kotlin = "2.4.21"
+composeMultiplatform = "1.12.2"
 # AndroidX Ink as Google publishes it. Pinned to the Android app's version and never ahead of it:
 # stored ink has to mean the same on both. The rest of the pin (source and native commits, build
 # toolchain) is in upstream/pins.properties; see upstream/README.md before changing this.
 androidx-ink = "1.1.0-alpha06"
 # What Google's ink-nativeloader-jvm declares at run time, kept by byteink's fork of it.
-androidx-annotation = "1.8.0"
+androidx-annotation = "1.11.0"
 # byteink's own modules, and its fork of ink-nativeloader, which is versioned after the release it
 # forks: <androidx-ink>-byteink.<N>.
 byteink-modules = "0.1.0-SNAPSHOT"
 byteink-nativeloader = "1.1.0-alpha06-byteink.4"
-asm = "9.10.1"
+asm = "9.11.1"
 sqlite-jdbc = "3.53.4.0"
 # AndroidX Ink's own test suites (conformance/) run with the libraries AndroidX pinned for them at the
 # pinned release.
 guava = "32.0.1-android"
 junit = "4.13.2"
-kotlinx-coroutines = "1.9.0"
-kotlinx-serialization = "1.11.0"
-okio = "3.17.0"
-truth = "1.0.1"
+kotlinx-coroutines = "1.11.0"
+kotlinx-serialization = "1.12.0"
+okio = "3.18.2"
+truth = "1.4.5"
 
 [libraries]
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidx-annotation" }
