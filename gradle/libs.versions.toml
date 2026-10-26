@@ -7,7 +7,7 @@ composeMultiplatform = "1.12.1"
 # AndroidX Ink as Google publishes it. Pinned to the Android app's version and never ahead of it:
 # stored ink has to mean the same on both. The rest of the pin (source and native commits, build
 # toolchain) is in upstream/pins.properties; see upstream/README.md before changing this.
-androidx-ink = "1.1.0-alpha06"
+androidx-ink = "1.1.0-alpha10"
 # What Google's ink-nativeloader-jvm declares at run time, kept by byteink's fork of it.
 androidx-annotation = "1.8.0"
 # byteink's own modules, and its fork of ink-nativeloader, which is versioned after the release it
