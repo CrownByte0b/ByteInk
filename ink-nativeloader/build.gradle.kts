@@ -32,6 +32,10 @@ val bundledNatives = tasks.register<BundleNativeLibraries>("bundleNativeLibrarie
     linux.from(byteinkLinuxLibrary())
     windows.from(byteinkWindowsLibrary())
     googleInkCommit = upstreamPins().map { it.getProperty("google.ink.commit") }
+    // -PbyteinkBundledPlatforms=linux-x86_64 builds a jar for one platform without the other's library.
+    platforms = providers.gradleProperty("byteinkBundledPlatforms")
+        .map { it.split(',').map(String::trim).filter(String::isNotEmpty).toSet() }
+        .orElse(setOf("linux-x86_64", "windows-x86_64"))
     directory = layout.buildDirectory.dir("natives")
 }
 

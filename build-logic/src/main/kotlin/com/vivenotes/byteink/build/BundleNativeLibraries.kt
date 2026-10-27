@@ -5,6 +5,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.OutputDirectory
@@ -32,6 +33,13 @@ abstract class BundleNativeLibraries : DefaultTask() {
     @get:Input
     abstract val googleInkCommit: Property<String>
 
+    /**
+     * The platforms to bundle, by id (`linux-x86_64`, `windows-x86_64`): both for the published jar.
+     * A package for one platform, such as a Linux Flatpak, bundles only its own and needs no other.
+     */
+    @get:Input
+    abstract val platforms: SetProperty<String>
+
     @get:OutputDirectory
     abstract val directory: DirectoryProperty
 
@@ -43,7 +51,7 @@ abstract class BundleNativeLibraries : DefaultTask() {
         for (library in listOf(
             Library("linux-x86_64", "libink.so", linux, "native/build-linux.sh", "byteinkLinuxLibrary"),
             Library("windows-x86_64", "ink.dll", windows, "native/build-windows.sh", "byteinkWindowsLibrary"),
-        )) {
+        ).filter { it.platform in platforms.get() }) {
             val file = library.files.singleFile
             if (!file.isFile) {
                 throw GradleException(
