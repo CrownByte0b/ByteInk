@@ -30,14 +30,6 @@ The ViveNotes desktop app now implements Normal partial-erase interaction, previ
 
 `InkMeshRenderer` adds vertex effects, textures and animated stamps to finished and live ink. `InkDrawingSurface` defaults to path rendering; the native low-latency surfaces default to mesh rendering. See [rendering](guides/rendering.md#choose-a-renderer).
 
-## Recent changes
-
-- [`53a6466`](https://github.com/CrownByte0b/ByteInk/commit/53a646646cbdbac37e15786b69eb8b341e8079b6): change-aware native painting, lazy mesh export, live-cache retirement through `InkRenderer.releaseLiveStroke`, live cache diagnostics, and bounded lossless native delivery. See [cache retirement](guides/rendering.md#live-cache-retirement).
-- [`48628e5`](https://github.com/CrownByte0b/ByteInk/commit/48628e53014cba923764ba4c1aa4a3c7a5ddc175): native JBR 25 Wayland pen/touch/mouse capture and software Skia authoring, with reconnection and cleanup. See [native platform setup](guides/authoring.md#native-platform-setup).
-- [`a131e4c`](https://github.com/CrownByte0b/ByteInk/commit/a131e4c6e778ab57f637fb28bd82831ca99ca416): Windows `WM_POINTER` and Linux XInput2 capture, tilt/orientation/calibration, replaceable prediction, simultaneous-pointer sessions and direct authoring surfaces. See [authoring](guides/authoring.md).
-- [`189b0c1`](https://github.com/CrownByte0b/ByteInk/commit/189b0c1bd5a2bd6969cf390b9c86ca40e0f91eb1): full mesh/shader rendering, textures and animated stamps; shared renderer integration for surfaces/scenes/caches; owned rendering snapshots and rebuilt Linux/Windows natives with loader byteink.4. See [rendering](guides/rendering.md).
-- [`3a047b7`](https://github.com/CrownByte0b/ByteInk/commit/3a047b787c86d4715ff1ea03c13ada4abbd76c4e): decoded native page replay for desktop partial erasing and expanded Android round-trip fixtures to include newly authored Normal masks. See [partial erase](guides/operations.md#partial-erasing) and [decoded replay](guides/storage.md#replay-decoded-ink).
-
 ## Why use ?
 
 - AndroidX Ink's desktop support stops at "compute strokes on Linux or macOS". ByteInk adds everything else a desktop notes app needs.
@@ -69,6 +61,14 @@ The ViveNotes desktop app now implements Normal partial-erase interaction, previ
    open on Android and the other way round.
 6. **An upstream use-after-free.** AndroidX Ink's JVM classes pass raw native pointers, so garbage collection can free
    an object while native code is still reading it, corrupting memory on Windows. ByteInk's loader delays those frees.
+
+## Recent changes
+
+- [`53a6466`](https://github.com/CrownByte0b/ByteInk/commit/53a646646cbdbac37e15786b69eb8b341e8079b6): change-aware native painting, lazy mesh export, live-cache retirement through `InkRenderer.releaseLiveStroke`, live cache diagnostics, and bounded lossless native delivery. See [cache retirement](guides/rendering.md#live-cache-retirement).
+- [`48628e5`](https://github.com/CrownByte0b/ByteInk/commit/48628e53014cba923764ba4c1aa4a3c7a5ddc175): native JBR 25 Wayland pen/touch/mouse capture and software Skia authoring, with reconnection and cleanup. See [native platform setup](guides/authoring.md#native-platform-setup).
+- [`a131e4c`](https://github.com/CrownByte0b/ByteInk/commit/a131e4c6e778ab57f637fb28bd82831ca99ca416): Windows `WM_POINTER` and Linux XInput2 capture, tilt/orientation/calibration, replaceable prediction, simultaneous-pointer sessions and direct authoring surfaces. See [authoring](guides/authoring.md).
+- [`189b0c1`](https://github.com/CrownByte0b/ByteInk/commit/189b0c1bd5a2bd6969cf390b9c86ca40e0f91eb1): full mesh/shader rendering, textures and animated stamps; shared renderer integration for surfaces/scenes/caches; owned rendering snapshots and rebuilt Linux/Windows natives with loader byteink.4. See [rendering](guides/rendering.md).
+- [`3a047b7`](https://github.com/CrownByte0b/ByteInk/commit/3a047b787c86d4715ff1ea03c13ada4abbd76c4e): decoded native page replay for desktop partial erasing and expanded Android round-trip fixtures to include newly authored Normal masks. See [partial erase](guides/operations.md#partial-erasing) and [decoded replay](guides/storage.md#replay-decoded-ink).
 
 ## Conventions
 
