@@ -15,9 +15,35 @@ behaviour and stored ink compatibility across platforms.
 
 ## Why use ?
 
-- 1 to 1 compatibility with Androidx Ink
+- AndroidX Ink's desktop support stops at "compute strokes on Linux or macOS". ByteInk adds everything else a desktop notes app needs.
+- 1 to 1 compatibility with AndroidX Ink **1.1.0-alpha06** (see [Compatible version](#compatible-version))
 - Wayland native support.
 - Only choice for Kotlin Multi platform on desktop
+
+### Compatible version
+
+| ByteInk         | AndroidX Ink    | Native engine (`google/ink`) |
+| --------------- | --------------- | ---------------------------- |
+| `0.1.0-alpha.1` | `1.1.0-alpha06` | `96e50239e1c8`               |
+
+### Why not just use AndroidX Ink's KMP artifacts?
+
+1. **Only the engine half runs on the JVM.** Google publishes JVM builds of `geometry`, `brush`, `strokes`, `storage` and
+   `nativeloader`, but not of `ink-rendering`, `ink-authoring` or any `*-compose` module, since those depend on Android's
+   Canvas, View and MotionEvent. You can compute a stroke on the desktop, but you can't draw it or capture a pen. ByteInk
+   renders with Compose/Skia and captures pen input on Windows, X11 and Wayland.
+2. **No Windows.** Google's JVM native loader ships only `linux-x86_64` and `macos-arm64` binaries and throws
+   "Unsupported platform" anywhere else. ByteInk builds `ink.dll` and loads it with a narrow fork of the loader.
+3. **Google's Linux binary doesn't produce exactly the same geometry as Android.** Android's math library rounds `atan2f`
+   and `hypotf` slightly differently from desktop libm, which changes the shape of some real strokes. ByteInk's native
+   build uses Android's arithmetic, so desktop geometry matches Android exactly.
+4. **Erasing depends on the exact native version.** Partial-erase results changed between `google/ink` commits, so
+   ByteInk builds from the commit that matches the AndroidX Ink release the Android app uses, not the latest one.
+5. **The ViveNotes note format isn't part of AndroidX Ink.** How notes are saved (stroke rows, partial-erase operations,
+   unknown fields, custom brushes) lives in the Android app. `byteink-kit` implements it, so notes written on the desktop
+   open on Android and the other way round.
+6. **An upstream use-after-free.** AndroidX Ink's JVM classes pass raw native pointers, so garbage collection can free
+   an object while native code is still reading it, corrupting memory on Windows. ByteInk's loader delays those frees.
 
 ## 🌍 Supported platforms
 
