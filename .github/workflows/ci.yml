@@ -37,6 +37,10 @@ jobs:
     needs: [release]
     uses: ./.github/workflows/native-windows.yml
 
+  native-arm64:
+    needs: [release]
+    uses: ./.github/workflows/native-arm64.yml
+
   native-linux-tests:
     needs: [release]
     uses: ./.github/workflows/native-linux-tests.yml
@@ -48,7 +52,7 @@ jobs:
   # The JVM and publish jobs request actions: read to download another run's artifacts when
   # started alone. A caller must grant every permission its called jobs request.
   jvm-linux:
-    needs: [release, native-linux, native-windows]
+    needs: [release, native-linux, native-windows, native-arm64]
     permissions:
       contents: read
       actions: read
@@ -65,9 +69,28 @@ jobs:
     with:
       version: ${{ needs.release.outputs.version }}
 
+  # The arm64 jobs compare their engine output with jvm-linux's x86_64 reference.
+  jvm-linux-arm64:
+    needs: [release, jvm-linux]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/jvm-linux-arm64.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+
+  jvm-windows-arm64:
+    needs: [release, jvm-linux]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/jvm-windows-arm64.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+
   publish:
     if: needs.release.outputs.version != ''
-    needs: [release, native-linux, native-windows, native-linux-tests, native-pin, jvm-linux, jvm-windows]
+    needs: [release, native-linux, native-windows, native-arm64, native-linux-tests, native-pin, jvm-linux, jvm-windows, jvm-linux-arm64, jvm-windows-arm64]
     permissions:
       contents: read
       packages: write

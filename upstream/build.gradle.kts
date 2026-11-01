@@ -1,6 +1,8 @@
 // Pins, the JNI surface they imply, and the tooling that proves both. See README.md here.
 
 import com.vivenotes.byteink.build.MAX_GLIBC
+import com.vivenotes.byteink.build.NativePlatform
+import com.vivenotes.byteink.build.byteinkLibrary
 import com.vivenotes.byteink.build.byteinkLinuxLibrary
 import com.vivenotes.byteink.build.byteinkWindowsLibrary
 
@@ -114,6 +116,16 @@ registerLibraryCheck("checkLinuxLibrary", byteinkLinuxLibrary(), listOf("check-l
     .configure { description = "Checks byteink's libink.so: pinned JNI plus declared ByteInk extensions, glibc alone, nothing newer than $MAX_GLIBC." }
 registerLibraryCheck("checkWindowsLibrary", byteinkWindowsLibrary(), listOf("check-windows-library"))
     .configure { description = "Checks byteink's ink.dll: x86-64, pinned JNI plus declared ByteInk extensions, only libraries Windows provides." }
+registerLibraryCheck(
+    "checkLinuxArm64Library",
+    byteinkLibrary(NativePlatform.LINUX_ARM64),
+    listOf("check-linux-library", "--max-glibc", MAX_GLIBC, "--architecture", "arm64"),
+).configure { description = "Checks byteink's arm64 libink.so: AArch64, the same JNI surface, glibc alone, nothing newer than $MAX_GLIBC." }
+registerLibraryCheck(
+    "checkWindowsArm64Library",
+    byteinkLibrary(NativePlatform.WINDOWS_ARM64),
+    listOf("check-windows-library", "--architecture", "arm64"),
+).configure { description = "Checks byteink's arm64 ink.dll: ARM64, the same JNI surface, only libraries Windows provides." }
 
 tasks.register<JavaExec>("scanGoogleInk") {
     group = "upstream"

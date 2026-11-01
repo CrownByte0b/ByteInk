@@ -15,8 +15,14 @@ val operatingSystem = System.getProperty("os.name").let {
     when {
         it.startsWith("Linux") -> "linux"
         it.startsWith("Windows") -> "windows"
-        else -> error("ByteInk supports Linux x86_64 and Windows x86_64: $it")
+        else -> error("ByteInk supports Linux and Windows on x86_64 and arm64: $it")
     }
+}
+// Compose's desktop runtimes are per OS and CPU: desktop-jvm-linux-x64, desktop-jvm-windows-arm64…
+val architecture = when (System.getProperty("os.arch").lowercase()) {
+    "amd64", "x86_64" -> "x64"
+    "aarch64", "arm64" -> "arm64"
+    else -> error("ByteInk supports Linux and Windows on x86_64 and arm64: ${System.getProperty("os.arch")}")
 }
 
 kotlin.compilerOptions {
@@ -29,7 +35,7 @@ dependencies {
     implementation("$byteinkGroup:byteink-compose:$byteinkVersion")
     implementation("$byteinkGroup:byteink-kit:$byteinkVersion")
     // The application's OS-specific Compose runtime supplies Skia. ByteInk itself stays portable.
-    runtimeOnly("org.jetbrains.compose.desktop:desktop-jvm-$operatingSystem-x64:$composeVersion")
+    runtimeOnly("org.jetbrains.compose.desktop:desktop-jvm-$operatingSystem-$architecture:$composeVersion")
 }
 
 application {

@@ -161,7 +161,7 @@ class NativeLibraryLoaderTest {
         val failure = assertFailsWith<UnsatisfiedLinkError> { loader(platform = null).load() }
 
         val message = failure.message.orEmpty()
-        assertContains(message, "Linux x86_64 and Windows x86_64")
+        assertContains(message, "Linux x86_64, Linux arm64, Windows x86_64 and Windows arm64")
         assertContains(message, "Mac OS X aarch64")
         assertContains(message, "-D${InkNativeLibrary.LIBRARY_PROPERTY}=")
     }
@@ -280,19 +280,29 @@ class NativeLibraryLoaderTest {
             assertEquals(Paths.get(home, ".cache", "byteink", "natives"), cache(Platform.LINUX_X86_64, "XDG_CACHE_HOME" to unusable))
         }
         assertEquals(Paths.get(home, ".cache", "byteink", "natives"), cache(Platform.LINUX_X86_64))
+        assertEquals(Paths.get(xdg, "byteink", "natives"), cache(Platform.LINUX_ARM64, "XDG_CACHE_HOME" to xdg))
+        assertEquals(Paths.get(home, ".cache", "byteink", "natives"), cache(Platform.LINUX_ARM64))
 
         val local = temporary.root.resolve("local").path
         assertEquals(Paths.get(local, "byteink", "natives"), cache(Platform.WINDOWS_X86_64, "LOCALAPPDATA" to local))
         assertEquals(Paths.get(home, "AppData", "Local", "byteink", "natives"), cache(Platform.WINDOWS_X86_64))
+        assertEquals(Paths.get(local, "byteink", "natives"), cache(Platform.WINDOWS_ARM64, "LOCALAPPDATA" to local))
+        assertEquals(Paths.get(home, "AppData", "Local", "byteink", "natives"), cache(Platform.WINDOWS_ARM64))
     }
 
     @Test
-    fun mapsTheTwoBundledPlatformsAndNothingElse() {
+    fun mapsTheBundledPlatformsAndNothingElse() {
         assertEquals(Platform.LINUX_X86_64, Platform.of("Linux", "amd64"))
         assertEquals(Platform.LINUX_X86_64, Platform.of("Linux", "x86_64"))
+        assertEquals(Platform.LINUX_ARM64, Platform.of("Linux", "aarch64"))
+        assertEquals(Platform.LINUX_ARM64, Platform.of("Linux", "arm64"))
         assertEquals(Platform.WINDOWS_X86_64, Platform.of("Windows 11", "amd64"))
         assertEquals(Platform.WINDOWS_X86_64, Platform.of("Windows Server 2025", "AMD64"))
-        for ((os, arch) in listOf("Linux" to "aarch64", "Windows 11" to "aarch64", "Mac OS X" to "aarch64", "FreeBSD" to "amd64")) {
+        assertEquals(Platform.WINDOWS_ARM64, Platform.of("Windows 11", "aarch64"))
+        assertEquals(Platform.WINDOWS_ARM64, Platform.of("Windows 11", "ARM64"))
+        for ((os, arch) in listOf(
+            "Mac OS X" to "aarch64", "FreeBSD" to "amd64", "Linux" to "arm", "Linux" to "riscv64", "Windows 10" to "x86",
+        )) {
             assertEquals(null, Platform.of(os, arch), "$os $arch")
         }
     }

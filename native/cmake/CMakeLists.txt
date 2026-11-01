@@ -1,4 +1,4 @@
-# Builds google/ink's JNI library, libink.so, for Linux x86_64 without Bazel. Flatpak/Flathub
+# Builds google/ink's JNI library, libink.so, for Linux (x86_64 or arm64) without Bazel. Flatpak/Flathub
 # builds use it: they run offline with the Freedesktop SDK's compiler, and upstream's Bazel build
 # fetches its toolchain, sysroot and module graph from the network. native/build-linux.sh remains
 # the build byteink publishes.
@@ -31,6 +31,10 @@ endif()
 set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 add_compile_options(-ffunction-sections -fdata-sections)
+# No fused multiply-add contraction, as in every byteink arm64 build (native/common.sh): GCC fuses
+# a*b+c by default (-ffp-contract=fast in GNU mode) wherever the target has FMA, as aarch64 always
+# does, and the result then rounds differently from x86_64's baseline builds. A no-op on x86_64.
+add_compile_options(-ffp-contract=off)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

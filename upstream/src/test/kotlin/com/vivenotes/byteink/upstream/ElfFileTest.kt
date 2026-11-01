@@ -71,6 +71,7 @@ class ElfFileTest {
  * `.gnu.version_r` and their section headers — everything [ElfFile] reads, and nothing else.
  */
 internal class TestElf(
+    private val machine: Int = 62, // EM_X86_64
     private val symbols: List<Symbol> = emptyList(),
     private val needed: List<String> = emptyList(),
     private val versions: Map<String, List<String>> = emptyMap(),
@@ -124,7 +125,7 @@ internal class TestElf(
         val image = buffer(headersAt + 5 * 64)
         image.put(byteArrayOf(0x7f, 'E'.code.toByte(), 'L'.code.toByte(), 'F'.code.toByte(), 2, 1, 1))
         image.putShort(0x10, 3) // ET_DYN
-        image.putShort(0x12, 62) // EM_X86_64
+        image.putShort(0x12, machine.toShort())
         image.putLong(0x28, headersAt.toLong())
         image.putShort(0x3A, 64)
         image.putShort(0x3C, 5)

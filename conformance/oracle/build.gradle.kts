@@ -6,7 +6,7 @@
 
 import com.vivenotes.byteink.build.InkLibraryOverride
 import com.vivenotes.byteink.build.byteinkHostLibrary
-import com.vivenotes.byteink.build.isLinuxHost
+import com.vivenotes.byteink.build.runsGoogleLinuxBinary
 import com.vivenotes.byteink.build.googleLinuxLibrary
 import com.vivenotes.byteink.build.upstreamPins
 
@@ -52,7 +52,7 @@ fun registerDump(name: String, label: Provider<String>) = tasks.register<JavaExe
 }
 
 val googleLibrary = googleLinuxLibrary()
-val google = if (isLinuxHost) registerDump("oracleGoogle", provider { "Google's libink.so" }).also {
+val google = if (runsGoogleLinuxBinary) registerDump("oracleGoogle", provider { "Google's libink.so" }).also {
     it.configure {
         description = "Dumps the oracle's results on Google's libink.so."
         jvmArgumentProviders.add(InkLibraryOverride(googleLibrary))
@@ -79,7 +79,7 @@ val production = registerDump("oracleProduction", provider { "byteink shipped An
         })
     }
 }
-val byteink = if (isLinuxHost) registerDump("oracleByteink", provider { "byteink unshipped platform-arithmetic pin-validation baseline" }).also {
+val byteink = if (runsGoogleLinuxBinary) registerDump("oracleByteink", provider { "byteink unshipped platform-arithmetic pin-validation baseline" }).also {
     it.configure {
         description = "Dumps the unshipped platform-math baseline; missing or invalid baseline metadata fails."
         val metadata = baselineMetadata
@@ -90,9 +90,10 @@ val byteink = if (isLinuxHost) registerDump("oracleByteink", provider { "byteink
             listOf("--baseline", "--native-metadata", metadata.get(), "--expected-native-commit", commit.get())
         })
     }
-} else registerDump("oracleByteink", provider { "byteink shipped Android-arithmetic native (legacy Windows task)" }).also {
+} else registerDump("oracleByteink", provider { "byteink shipped Android-arithmetic native (legacy task without Google's binary)" }).also {
     it.configure {
-        description = "Legacy Windows production dump; use oracleProduction for cross-OS comparisons."
+        description = "Legacy production dump where Google's Linux x86_64 binary cannot run (Windows, arm64); " +
+            "use oracleProduction for cross-platform comparisons."
         val metadata = productionMetadata
         val commit = nativeCommit
         inputs.file(metadata).withPropertyName("nativeBuildMetadata")

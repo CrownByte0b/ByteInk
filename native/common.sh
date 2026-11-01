@@ -27,6 +27,11 @@ read -r -a experiment_flags <<< "${BYTEINK_BAZEL_FLAGS:-}"
 # Every build and test: the shared caches, the optimized configuration byteink ships with debug
 # information (stripped separately), and any experiment flags.
 flags=(--repository_cache="$cache/repository" --disk_cache="$cache/disk" -c opt --copt=-g "${experiment_flags[@]}")
+# Every arm64 build (memory/arm64.md). aarch64 has fused multiply-add in its base instruction set,
+# and clang fuses a*b+c within an expression by default; x86_64's baseline has no FMA, so its
+# binaries never fuse. Unfused arithmetic keeps arm64's rounding equal to x86_64's, which the
+# Android fidelity captures (from an x86_64 emulator) and every strict comparison check.
+arm64_flags=(--copt=-ffp-contract=off)
 
 # The user's git hooks and signing settings have no business in a throwaway checkout.
 git() { command git -c core.hooksPath=/dev/null -c advice.detachedHead=false "$@"; }

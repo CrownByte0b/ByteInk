@@ -1,3 +1,4 @@
+import com.vivenotes.byteink.build.composeDesktopRuntime
 import java.io.File
 
 // Test support shared by byteink and its consumers: fixtures, a .vive reader for tests, geometry
@@ -13,7 +14,7 @@ dependencies {
     api(project(":byteink-compose"))
     implementation(libs.sqlite.jdbc)
     implementation(libs.kotlinx.serialization.json)
-    testImplementation(compose.desktop.currentOs)
+    testImplementation(composeDesktopRuntime(libs.versions.composeMultiplatform.get()))
 }
 
 kotlin.sourceSets.named("test") {

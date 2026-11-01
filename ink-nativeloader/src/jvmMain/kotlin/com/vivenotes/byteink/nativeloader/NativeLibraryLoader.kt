@@ -56,7 +56,7 @@ internal class NativeLibraryLoader(
     fun load(): LoadedInkLibrary {
         libraryProperty?.let { return loadNamed(it) }
         val platform = platform ?: throw UnsatisfiedLinkError(
-            "byteink bundles the Ink native library for Linux x86_64 and Windows x86_64, not for " +
+            "byteink bundles the Ink native library for ${Platform.names}, not for " +
                 "$platformName. Build google/ink's //ink/jni:libink.so for this platform and name it " +
                 "with -D${InkNativeLibrary.LIBRARY_PROPERTY}=<absolute path>.",
         )
@@ -114,7 +114,7 @@ internal class NativeLibraryLoader(
 
     /** Some Windows JVMs still convert System.load paths through the Windows native code page. */
     private fun nativePathAdvice(file: Path): String {
-        if (platform != Platform.WINDOWS_X86_64) return ""
+        if (platform?.windows != true) return ""
         val encoding = System.getProperty("sun.jnu.encoding") ?: return ""
         val charset = runCatching { Charset.forName(encoding) }.getOrNull() ?: return ""
         if (charset.newEncoder().canEncode(file.toString())) return ""

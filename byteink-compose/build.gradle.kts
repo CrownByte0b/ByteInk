@@ -1,3 +1,5 @@
+import com.vivenotes.byteink.build.composeDesktopRuntime
+
 // Compose Desktop/Skia rendering of finished and in-progress strokes, and live stroke authoring.
 
 plugins {
@@ -12,7 +14,7 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.kotlinx.coroutines.core)
     testImplementation(project(":byteink-kit"))
-    testImplementation(compose.desktop.currentOs)
+    testImplementation(composeDesktopRuntime(libs.versions.composeMultiplatform.get()))
     testImplementation(libs.compose.ui.test)
 }
 

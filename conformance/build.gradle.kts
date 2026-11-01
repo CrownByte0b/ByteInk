@@ -8,7 +8,7 @@ import com.vivenotes.byteink.build.ExpectedLibraryFile
 import com.vivenotes.byteink.build.GitSparseCheckout
 import com.vivenotes.byteink.build.InkLibraryOverride
 import com.vivenotes.byteink.build.byteinkHostLibrary
-import com.vivenotes.byteink.build.isLinuxHost
+import com.vivenotes.byteink.build.runsGoogleLinuxBinary
 import com.vivenotes.byteink.build.bytecodeTarget
 import com.vivenotes.byteink.build.googleLinuxLibrary
 import com.vivenotes.byteink.build.registerTestsOnJdk
@@ -86,7 +86,7 @@ val jvmTest = tasks.named<Test>("jvmTest") {
 
 val googleLibrary = googleLinuxLibrary()
 
-val jvmTestGoogleBinary = if (isLinuxHost) tasks.register<Test>("jvmTestGoogleBinary") {
+val jvmTestGoogleBinary = if (runsGoogleLinuxBinary) tasks.register<Test>("jvmTestGoogleBinary") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     description = "Runs AndroidX Ink's JVM suites on Google's own libink.so, through byteink's loader."
     val suites = jvmTest.get()

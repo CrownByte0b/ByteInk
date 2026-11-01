@@ -54,8 +54,10 @@ the change in its licence header.
 
 - **Library property:** `-Dbyteink.ink.library=<absolute path>` names a library to load instead of
   the bundled one.
-- **Bundled library:** otherwise the jar's library for the platform is used: Linux x86_64 or
-  Windows x86_64, with anything else refused with advice.
+- **Bundled library:** otherwise the jar's library for the platform is used: Linux or Windows, on
+  x86_64 or arm64 (`linux-x86_64`, `linux-arm64`, `windows-x86_64`, `windows-arm64`), with
+  anything else refused with advice. The arm64 libraries keep x86_64's floating-point rounding
+  (`native/ARM64.md`).
 - **Cache:** the bundled library is extracted into a per-user cache keyed by its SHA-256:
   `$XDG_CACHE_HOME/byteink/natives/<sha256>/libink.so` (or under `~/.cache`) on Linux, and
   `%LOCALAPPDATA%\byteink\natives\<sha256>\ink.dll` on Windows.

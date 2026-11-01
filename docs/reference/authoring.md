@@ -612,7 +612,7 @@ public enum class InkNativeBackend
 
 ### `NativeInkInputSource`
 
-Java 25+ native pen/history adapter for Windows/Linux x86_64. Native Wayland requires JBR 25 WLToolkit, native access, and opening java.desktop/sun.awt.wl. Uses the matching configured top-level surface; no raw reads from JBR's borrowed display socket.
+Java 25+ native pen/history adapter for Windows and Linux on x86_64 or arm64. Native Wayland requires JBR 25 WLToolkit, native access, and opening java.desktop/sun.awt.wl. Uses the matching configured top-level surface; no raw reads from JBR's borrowed display socket.
 
 ```kotlin
 public class NativeInkInputSource( private val component: Component, private val windowHandle: Long, private val pixelsPerLocalUnit: () -> Float = { 1f }, private val centimetersPerNativePixel: Float? = null, private val onFailure: (Throwable) -> Unit = { throw IllegalStateException("Native ink capture failed", it) }, ) : InkInputSource
@@ -660,7 +660,7 @@ override public fun subscribe(listener: (InkInputEvent) -> Unit): AutoCloseable
 | --- | --- | --- | --- |
 | `listener` | `(InkInputEvent) -> Unit` | `Required` | Serial UI-thread event callback; closing the subscription stops callbacks. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L64)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L66)
 
 ## InkLowLatencyPanel
 

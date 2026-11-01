@@ -1,6 +1,6 @@
 # ByteInk API wiki
 
-Use the real AndroidX Ink engine in Kotlin/JVM applications on **Linux x86_64 and Windows x86_64**. ByteInk supplies native loading, Compose/Skia rendering, live input, and ViveNotes-compatible storage and operation replay.
+Use the real AndroidX Ink engine in Kotlin/JVM applications on **Linux and Windows, on x86_64 and arm64**. ByteInk supplies native loading, Compose/Skia rendering, live input, and ViveNotes-compatible storage and operation replay.
 
 | Start here                                          | What you get                                                            |
 | --------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -49,8 +49,9 @@ The ViveNotes desktop app now implements Normal partial-erase interaction, previ
    `nativeloader`, but not of `ink-rendering`, `ink-authoring` or any `*-compose` module, since those depend on Android's
    Canvas, View and MotionEvent. You can compute a stroke on the desktop, but you can't draw it or capture a pen. ByteInk
    renders with Compose/Skia and captures pen input on Windows, X11 and Wayland.
-2. **No Windows.** Google's JVM native loader ships only `linux-x86_64` and `macos-arm64` binaries and throws
-   "Unsupported platform" anywhere else. ByteInk builds `ink.dll` and loads it with a narrow fork of the loader.
+2. **No Windows, and no Linux arm64.** Google's JVM native loader ships only `linux-x86_64` and `macos-arm64` binaries
+   and throws "Unsupported platform" anywhere else. ByteInk builds `ink.dll` for Windows x86_64 and arm64 and
+   `libink.so` for Linux arm64, and loads them with a narrow fork of the loader.
 3. **Google's Linux binary doesn't produce exactly the same geometry as Android.** Android's math library rounds `atan2f`
    and `hypotf` slightly differently from desktop libm, which changes the shape of some real strokes. ByteInk's native
    build uses Android's arithmetic, so desktop geometry matches Android exactly.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Builds libink.so for Linux x86_64 with native/cmake instead of Bazel, from the pinned google/ink
-# commit with the whole native/patches series and the cmake.* pins in upstream/pins.properties.
+# Builds libink.so for this Linux host's architecture (x86_64 or arm64) with native/cmake instead of
+# Bazel, from the pinned google/ink commit with the whole native/patches series and the cmake.* pins
+# in upstream/pins.properties.
 # This is the build Flatpak/Flathub packages make offline with their SDK's compiler; it lets the
 # conformance oracle and the test suites check that build against the Bazel one byteink ships.
 #
@@ -8,15 +9,20 @@
 #
 # BYTEINK_FLATPAK_SDK (for example org.freedesktop.Sdk//26.08) compiles inside that Flatpak SDK, as
 # Flathub does; otherwise the host's cc/c++ build. JAVA_HOME (or, in the SDK, BYTEINK_JNI_HOME) is
-# a JDK whose include/ supplies jni.h. Results land in native/build/out-cmake/<commit>/linux-x86_64/,
-# or in BYTEINK_OUT, laid out as native/build-linux.sh lays out its own.
+# a JDK whose include/ supplies jni.h. Results land in native/build/out-cmake/<commit>/linux-<arch>/
+# (linux-x86_64 or linux-arm64), or in BYTEINK_OUT, laid out as native/build-linux.sh lays out its own.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 commit=$(pin google.ink.commit)
 deps="$native/build/cmake-deps"
 work="$native/build/cmake"
-out=${BYTEINK_OUT:-"$native/build/out-cmake/$commit/linux-x86_64"}
+case $(uname -m) in
+  x86_64) platform=linux-x86_64 ;;
+  aarch64 | arm64) platform=linux-arm64 ;;
+  *) echo "byteink builds Linux x86_64 and arm64, not $(uname -m)" >&2; exit 1 ;;
+esac
+out=${BYTEINK_OUT:-"$native/build/out-cmake/$commit/$platform"}
 
 # Downloads and unpacks the archive pinned as cmake.$1, checking its sha256; prints where it is.
 fetch_archive() {

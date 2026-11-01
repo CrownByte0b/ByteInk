@@ -30,6 +30,9 @@ internal class ElfFile(bytes: ByteArray) {
         }
     }
 
+    /** The ELF machine (`e_machine`): 62 is x86-64, 183 is AArch64. */
+    val machine: Int get() = elf.getShort(0x12).toInt() and 0xffff
+
     /**
      * Defined, global or weak, visible functions in `.dynsym`: what `nm -D --defined-only` lists as
      * `T` or `W`.

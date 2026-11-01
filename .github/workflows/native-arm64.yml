@@ -1,0 +1,84 @@
+name: Native arm64
+
+# Called by ci; can also run alone. Cross-builds the Linux and Windows arm64 libraries, and the
+# portable upstream C++ test subset for each, on x86_64 Linux with zig (native/ARM64.md). Later jobs
+# bundle the libraries and run the tests on arm64 runners.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-arm64:
+    name: Native arm64 cross-builds and checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # gradle/gradle-daemon-jvm.properties asks for an Azul JDK 27 for the Gradle daemon.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: zulu
+          java-version: 27
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+      # Bazel unpacks an 8 GB LLVM toolchain; the runner's preinstalled SDKs, unused here, make room.
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/byteink/bazel/repository
+          key: bazel-repository-arm64-${{ hashFiles('upstream/pins.properties', 'native/*.sh', 'native/patches/*.patch') }}
+          restore-keys: bazel-repository-arm64-
+      - name: Build Linux arm64 libink.so
+        run: native/build-linux-arm64.sh
+      - name: Build Windows arm64 ink.dll
+        run: native/build-windows.sh arm64
+      - name: Check that no engine arithmetic is fused
+        run: native/check-arm64-fma.sh
+      - name: Build Linux arm64 C++ tests
+        run: native/build-linux-arm64-tests.sh
+      - name: Build Windows arm64 C++ tests
+        run: native/build-windows-tests.sh arm64
+      - name: Check them
+        run: ./gradlew :upstream:checkLinuxArm64Library :upstream:checkWindowsArm64Library
+      - name: Upload Linux arm64 libink.so
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: libink-linux-arm64
+          # The files keep their path below the wildcard, <commit>/linux-arm64/.
+          path: |
+            native/build/out/*/linux-arm64/libink.so
+            native/build/out/*/linux-arm64/build.properties
+          if-no-files-found: error
+      - name: Upload Linux arm64 debug symbols separately
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: libink-linux-arm64-debug-symbols
+          path: native/build/out/*/linux-arm64/libink.so.debug
+          if-no-files-found: error
+      - name: Upload Windows arm64 ink.dll
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ink-windows-arm64
+          path: |
+            native/build/out/*/windows-arm64/ink.dll
+            native/build/out/*/windows-arm64/build.properties
+          if-no-files-found: error
+      - name: Upload Linux arm64 C++ tests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-linux-arm64-tests
+          path: native/build/linux-arm64-tests/
+          if-no-files-found: error
+      - name: Upload Windows arm64 C++ tests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-windows-arm64-tests
+          path: native/build/windows-arm64-tests/
+          if-no-files-found: error
