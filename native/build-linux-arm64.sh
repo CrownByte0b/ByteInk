@@ -37,6 +37,10 @@ strip_tool="$(bazel info output_base)/external/toolchains_llvm++llvm+llvm_toolch
 install -m 644 "$src/$library" "$out/libink.so.debug"
 "$strip_tool" --strip-unneeded -o "$out/libink.so" "$out/libink.so.debug"
 chmod 644 "$out/libink.so"
+# lld's md5 build ID also hashes the debug information, where Zig's compiler-rt records the absolute
+# path of the Bazel sandbox it was built in. Rederive the ID from the stripped library alone, so the
+# same code and data get the same ID, and the same library, on every machine (native/ARM64.md).
+python3 -I "$native/set-content-build-id.py" "$out/libink.so" "$out/libink.so.debug" > /dev/null
 {
   echo "google.ink.commit=$commit"
   echo "float.angle.math=android-bionic-$(pin bionic.math.commit)"

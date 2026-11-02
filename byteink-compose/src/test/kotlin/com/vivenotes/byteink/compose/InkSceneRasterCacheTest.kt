@@ -150,7 +150,10 @@ class InkSceneRasterCacheTest {
                     }
                 }
                 measured += "{\"view\":$viewIndex,\"backgroundArgb\":$background,\"differingPixels\":$differing,\"maxChannelDelta\":$maxDelta}"
-                assertTrue(maxDelta <= 2, "Transparent raster compositing exceeds the existing two-channel renderer bound: ${measured.last()}")
+                assertTrue(
+                    maxDelta <= SKIA_RASTER_BOUND,
+                    "Transparent raster compositing exceeds the existing $SKIA_RASTER_BOUND-channel renderer bound: ${measured.last()}",
+                )
                 if (background == 0) assertEquals(direct, cached, "transparent destinations preserve the layer exactly")
             }
             assertEquals(3L, cache.rasterBuildCount, "backgrounds are composited at draw time and do not invalidate the transparent image")
@@ -158,8 +161,9 @@ class InkSceneRasterCacheTest {
         val report = """
             {
               "scope": "Skia N32 premultiplied viewport layer versus direct paths, four opaque/translucent strokes including DISCARD self-crossing, three affine views, four destination backgrounds",
-              "maxAcceptedChannelDelta": 2,
-              "toleranceSource": "Existing uniform path renderer channel bound; unchanged",
+              "maxAcceptedChannelDelta": $SKIA_RASTER_BOUND,
+              "architecture": "${System.getProperty("os.arch")}",
+              "toleranceSource": "Existing uniform path renderer channel bound of 2; 6 on arm64 (Skia NEON raster pipeline)",
               "cases": [${measured.joinToString(",")}]
             }
         """.trimIndent() + "\n"
@@ -525,3 +529,10 @@ class InkSceneRasterCacheTest {
             }
         }
 }
+
+/**
+ * Skia's software renderer bound for compositing the same geometry two ways: 2 levels per channel,
+ * or 6 on arm64, whose NEON raster pipeline rounds translucent compositing differently from x86's
+ * (byteink-testing's SoftwareRaster, native/ARM64.md).
+ */
+private val SKIA_RASTER_BOUND: Int = if (System.getProperty("os.arch").lowercase() in setOf("aarch64", "arm64")) 6 else 2

@@ -36,6 +36,14 @@ The Linux library is linked with `-Wl,--build-id=md5`, as toolchains_llvm links 
 and stripped with the LLVM distribution's `llvm-strip --strip-unneeded`, since Zig's toolchain has
 no strip. Its unstripped copy ships separately as the `linux-arm64-debug-symbols` classifier.
 
+lld's md5 build ID hashes the unstripped output, and Zig's compiler-rt records the absolute path
+of the Bazel sandbox that compiled it in its debug information. Builds on different machines were
+therefore identical except for those 16 bytes (CI run 41362260608 against a local build).
+`set-content-build-id.py` rederives the ID as the MD5 of the stripped library with the ID zeroed,
+and writes it into both files, so the library is reproducible across machines; only the debug copy
+still carries build-host paths. The Windows DLLs strip debug information at link time and were
+already byte-identical between CI and local builds.
+
 ## Floating point
 
 AArch64 has fused multiply-add in its base instruction set, and clang fuses `a*b+c` within one
@@ -52,9 +60,15 @@ Zig compiles with its own flags; strtod's exact fast path is unaffected by fusin
 correction loop decides longer inputs. The check allows that one and fails on any other.
 
 Ink already runs on Android arm64 devices, so arm64's 128-bit `long double` and unsigned `char`
-(on Linux) are not new to its code. The C library's math differs per platform anyway (glibc,
-UCRT, bionic), as it already does between Linux and Windows x86_64; patches 0003/0004 compile in
-Android's float angle and magnitude functions. The strict comparisons below decide.
+(on Linux) are not new to its code.
+
+Math functions are the remaining difference, as they already are between Linux and Windows x86_64.
+Patches 0003/0004 compile Android's float angle and magnitude functions into every build. Beyond
+those, the Linux x86_64 library calls the host's glibc for `sinf`, `cosf`, `tanf`, `expf`,
+`log2`, `fmodf` and the rest. The Zig-built libraries link Zig's compiler-rt versions of
+`sinf`, `cosf`, `tanf`, `expf`, `log2`, `fmodf` and `sqrtf` statically (local symbols in
+`linux-arm64/libink.so`), and import only `acosf`, `atanf` and `pow` from glibc. Their last bits
+can differ from glibc's. The strict comparisons below decide whether that matters.
 
 ## Verification
 
