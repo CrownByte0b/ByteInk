@@ -141,6 +141,11 @@ jobs:
           path: native/build/oracle-linux-x64
           github-token: ${{ steps.artifacts.outputs.linux && github.token || '' }}
           run-id: ${{ steps.artifacts.outputs.linux || github.run_id }}
+      # Skiko links EGL even for headless software rendering in the main build/consumer tests.
+      - name: Install graphics runtime and offscreen test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libvulkan1 mesa-vulkan-drivers libxi6 libxtst6
       - name: Build, consumer smoke, full suites, engine oracle and synthetic fidelity reports
         run: >-
           ./gradlew build -PbyteinkPortable=true :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary
@@ -151,10 +156,6 @@ jobs:
           -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }}
           -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
           -Porg.gradle.java.installations.auto-download=false
-      - name: Install offscreen OpenGL and EGL test dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libvulkan1 mesa-vulkan-drivers libxi6 libxtst6
       - name: Verify mesh shaders on OpenGL
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"

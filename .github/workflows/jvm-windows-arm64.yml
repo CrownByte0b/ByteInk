@@ -178,6 +178,9 @@ jobs:
             "-PbyteinkParityFixtures=$reference\fixtures" "-PbyteinkParityReference=$reference" \
             -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }} \
             $GRADLE_JAVA_ARGS
+      - name: Prepare desktop for native input tests
+        shell: pwsh
+        run: ./.github/scripts/prepare-windows-desktop.ps1
       - name: Verify native Windows input and immediate Skia authoring
         run: >-
           ./gradlew.bat :byteink-compose:desktopPenTest --no-daemon

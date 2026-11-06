@@ -52,7 +52,16 @@ jobs:
       - name: Verify an independent published Wasm consumer
         run: |
           source native/build/emsdk/emsdk_env.sh
-          export BYTEINK_WASM_ENGINE="$(python -c 'from pathlib import Path; pins = dict(line.split("=", 1) for line in Path("upstream/pins.properties").read_text().splitlines() if line and not line.startswith("#")); print(Path("native/build/out", pins["google.ink.commit"], "wasm/byteink-engine.mjs").resolve().as_uri())')"
+          BYTEINK_WASM_ENGINE="$(python - <<'PY'
+          from pathlib import Path
+          import re
+          pins = Path("upstream/pins.properties").read_text()
+          commits = re.findall(r"^google\.ink\.commit=([0-9a-f]{40})$", pins, re.MULTILINE)
+          assert len(commits) == 1, "Expected exactly one pinned google.ink.commit"
+          print(Path("native/build/out", commits[0], "wasm/byteink-engine.mjs").resolve().as_uri())
+          PY
+          )"
+          export BYTEINK_WASM_ENGINE
           ./gradlew -p consumer-tests/wasm-fixture wasmJsNodeDevelopmentRun
           ./gradlew -p consumer-tests/wasm-compose-fixture wasmJsBrowserDistribution
       - name: Exercise the actual browser consumer

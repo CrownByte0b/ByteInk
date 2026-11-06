@@ -170,6 +170,11 @@ jobs:
             chmod +x "$test"
             "$test" "--gtest_output=xml:native/build/linux-arm64-tests/results/$(basename "$test").xml"
           done
+      # Skiko links EGL even for headless software rendering in the main build/consumer tests.
+      - name: Install graphics runtime and offscreen test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libvulkan1 mesa-vulkan-drivers libxi6 libxtst6
       - name: Build, consumer smoke, full suites and synthetic fidelity comparison
         run: |
           reference="$PWD/linux-reference/byteink-testing/build/desktop-parity"
@@ -187,10 +192,6 @@ jobs:
             compare --reference linux-reference/conformance/oracle/build/oracle/oracleProduction.tsv \
             --candidate conformance/oracle/build/oracle/oracleProduction.tsv \
             --report conformance/oracle/build/reports/linux-arm64-vs-linux-x86_64-production.md
-      - name: Install offscreen OpenGL and EGL test dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libvulkan1 mesa-vulkan-drivers libxi6 libxtst6
       - name: Verify mesh shaders on OpenGL and native X11 pen input
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
