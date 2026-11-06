@@ -49,6 +49,10 @@ jobs:
     needs: [release]
     uses: ./.github/workflows/native-pin.yml
 
+  wasm:
+    needs: [release]
+    uses: ./.github/workflows/wasm.yml
+
   # The JVM and publish jobs request actions: read to download another run's artifacts when
   # started alone. A caller must grant every permission its called jobs request.
   jvm-linux:
@@ -90,7 +94,7 @@ jobs:
 
   publish:
     if: needs.release.outputs.version != ''
-    needs: [release, native-linux, native-windows, native-arm64, native-linux-tests, native-pin, jvm-linux, jvm-windows, jvm-linux-arm64, jvm-windows-arm64]
+    needs: [release, native-linux, native-windows, native-arm64, native-linux-tests, native-pin, wasm, jvm-linux, jvm-windows, jvm-linux-arm64, jvm-windows-arm64]
     permissions:
       contents: read
       packages: write

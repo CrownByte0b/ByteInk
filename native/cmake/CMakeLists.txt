@@ -12,6 +12,12 @@
 cmake_minimum_required(VERSION 3.25)
 project(byteink_ink LANGUAGES C CXX)
 
+if(EMSCRIPTEN)
+  # Native Wasm exception handling also unwinds C++ owners on JavaScript binding errors.
+  add_compile_options(-fwasm-exceptions)
+  add_link_options(-fwasm-exceptions)
+endif()
+
 set(INK_SOURCE_DIR "" CACHE PATH "google/ink checkout with native/patches applied")
 set(ABSEIL_SOURCE_DIR "" CACHE PATH "abseil-cpp source")
 set(PROTOBUF_SOURCE_DIR "" CACHE PATH "protobuf source")
@@ -41,8 +47,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(BUILD_SHARED_LIBS OFF)
 
-find_path(JNI_INCLUDE_DIR jni.h HINTS "$ENV{JAVA_HOME}/include" REQUIRED NO_DEFAULT_PATH)
-find_path(JNI_MD_INCLUDE_DIR jni_md.h HINTS "${JNI_INCLUDE_DIR}/linux" REQUIRED NO_DEFAULT_PATH)
+if(NOT EMSCRIPTEN)
+  find_path(JNI_INCLUDE_DIR jni.h HINTS "$ENV{JAVA_HOME}/include" REQUIRED NO_DEFAULT_PATH)
+  find_path(JNI_MD_INCLUDE_DIR jni_md.h HINTS "${JNI_INCLUDE_DIR}/linux" REQUIRED NO_DEFAULT_PATH)
+endif()
 
 set(ABSL_PROPAGATE_CXX_STD ON)
 set(ABSL_BUILD_TESTING OFF)
@@ -55,6 +63,15 @@ set(protobuf_BUILD_CONFORMANCE OFF)
 set(protobuf_BUILD_EXAMPLES OFF)
 set(protobuf_INSTALL OFF)
 set(protobuf_WITH_ZLIB OFF)
+if(EMSCRIPTEN)
+  # protoc must run on the build host, using exactly the same pinned protobuf sources.
+  if(NOT EXISTS "${WITH_PROTOC}")
+    message(FATAL_ERROR "Set WITH_PROTOC to the host protobuf 33.5 protoc executable")
+  endif()
+  set(protobuf_BUILD_PROTOC_BINARIES OFF)
+  set(protobuf_BUILD_LIBPROTOC OFF)
+  set(protobuf_BUILD_LIBUPB OFF)
+endif()
 add_subdirectory("${PROTOBUF_SOURCE_DIR}" protobuf EXCLUDE_FROM_ALL SYSTEM)
 
 # zlib and libtess2 as upstream's Bazel targets compile them: their sources only, no configure.
@@ -104,175 +121,22 @@ add_custom_command(
   COMMENT "Generating ink/storage/proto C++ sources"
   VERBATIM)
 
-# Every ink source //ink/jni:libink.so compiles at the pinned commit with the patch series
-# (bazel query 'kind("source file", deps(//ink/jni:libink.so))').
-set(ink_sources
-  ink/brush/brush.cc
-  ink/brush/brush_behavior.cc
-  ink/brush/brush_coat.cc
-  ink/brush/brush_family.cc
-  ink/brush/brush_paint.cc
-  ink/brush/brush_tip.cc
-  ink/brush/color_function.cc
-  ink/brush/easing_function.cc
-  ink/brush/stock_brushes.cc
-  ink/brush/internal/jni/brush_behavior_jni.cc
-  ink/brush/internal/jni/brush_behavior_native.cc
-  ink/brush/internal/jni/brush_behavior_node_jni.cc
-  ink/brush/internal/jni/brush_behavior_node_native.cc
-  ink/brush/internal/jni/brush_coat_jni.cc
-  ink/brush/internal/jni/brush_coat_native.cc
-  ink/brush/internal/jni/brush_family_jni.cc
-  ink/brush/internal/jni/brush_family_native.cc
-  ink/brush/internal/jni/brush_jni.cc
-  ink/brush/internal/jni/brush_native.cc
-  ink/brush/internal/jni/brush_native_helper.cc
-  ink/brush/internal/jni/brush_paint_jni.cc
-  ink/brush/internal/jni/brush_paint_native.cc
-  ink/brush/internal/jni/brush_tip_jni.cc
-  ink/brush/internal/jni/brush_tip_native.cc
-  ink/brush/internal/jni/easing_function_jni.cc
-  ink/brush/internal/jni/easing_function_native.cc
-  ink/brush/internal/jni/input_tool_type_jni.cc
-  ink/brush/internal/jni/input_tool_type_native.cc
-  ink/brush/internal/jni/self_overlap_jni.cc
-  ink/brush/internal/jni/self_overlap_native.cc
-  ink/brush/internal/jni/stock_brushes_jni.cc
-  ink/brush/internal/jni/stock_brushes_native.cc
-  ink/color/color.cc
-  ink/color/color_space.cc
-  ink/color/internal/jni/color_jni_helper.cc
-  ink/color/internal/jni/color_native_helper.cc
-  ink/geometry/affine_transform.cc
-  ink/geometry/angle.cc
-  ink/geometry/distance.cc
-  ink/geometry/envelope.cc
-  ink/geometry/intersects.cc
-  ink/geometry/mesh.cc
-  ink/geometry/mesh_format.cc
-  ink/geometry/mesh_packing_types.cc
-  ink/geometry/mutable_mesh.cc
-  ink/geometry/partitioned_mesh.cc
-  ink/geometry/point.cc
-  ink/geometry/quad.cc
-  ink/geometry/rect.cc
-  ink/geometry/segment.cc
-  ink/geometry/tessellator.cc
-  ink/geometry/triangle.cc
-  ink/geometry/vec.cc
-  ink/geometry/internal/algorithms.cc
-  ink/geometry/internal/circle.cc
-  ink/geometry/internal/intersects_internal.cc
-  ink/geometry/internal/legacy_segment_intersection.cc
-  ink/geometry/internal/legacy_triangle_contains.cc
-  ink/geometry/internal/legacy_vector_utils.cc
-  ink/geometry/internal/lerp.cc
-  ink/geometry/internal/mesh_packing.cc
-  ink/geometry/internal/modulo.cc
-  ink/geometry/internal/outline_processing.cc
-  ink/geometry/internal/polyline_processing.cc
-  ink/geometry/internal/static_rtree.cc
-  ink/geometry/internal/jni/affine_transform_jni.cc
-  ink/geometry/internal/jni/affine_transform_native.cc
-  ink/geometry/internal/jni/angle_jni.cc
-  ink/geometry/internal/jni/angle_native.cc
-  ink/geometry/internal/jni/box_accumulator_jni_helper.cc
-  ink/geometry/internal/jni/box_jni.cc
-  ink/geometry/internal/jni/box_jni_helper.cc
-  ink/geometry/internal/jni/box_native.cc
-  ink/geometry/internal/jni/intersection_jni.cc
-  ink/geometry/internal/jni/intersection_native.cc
-  ink/geometry/internal/jni/mesh_format_jni.cc
-  ink/geometry/internal/jni/mesh_format_native.cc
-  ink/geometry/internal/jni/mesh_jni.cc
-  ink/geometry/internal/jni/mesh_native.cc
-  ink/geometry/internal/jni/parallelogram_jni.cc
-  ink/geometry/internal/jni/parallelogram_jni_helper.cc
-  ink/geometry/internal/jni/parallelogram_native.cc
-  ink/geometry/internal/jni/partitioned_mesh_jni.cc
-  ink/geometry/internal/jni/partitioned_mesh_native.cc
-  ink/geometry/internal/jni/triangle_jni.cc
-  ink/geometry/internal/jni/triangle_native.cc
-  ink/geometry/internal/jni/vec_jni.cc
-  ink/geometry/internal/jni/vec_jni_helper.cc
-  ink/geometry/internal/jni/vec_native.cc
-  ink/jni/byteink_compression_jni.cc
-  ink/jni/byteink_geometry_jni.cc
-  ink/jni/byteink_input_codec_jni.cc
-  ink/jni/internal/jni_buffer_util.cc
-  ink/jni/internal/jni_jvm_interface.cc
-  ink/jni/internal/jni_proto_util.cc
-  ink/jni/internal/jni_string_util.cc
-  ink/jni/internal/status_jni.cc
-  ink/jni/internal/status_jni_helper.cc
-  ink/jni/internal/status_native.cc
-  ink/rendering/android/internal/jni/canvas_mesh_renderer_jni.cc
-  ink/rendering/common/stroke_attribute_helpers.cc
-  ink/rendering/skia/common_internal/mesh_specification_data.cc
-  ink/storage/brush.cc
-  ink/storage/color.cc
-  ink/storage/input_batch.cc
-  ink/storage/numeric_run.cc
-  ink/storage/stroke_input_batch.cc
-  ink/storage/internal/jni/brush_family_serialization_jni.cc
-  ink/storage/internal/jni/brush_family_serialization_jni_helper.cc
-  ink/storage/internal/jni/brush_family_serialization_native.cc
-  ink/storage/internal/jni/brush_family_serialization_native_helper.cc
-  ink/storage/internal/jni/byte_array_native_helper.cc
-  ink/storage/internal/jni/stroke_input_batch_serialization_jni.cc
-  ink/storage/internal/jni/stroke_input_batch_serialization_native.cc
-  ink/strokes/in_progress_stroke.cc
-  ink/strokes/stroke.cc
-  ink/strokes/input/stroke_input.cc
-  ink/strokes/input/stroke_input_batch.cc
-  ink/strokes/input/internal/stroke_input_validation_helpers.cc
-  ink/strokes/internal/brush_tip_extruder.cc
-  ink/strokes/internal/brush_tip_extrusion.cc
-  ink/strokes/internal/brush_tip_modeler.cc
-  ink/strokes/internal/brush_tip_modeler_helpers.cc
-  ink/strokes/internal/brush_tip_shape.cc
-  ink/strokes/internal/brush_tip_state.cc
-  ink/strokes/internal/circular_extrusion_helpers.cc
-  ink/strokes/internal/constrain_brush_tip_extrusion.cc
-  ink/strokes/internal/easing_implementation.cc
-  ink/strokes/internal/modeled_stroke_input.cc
-  ink/strokes/internal/noise_generator.cc
-  ink/strokes/internal/rounded_polygon.cc
-  ink/strokes/internal/stroke_input_modeler.cc
-  ink/strokes/internal/stroke_outline.cc
-  ink/strokes/internal/stroke_segmentation.cc
-  ink/strokes/internal/stroke_shape_builder.cc
-  ink/strokes/internal/stroke_shape_update.cc
-  ink/strokes/internal/stroke_subtraction.cc
-  ink/strokes/internal/stroke_vertex.cc
-  ink/strokes/internal/brush_tip_extruder/derivative_calculator.cc
-  ink/strokes/internal/brush_tip_extruder/derivative_calculator_helpers.cc
-  ink/strokes/internal/brush_tip_extruder/directed_partial_outline.cc
-  ink/strokes/internal/brush_tip_extruder/extruded_vertex.cc
-  ink/strokes/internal/brush_tip_extruder/find_clockwise_winding_segment.cc
-  ink/strokes/internal/brush_tip_extruder/geometry.cc
-  ink/strokes/internal/brush_tip_extruder/mutable_mesh_view.cc
-  ink/strokes/internal/brush_tip_extruder/simplify.cc
-  ink/strokes/internal/jni/in_progress_stroke_jni.cc
-  ink/strokes/internal/jni/in_progress_stroke_native.cc
-  ink/strokes/internal/jni/in_progress_stroke_native_helper.cc
-  ink/strokes/internal/jni/mesh_creation_jni.cc
-  ink/strokes/internal/jni/mesh_creation_native.cc
-  ink/strokes/internal/jni/stroke_input_batch_jni.cc
-  ink/strokes/internal/jni/stroke_input_batch_native.cc
-  ink/strokes/internal/jni/stroke_input_jni_helper.cc
-  ink/strokes/internal/jni/stroke_jni.cc
-  ink/strokes/internal/jni/stroke_native.cc
-  ink/strokes/internal/stroke_input_modeler/passthrough_input_modeler.cc
-  ink/strokes/internal/stroke_input_modeler/sliding_window_input_modeler.cc
-  ink/types/duration.cc
-  ink/types/physical_distance.cc
-)
+include("${CMAKE_CURRENT_LIST_DIR}/ink-sources.cmake")
+if(EMSCRIPTEN)
+  list(FILTER ink_sources EXCLUDE REGEX "/jni/")
+  list(FILTER ink_sources EXCLUDE REGEX "^ink/rendering/(android|skia)/")
+endif()
 list(TRANSFORM ink_sources PREPEND "${INK_SOURCE_DIR}/")
 
-add_library(ink SHARED ${ink_sources} ${proto_sources})
+if(EMSCRIPTEN)
+  add_executable(ink ${ink_sources} ${proto_sources} "${CMAKE_CURRENT_LIST_DIR}/../wasm/bridge.cc")
+  target_compile_definitions(ink PRIVATE BYTEINK_ENGINE_COMMIT="${BYTEINK_ENGINE_COMMIT}")
+  set_target_properties(ink PROPERTIES OUTPUT_NAME byteink-engine SUFFIX .mjs)
+else()
+  add_library(ink SHARED ${ink_sources} ${proto_sources})
+  target_include_directories(ink SYSTEM PRIVATE "${JNI_INCLUDE_DIR}" "${JNI_MD_INCLUDE_DIR}")
+endif()
 target_include_directories(ink PRIVATE "${INK_SOURCE_DIR}" "${proto_out}")
-target_include_directories(ink SYSTEM PRIVATE "${JNI_INCLUDE_DIR}" "${JNI_MD_INCLUDE_DIR}")
 target_link_libraries(ink PRIVATE
   byteink_zlib byteink_libtess2
   protobuf::libprotobuf
@@ -281,8 +145,15 @@ target_link_libraries(ink PRIVATE
   absl::overload absl::absl_check absl::absl_log absl::log absl::bits absl::status
   absl::status_macros absl::statusor absl::str_format absl::strings absl::string_view
   absl::synchronization absl::time absl::span)
-set(version_script "${INK_SOURCE_DIR}/ink/jni/jni.lds")
-target_link_options(ink PRIVATE
-  -Wl,--gc-sections -Wl,-z,relro,-z,now -Wl,--build-id=md5 -Wl,--hash-style=gnu
-  "-Wl,--version-script=${version_script}")
-set_target_properties(ink PROPERTIES LINK_DEPENDS "${version_script}")
+if(EMSCRIPTEN)
+  target_link_options(ink PRIVATE
+    -lembind --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker,node
+    -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=536870912 -sSTACK_SIZE=1048576
+    -sFILESYSTEM=0 -sASSERTIONS=1)
+else()
+  set(version_script "${INK_SOURCE_DIR}/ink/jni/jni.lds")
+  target_link_options(ink PRIVATE
+    -Wl,--gc-sections -Wl,-z,relro,-z,now -Wl,--build-id=md5 -Wl,--hash-style=gnu
+    "-Wl,--version-script=${version_script}")
+  set_target_properties(ink PROPERTIES LINK_DEPENDS "${version_script}")
+endif()

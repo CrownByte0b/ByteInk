@@ -1,5 +1,8 @@
 # Get started
 
+For the experimental browser target, use the [WebAssembly preview guide](guides/wasm.md).
+The setup below applies to the published JVM libraries.
+
 ## Add ByteInk to your project
 
 ByteInk is published to [GitHub Packages](https://github.com/orgs/CrownByte0b/packages). The current release is `0.1.0-alpha.1`. Use Java 25+, Kotlin 2.4.20 and Compose Multiplatform 1.12.1 for the tested setup. The natives for Linux and Windows, on x86_64 and arm64, ship inside the dependency; the loader picks the one matching the JVM's `os.name` and `os.arch`.

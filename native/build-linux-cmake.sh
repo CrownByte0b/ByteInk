@@ -24,33 +24,8 @@ case $(uname -m) in
 esac
 out=${BYTEINK_OUT:-"$native/build/out-cmake/$commit/$platform"}
 
-# Downloads and unpacks the archive pinned as cmake.$1, checking its sha256; prints where it is.
-fetch_archive() {
-  local url sha archive dir
-  url=$(pin "cmake.$1.url")
-  sha=$(pin "cmake.$1.sha256")
-  archive="$deps/$(basename "$url")"
-  dir="$deps/$1-$sha"
-  if [[ ! -d $dir ]]; then
-    mkdir -p "$deps"
-    [[ -f $archive ]] || curl -fsSL -o "$archive.part" "$url"
-    [[ -f $archive ]] || mv "$archive.part" "$archive"
-    echo "$sha  $archive" | sha256sum --check --quiet -
-    mkdir -p "$dir.part"
-    tar -xzf "$archive" -C "$dir.part" --strip-components=1
-    mv "$dir.part" "$dir"
-  fi
-  echo "$dir"
-}
-
-abseil=$(fetch_archive abseil)
-protobuf=$(fetch_archive protobuf)
-zlib=$(fetch_archive zlib)
-libtess2="$deps/libtess2"
-if [[ ! -d $libtess2/.git ]]; then
-  git clone --quiet "$(pin cmake.libtess2.repository)" "$libtess2"
-fi
-git -C "$libtess2" checkout --quiet --force "$(pin cmake.libtess2.commit)"
+source "$native/cmake/dependencies.sh"
+prepare_cmake_dependencies
 checkout "$commit"
 
 configure_and_build=(

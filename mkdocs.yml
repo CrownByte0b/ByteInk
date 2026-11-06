@@ -57,6 +57,7 @@ nav:
       - Erase, select and transform: guides/operations.md
       - Notebook utilities: guides/notebooks.md
       - Software latency diagnostics: guides/software-latency.md
+      - WebAssembly preview: guides/wasm.md
   - API reference:
       - Reference conventions: reference/index.md
       - Engine and geometry: reference/core.md
