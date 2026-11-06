@@ -558,6 +558,8 @@ def render(title: str, module: str, files: list[str]) -> tuple[str, int]:
     count = 0
     for filename in files:
         paths = list((ROOT / module / "src").glob(f"*/kotlin/com/vivenotes/byteink/**/{filename}.kt"))
+        if not paths and module == "byteink-kit":
+            paths = list((ROOT / "byteink-model" / "src").glob(f"*/kotlin/com/vivenotes/byteink/**/{filename}.kt"))
         if len(paths) != 1:
             raise ValueError(f"Expected one source for {module}/{filename}, got {paths}")
         path = paths[0]

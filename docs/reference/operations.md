@@ -17,7 +17,7 @@ public data class InkPoint(val x: Float, val y: Float)
 | `x` | `Float` | `Required` | Horizontal coordinate; input-surface units for pointer samples, page dp for InkPoint. |
 | `y` | `Float` | `Required` | Vertical coordinate; input-surface units for pointer samples, page dp for InkPoint. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L4)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L4)
 
 ### `InkBounds`
 
@@ -34,7 +34,7 @@ public data class InkBounds(val left: Float, val top: Float, val right: Float, v
 | `right` | `Float` | `Required` | Right bound in page dp. |
 | `bottom` | `Float` | `Required` | Bottom bound in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L7)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L7)
 
 ### `InkBounds.center`
 
@@ -44,7 +44,7 @@ public val center: InkPoint
 
 Midpoint of the page rectangle.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L9)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L9)
 
 ### `InkBounds.contains`
 
@@ -56,7 +56,7 @@ public fun contains(point: InkPoint): Boolean
 | --- | --- | --- | --- |
 | `point` | `InkPoint` | `Required` | Point in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L11)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L11)
 
 ### `InkBounds.translated`
 
@@ -69,7 +69,7 @@ public fun translated(dx: Float, dy: Float): InkBounds
 | `dx` | `Float` | `Required` | Horizontal translation in page dp. |
 | `dy` | `Float` | `Required` | Vertical translation in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L13)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L13)
 
 ### `InkBounds.scaled`
 
@@ -83,7 +83,7 @@ public fun scaled(anchor: InkPoint, scaleX: Float, scaleY: Float): InkBounds
 | `scaleX` | `Float` | `Required` | Horizontal scale multiplier; 1 leaves that axis unchanged. |
 | `scaleY` | `Float` | `Required` | Vertical scale multiplier; 1 leaves that axis unchanged. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L15)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L15)
 
 ### `List<InkBounds>.unionBounds`
 
@@ -91,7 +91,7 @@ public fun scaled(anchor: InkPoint, scaleX: Float, scaleY: Float): InkBounds
 public fun List<InkBounds>.unionBounds(): InkBounds?
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L25)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L25)
 
 ### `InkProjectionKey`
 
@@ -106,7 +106,7 @@ public data class InkProjectionKey(val strokeId: String, val projection: Int)
 | `strokeId` | `String` | `Required` | Stored stroke-row ID owning this process-local projection key. |
 | `projection` | `Int` | `Required` | Process-local piece number; preserve with copy, never store as a database identifier. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L41)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L41)
 
 ### `InkLassoMove`
 
@@ -122,7 +122,7 @@ public data class InkLassoMove( val path: List<InkPoint>, val targetIds: Set<Str
 | `dx` | `Float` | `Required` | Horizontal translation in page dp. |
 | `dy` | `Float` | `Required` | Vertical translation in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L44)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L44)
 
 ### `InkLassoResize`
 
@@ -139,7 +139,7 @@ public data class InkLassoResize( val path: List<InkPoint>, val targetIds: Set<S
 | `scaleX` | `Float` | `Required` | Horizontal scale multiplier; 1 leaves that axis unchanged. |
 | `scaleY` | `Float` | `Required` | Vertical scale multiplier; 1 leaves that axis unchanged. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L53)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L53)
 
 ### `InkLassoSelection`
 
@@ -154,7 +154,7 @@ public data class InkLassoSelection( val path: List<InkPoint>, val targetIds: Se
 | `projections` | `Set<InkProjectionKey>` | `Required` | Process-local keys of selected pieces; use only with the matching live page snapshot. |
 | `bounds` | `InkBounds` | `Required` | Page-space bounds; a callback returning null omits that item's geometry from queries. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L63)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkGeometry.kt#L63)
 
 ## PageStroke
 
@@ -535,7 +535,7 @@ public fun pointInOrNearPolygon(point: InkPoint, polygon: List<InkPoint>, edgeTo
 | `polygon` | `List<InkPoint>` | `Required` | Nonempty page-space polygon for point tests; use at least three finite vertices. |
 | `edgeTolerance` | `Float` | `Required` | Lasso edge reach in page dp; default is 4f. Use finite nonnegative values. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/Lasso.kt#L228)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/Lasso.kt#L201)
 
 ### `InkPoint.distanceSquaredToSegment`
 
@@ -548,7 +548,7 @@ public fun InkPoint.distanceSquaredToSegment(start: InkPoint, end: InkPoint): Fl
 | `start` | `InkPoint` | `Required` | Segment start in page dp. |
 | `end` | `InkPoint` | `Required` | Segment end in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/Lasso.kt#L241)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/Lasso.kt#L205)
 
 ### `List<InkPoint>.closesIntoALoop`
 
@@ -560,7 +560,7 @@ public fun List<InkPoint>.closesIntoALoop(touch: Float): Boolean
 | --- | --- | --- | --- |
 | `touch` | `Float` | `Required` | Loop-closing reach in page dp; the algorithm applies a minimum of 2 dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/Lasso.kt#L266)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/Lasso.kt#L216)
 
 ## InkPageIndex
 
@@ -665,7 +665,7 @@ Origin walls are MIN_X = MIN_Y = 0f. clampTranslation returns the applied delta;
 public object PageBounds
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L9)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L9)
 
 ### `PageBounds.MIN_X`
 
@@ -673,7 +673,7 @@ public object PageBounds
 public const val MIN_X: Float = 0f
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L11)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L11)
 
 ### `PageBounds.MIN_Y`
 
@@ -681,7 +681,7 @@ public const val MIN_X: Float = 0f
 public const val MIN_Y: Float = 0f
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L12)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L12)
 
 ### `PageBounds.clampTranslation`
 
@@ -695,7 +695,7 @@ public fun clampTranslation(bounds: InkBounds, dx: Float, dy: Float): InkPoint
 | `dx` | `Float` | `Required` | Horizontal translation in page dp. |
 | `dy` | `Float` | `Required` | Vertical translation in page dp. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L19)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L19)
 
 ### `PageBounds.clampScale`
 
@@ -710,4 +710,4 @@ public fun clampScale(bounds: InkBounds, anchor: InkPoint, scaleX: Float, scaleY
 | `scaleX` | `Float` | `Required` | Horizontal scale multiplier; 1 leaves that axis unchanged. |
 | `scaleY` | `Float` | `Required` | Vertical scale multiplier; 1 leaves that axis unchanged. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L27)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PageBounds.kt#L27)

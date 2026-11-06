@@ -122,7 +122,7 @@ public fun inputModelFor(stabilization: Int): BrushFamily.InputModel
 | --- | --- | --- | --- |
 | `stabilization` | `Int` | `Required` | Input-model level 0–5; tool constructors validate, catalog lookup clamps. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L83)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L80)
 
 ### `ViveBrushes.family`
 
@@ -135,7 +135,7 @@ public fun family(id: String, stabilization: Int): BrushFamily
 | `id` | `String` | `Required` | Stored brush family ID; unknown IDs fall back to pressure-pen. |
 | `stabilization` | `Int` | `Required` | Input-model level 0–5; tool constructors validate, catalog lookup clamps. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L107)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L99)
 
 ### `ViveBrushes.brush`
 
@@ -150,7 +150,7 @@ public fun brush(familyId: String, stabilization: Int, colorArgb: Int, size: Flo
 | `colorArgb` | `Int` | `Required` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 | `size` | `Float` | `Required` | Finite positive brush width in page/stroke units, at least epsilon. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L222)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L212)
 
 ### `ViveBrushes.highlighter`
 
@@ -163,7 +163,7 @@ public fun highlighter(colorArgb: Int, size: Float): Brush
 | `colorArgb` | `Int` | `Required` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 | `size` | `Float` | `Required` | Finite positive brush width in page/stroke units, at least epsilon. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L234)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L224)
 
 ### `ViveBrushes.eraseMask`
 
@@ -176,7 +176,7 @@ public fun eraseMask(inputs: StrokeInputBatch, sizeDp: Float): Stroke
 | `inputs` | `StrokeInputBatch` | `Required` | Native input batch in page/stroke units, with ordered relative timestamps. |
 | `sizeDp` | `Float` | `Required` | Finite positive brush width or eraser diameter in page dp, at least epsilon. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L237)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/ViveBrushes.kt#L227)
 
 ## PenPreset
 
@@ -188,7 +188,7 @@ Android pen kinds: Fountain and Calligraphy.
 public enum class PenKind
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L4)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L4)
 
 ### `LineType`
 
@@ -198,7 +198,7 @@ Android line types: Solid, Dashed and Dotted. Both non-solid pen values use the 
 public enum class LineType
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L10)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L10)
 
 ### `PenPreset`
 
@@ -219,7 +219,7 @@ public data class PenPreset( val kind: PenKind = PenKind.Fountain, val lineType:
 | `stabilization` | `Int` | `1` | Input-model level 0–5; tool constructors validate, catalog lookup clamps. |
 | `holdForStraightLine` | `Boolean` | `true` | Application gesture preference, default true; does not change the brush or stored stroke metadata. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L21)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L21)
 
 ### `PenPreset.MIN_THICKNESS`
 
@@ -227,7 +227,7 @@ public data class PenPreset( val kind: PenKind = PenKind.Fountain, val lineType:
 public const val MIN_THICKNESS: Float = 1f
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L33)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L33)
 
 ### `PenPreset.MAX_THICKNESS`
 
@@ -235,7 +235,7 @@ public const val MIN_THICKNESS: Float = 1f
 public const val MAX_THICKNESS: Float = 8f
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L34)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L34)
 
 ### `PenPreset.THICKNESS_STEP`
 
@@ -243,23 +243,23 @@ public const val MAX_THICKNESS: Float = 8f
 public const val THICKNESS_STEP: Float = 0.5f
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L35)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L35)
 
 ### `PenPreset.MAX_PRESSURE`
 
 ```kotlin
-public const val MAX_PRESSURE: Int = ViveBrushes.MAX_CALLIGRAPHY_PRESSURE
+public const val MAX_PRESSURE: Int = InkBrushCatalog.MAX_CALLIGRAPHY_PRESSURE
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L36)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L36)
 
 ### `PenPreset.MAX_STABILIZATION`
 
 ```kotlin
-public const val MAX_STABILIZATION: Int = ViveBrushes.MAX_STABILIZATION
+public const val MAX_STABILIZATION: Int = InkBrushCatalog.MAX_STABILIZATION
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L37)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/PenPreset.kt#L37)
 
 ## HighlighterSettings
 
@@ -276,7 +276,7 @@ public data class HighlighterSettings( val colorArgb: Int = DEFAULT_COLOR, val t
 | `colorArgb` | `Int` | `DEFAULT_COLOR` | 32-bit ARGB including alpha; nullable drawing overrides use the brush color when null. |
 | `thickness` | `Int` | `DEFAULT_THICKNESS` | Brush width in page dp; Float for pens and Int for highlighter settings. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L4)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L4)
 
 ### `HighlighterSettings.MIN_THICKNESS`
 
@@ -284,7 +284,7 @@ public data class HighlighterSettings( val colorArgb: Int = DEFAULT_COLOR, val t
 public const val MIN_THICKNESS: Int = 6
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L11)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L11)
 
 ### `HighlighterSettings.MAX_THICKNESS`
 
@@ -292,7 +292,7 @@ public const val MIN_THICKNESS: Int = 6
 public const val MAX_THICKNESS: Int = 40
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L12)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L12)
 
 ### `HighlighterSettings.DEFAULT_THICKNESS`
 
@@ -300,7 +300,7 @@ public const val MAX_THICKNESS: Int = 40
 public const val DEFAULT_THICKNESS: Int = 18
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L13)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L13)
 
 ### `HighlighterSettings.DEFAULT_COLOR`
 
@@ -308,7 +308,7 @@ public const val DEFAULT_THICKNESS: Int = 18
 public const val DEFAULT_COLOR: Int = 0x66FFEB3B
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L14)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/HighlighterSettings.kt#L14)
 
 ## ViveInkTool
 
@@ -388,7 +388,7 @@ public fun complete( stroke: Stroke, id: String, pageId: String, seq: Int, creat
 public const val AUTOMATIC_LIGHT: Int = 0xFFFFFFFF.toInt()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkColors.kt#L4)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkColors.kt#L4)
 
 ### `AUTOMATIC_DARK`
 
@@ -396,7 +396,7 @@ public const val AUTOMATIC_LIGHT: Int = 0xFFFFFFFF.toInt()
 public const val AUTOMATIC_DARK: Int = 0xFF000000.toInt()
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkColors.kt#L7)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkColors.kt#L7)
 
 ### `automaticInkFor`
 
@@ -408,7 +408,7 @@ public fun automaticInkFor(isDark: Boolean): Int
 | --- | --- | --- | --- |
 | `isDark` | `Boolean` | `Required` | True chooses white automatic ink; false chooses black. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkColors.kt#L10)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkColors.kt#L10)
 
 ### `automaticColorOr`
 
@@ -422,4 +422,4 @@ public fun automaticColorOr(stored: Int, followsTheme: Boolean?, canvasInk: Int)
 | `followsTheme` | `Boolean?` | `Required` | Stored theme flag: true automatic, false fixed, null legacy behavior. |
 | `canvasInk` | `Int` | `Required` | Resolved automatic canvas ARGB, usually automaticInkFor(isDark). |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-kit/src/main/kotlin/com/vivenotes/byteink/kit/InkColors.kt#L18)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-model/src/commonMain/kotlin/com/vivenotes/byteink/kit/InkColors.kt#L18)

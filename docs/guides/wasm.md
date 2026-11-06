@@ -1,13 +1,15 @@
 # WebAssembly preview
 
-`byteink-wasm` runs the pinned Google Ink C++ engine in a browser or Node through Kotlin's
-`wasmJs` target. It supports finished and live strokes, version 1 stock brushes, serialized
-custom brush families, owned triangle/outline snapshots, point hit testing and Android input
-blobs. This is an experimental source-checkout module; it is **not included in `0.1.0-alpha.1`**.
+`byteink-portable` supplies a common JVM/Wasm API for ViveNotes brushes, stored strokes, erase
+masks, move/resize operations and page replay. Its Wasm adapter calls `byteink-wasm`, which runs
+the pinned Google Ink C++ engine in a browser or Node. Both preview modules are experimental
+source-checkout artifacts; they are **not included in `0.1.0-alpha.1`**.
 
-The existing `byteink-core`, `byteink-kit` and `byteink-compose` artifacts remain JVM libraries.
-The Wasm API lives in `com.vivenotes.byteink.wasm`. It does not yet supply the desktop kit's
-stored-row/operation replay APIs, Compose renderers or production browser pen adapter.
+The existing JVM APIs and coordinates remain available. Portable settings and stored-row types
+retain their `com.vivenotes.byteink.kit` package and are re-exported from `byteink-model`.
+The facade lives in `com.vivenotes.byteink.portable`; the lower-level live/finished engine API
+lives in `com.vivenotes.byteink.wasm`. Compose/Wasm rendering and a production browser pen
+adapter remain planned.
 
 ## Prepare the preview artifacts
 
@@ -16,7 +18,11 @@ From a ByteInk checkout on Linux, with a JDK, CMake, Ninja, Python and Node 22+ 
 ```sh
 native/setup-wasm.sh
 native/build-wasm.sh
-./gradlew -PbyteinkWasm=true :byteink-wasm:publishAllPublicationsToBuildRepository
+./gradlew -PbyteinkWasm=true \
+  :byteink-model:publishAllPublicationsToBuildRepository \
+  :byteink-portable:publishKotlinMultiplatformPublicationToBuildRepository \
+  :byteink-portable:publishWasmJsPublicationToBuildRepository \
+  :byteink-wasm:publishAllPublicationsToBuildRepository
 ```
 
 `JAVA_HOME` must point to the JDK for the native build. The scripts download the pinned SDK and
@@ -28,8 +34,8 @@ Add the checkout's `build/repo` Maven repository to your consumer's settings, th
 ```kotlin
 kotlin {
     wasmJs { browser() }
-    sourceSets.wasmJsMain.dependencies {
-        implementation("com.vivenotes.byteink:byteink-wasm:0.1.0-SNAPSHOT")
+    sourceSets.commonMain.dependencies {
+        implementation("com.vivenotes.byteink:byteink-portable:0.1.0-SNAPSHOT")
     }
 }
 ```
@@ -45,9 +51,86 @@ Serve `.wasm` as `application/wasm` and `.mjs` as JavaScript. Use HTTP(S), inclu
 development; a browser cannot load the module from a local `file:` page. The initial backend is
 single-threaded and does not require cross-origin isolation or `SharedArrayBuffer`.
 
-## Create, save and reload
+## Shared brushes, stored rows and replay
 
-Load the engine once from a coroutine, using an absolute URL or an origin-relative path:
+Initialize one backend per application, then pass the `InkEngine` to common application code:
+
+```kotlin
+// wasmJsMain, from a coroutine:
+val engine = WasmInkEngine.load("/ink/byteink-engine.mjs")
+// jvmMain: val engine = JvmInkEngine()
+```
+
+The following code uses only common APIs:
+
+```kotlin
+import com.vivenotes.byteink.kit.*
+import com.vivenotes.byteink.portable.*
+
+val kit = InkKit(engine)
+val pen = PenPreset(kind = PenKind.Calligraphy, thickness = 4f, pressure = 3, stabilization = 2)
+val row = engine.createStroke(InkStyle.forPen(pen), listOf(
+    InkSample(10f, 30f, 0, InkTool.STYLUS, pressure = 0.3f),
+    InkSample(90f, 30f, 80, InkTool.STYLUS, pressure = 0.8f),
+)).use { stroke ->
+    kit.encode(stroke, pageId = "page", seq = 0, pen = pen)
+}
+
+val erase = kit.reloadedEraseMask(listOf(
+    InkSample(50f, 0f, 0), InkSample(50f, 60f, 60),
+), sizeDp = 10f)!!.use { mask ->
+    kit.encodeErase(mask, id = "cut", pageId = "page", mode = InkEraseMode.Normal,
+        createdAt = row.createdAt + 1, targetIds = listOf(row.id))
+}
+
+kit.load("page", strokes = listOf(row), erases = listOf(erase)).use { page ->
+    for (projection in page.strokes) {
+        val geometry = projection.stroke.geometry()
+        val strokeToPage = projection.transform
+        // Render each piece with this transform. Persist the original rows and operations.
+    }
+    check(page.storedStrokes.single() == row)
+}
+```
+
+`InkStyle.forPen` shares Android's solid/dashed/dotted selection, calligraphy levels 0–5 and
+stabilization windows 0/20/40/60/90/120 ms. `InkStyle.forHighlighter(HighlighterSettings())`
+preserves alpha and DISCARD self overlap. Unknown family IDs retain the pressure-pen fallback;
+captured metadata keeps the original ID and unclamped setting values.
+
+`encode` generates a UUIDv7 row ID. `encodeStroke` accepts application-owned IDs and timestamps;
+`encodeCopy` preserves the source's family/version/stabilization/theme metadata. The returned
+`StoredInkStroke`, `StoredInkErase` and `StoredInkMove` map to the same Android database fields
+as the JVM kit. Applications still own their database, transactions, target IDs and undo history.
+
+`encodeMove(InkLassoMove(...))` and `encodeResize(InkLassoResize(...))` write Android's
+`ink/lasso-f32le1` path format. Replay applies operations by creation time and ID, targets only
+their recorded row IDs, tests the lasso against current pieces, and clamps movement/resize at
+the page origin. A combined move/resize selects again after translation. A Normal erase splits
+opaque strokes into pieces; DISCARD highlighters remain one projection. An Object erase removes
+only touched pieces, or the whole highlighter. Tombstoning an operation and reloading undoes it.
+The order returned by the native split within one row is unspecified.
+
+`InkPage` owns its source and replayed strokes. `strokes` and `sourceStrokes` borrow those
+handles; call `stroke.copy()` for an independent owner that must outlive the page. Close copied
+strokes and pages explicitly. Wasm closes the C++ owner immediately; the JVM adapter releases its
+reference and AndroidX's native owner remains subject to garbage collection. Geometry arrays are
+copied snapshots and survive close. `nativeStroke` on each adapter provides a borrowed backend
+handle for platform rendering; keep its portable owner open and close only the owner.
+Both adapters expose native point/box coverage and transformed stroke intersection queries.
+
+Loading keeps snapshots of all supplied records, including tombstones, unreadable encodings,
+unknown brush metadata and operations it cannot apply. Inspect `unreadable` and
+`ignoredOperations` for diagnostics. Stored records remain available after page close. Retain
+unknown database columns in application storage too. Decoding is not a lossless storage rewrite:
+do not replace original input blobs with re-encoded ones or bake erased geometry into an input
+row, since input encoding does not contain the erase cuts.
+
+## Lower-level live and finished strokes
+
+Use `byteink-wasm` directly when you need its live authoring API or arbitrary serialized families.
+It is also a transitive dependency of the Wasm portable facade. Load the engine once from a
+coroutine, using an absolute URL or an origin-relative path:
 
 ```kotlin
 import com.vivenotes.byteink.wasm.*
@@ -79,8 +162,8 @@ the private zero animation phase field. Decoding checks the gzip CRC and bounds 
 64 MiB; trailing bytes and truncated streams are rejected.
 
 Encoding quantizes inputs, as on desktop and Android. Keep existing stored bytes and unknown
-row fields in application storage; decoding is not a lossless storage rewrite. The preview does
-not encode complete ViveNotes rows, erasure operations or transforms.
+row fields in application storage; decoding is not a lossless storage rewrite. Use the shared
+`InkKit` above for complete ViveNotes rows and operation replay.
 
 ## Live input
 
@@ -126,6 +209,7 @@ Closing without finishing cancels the gesture.
 | `InkMesh.triangles` | Three indices per triangle; `triangleCount` equals array length / 3. |
 | `InkStroke.inputs()` | Owned input values. Optional attribute presence is preserved; encoded inputs may have quantized coordinates/times. |
 | `InkStroke.contains(x, y)` | Native triangle intersection in stroke coordinates; false for an empty shape. |
+| `InkStroke.coverage(left, top, right, bottom)` | Native box coverage in stroke coordinates; zero for an empty shape. The portable stroke takes an `InkBounds` instead. |
 | `close()` | Releases the C++ owner; repeated close is safe. Other methods fail after close. |
 
 The engine validates time ordering, tool consistency and optional attribute consistency across
@@ -147,17 +231,22 @@ Build the Kotlin/Wasm example from the checkout:
 python3 -m http.server 8080 --directory samples/wasm/build/dist/wasmJs/productionExecutable
 ```
 
-Open `http://localhost:8080`. The example draws pen/highlighter outlines and supports save/reload,
-cancel and clear. It is a minimal single-pointer adapter; pressure/tilt normalization, coalesced
-events, browser prediction and simultaneous contacts remain planned.
+Open `http://localhost:8080`. The example draws pen/highlighter outlines and supports partial
+erase, Object erase, moving ink, operation undo, stored-row reload, cancel and clear. It uses
+`InkKit.load` for every replay. It is a minimal single-pointer adapter; pressure/tilt normalization,
+coalesced events, browser prediction and simultaneous contacts remain planned.
 
 The native-backed Kotlin tests and Chromium consumer checks cover loading, authoring, prediction
 replacement, finishing, hit testing, ownership and Android input reload. All 840 committed Android
 input fixtures re-encode to identical gzip bytes. Their closed boundaries, vertex counts/positions
 and native coverage probes match within the existing float tolerance; the largest measured
-coordinate difference is about 0.000023 stroke units.
+coordinate difference is about 0.000023 stroke units. The same common facade contract runs
+against JVM and Wasm: all 280 Android pages replay their erase/move/resize records into 891
+projections, with matching family protobufs, bounds/transforms and spatial geometry. Ownership,
+unknown-data retention, tombstones and invalid-data handling are also checked. Chromium checks
+operation reload and undo at desktop and phone widths.
 
 **Buffer order differs:** 28 width-20 marker fixtures have reindexed/retriangulated caps and a
 cyclic change of contour start. Counts, vertex positions, oriented closed boundaries and coverage
 match, but direct triangle-index/contour-start parity is not established. No full mesh shader,
-Android pixel equivalence, operation replay or physical input latency claim is made for Wasm.
+Android pixel equivalence or physical input latency claim is made for Wasm.

@@ -6,8 +6,6 @@ import androidx.ink.strokes.StrokeInputBatch
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.UUID
 import java.util.zip.GZIPInputStream
 
@@ -296,27 +294,10 @@ public object ViveInkCodec {
         )
 
     /** A move row's lasso path, or null if it is not one: another encoding, fewer than three points, or damaged. */
-    public fun decodeMove(row: StoredInkMove): List<InkPoint>? {
-        if (row.enc != MOVE_ENCODING) return null
-        return readOrNull {
-            val buffer = ByteBuffer.wrap(row.points).order(ByteOrder.LITTLE_ENDIAN)
-            val count = buffer.int
-            require(count >= 3 && buffer.remaining() == count * 2 * Float.SIZE_BYTES)
-            List(count) {
-                InkPoint(buffer.float, buffer.float).also { point -> require(point.x.isFinite() && point.y.isFinite()) }
-            }
-        }
-    }
+    public fun decodeMove(row: StoredInkMove): List<InkPoint>? =
+        if (row.enc == MOVE_ENCODING) InkMoveCodec.decodePath(row.points) else null
 
-    private fun encodePath(path: List<InkPoint>): ByteArray {
-        require(path.size >= 3) { "A lasso needs at least three points" }
-        require(path.all { it.x.isFinite() && it.y.isFinite() }) { "Lasso points must be finite" }
-        return ByteBuffer.allocate(Int.SIZE_BYTES + path.size * 2 * Float.SIZE_BYTES)
-            .order(ByteOrder.LITTLE_ENDIAN)
-            .putInt(path.size)
-            .apply { path.forEach { point -> putFloat(point.x).putFloat(point.y) } }
-            .array()
-    }
+    private fun encodePath(path: List<InkPoint>): ByteArray = InkMoveCodec.encodePath(path)
 
     internal fun encodeInputs(inputs: StrokeInputBatch): ByteArray {
         // Keep the real engine's delta-coded protobuf. The pinned Android binary additionally

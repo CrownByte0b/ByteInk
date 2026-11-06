@@ -15,7 +15,7 @@ const createStroke = (family = 0, inputs = samples) => engine.createStroke(famil
 const empty = new Float64Array();
 
 test('loads the pinned engine and authors all four version 1 stock brushes', () => {
-    assert.equal(engine.abiVersion(), 1);
+    assert.equal(engine.abiVersion(), 2);
     assert.equal(engine.engineCommit(), commit);
     for (let family = 0; family < 4; ++family) {
         const stroke = createStroke(family);

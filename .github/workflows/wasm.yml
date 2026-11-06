@@ -43,8 +43,16 @@ jobs:
       - name: Verify Kotlin/Wasm and stage preview artifacts
         run: |
           source native/build/emsdk/emsdk_env.sh
-          ./gradlew -PbyteinkWasm=true :byteink-wasm:wasmJsNodeTest \
+          ./gradlew -PbyteinkWasm=true :byteink-wasm:wasmJsNodeTest :byteink-model:wasmJsNodeTest \
+            :byteink-portable:wasmJsNodeTest :byteink-model:publishAllPublicationsToBuildRepository \
+            :byteink-portable:publishKotlinMultiplatformPublicationToBuildRepository \
+            :byteink-portable:publishWasmJsPublicationToBuildRepository \
             :byteink-wasm:publishAllPublicationsToBuildRepository :samples:wasm:wasmJsBrowserDistribution
+      - name: Verify an independent published Wasm consumer
+        run: |
+          source native/build/emsdk/emsdk_env.sh
+          export BYTEINK_WASM_ENGINE="$(python -c 'from pathlib import Path; pins = dict(line.split("=", 1) for line in Path("upstream/pins.properties").read_text().splitlines() if line and not line.startswith("#")); print(Path("native/build/out", pins["google.ink.commit"], "wasm/byteink-engine.mjs").resolve().as_uri())')"
+          ./gradlew -p consumer-tests/wasm-fixture wasmJsNodeDevelopmentRun
       - name: Exercise the actual browser consumer
         run: |
           python -m pip install playwright==1.63.0
@@ -59,6 +67,12 @@ jobs:
             byteink-wasm/build/distributions/
             byteink-wasm/build/reports/
             byteink-wasm/build/test-results/
+            byteink-portable/build/reports/
+            byteink-portable/build/test-results/
+            byteink-model/build/reports/
+            byteink-model/build/test-results/
             build/wasm-browser/
             build/repo/com/vivenotes/byteink/byteink-wasm*/
+            build/repo/com/vivenotes/byteink/byteink-portable*/
+            build/repo/com/vivenotes/byteink/byteink-model*/
           if-no-files-found: error

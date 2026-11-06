@@ -40,7 +40,7 @@ val wasmEngineZip = tasks.register<Zip>("wasmEngineZip") {
 publishing.publications.withType<MavenPublication>().configureEach {
     pom.description = "The pinned Google Ink stroke engine for Kotlin/Wasm browser and Node applications."
     pom.properties.set(pom.properties.get().filterKeys { it != "byteink.jvm.target" } + mapOf(
-        "byteink.wasm.bridge.abi" to "1",
+        "byteink.wasm.bridge.abi" to "2",
         "byteink.wasm.emscripten.version" to upstreamPins().get().getProperty("wasm.emscripten.version"),
     ))
     if (name == "kotlinMultiplatform") artifact(wasmEngineZip)
@@ -51,7 +51,7 @@ kotlin {
     explicitApi()
     sourceSets {
         wasmJsMain { kotlin.srcDir(generateWasmMetadata.flatMap { it.directory }) }
-        wasmJsMain.dependencies { implementation(libs.kotlinx.coroutines.core) }
+        wasmJsMain.dependencies { implementation(libs.kotlinx.coroutines.core); api(project(":byteink-model")) }
         wasmJsTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)

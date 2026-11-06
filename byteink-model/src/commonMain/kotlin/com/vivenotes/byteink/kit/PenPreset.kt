@@ -33,7 +33,7 @@ public data class PenPreset(
         public const val MIN_THICKNESS: Float = 1f
         public const val MAX_THICKNESS: Float = 8f
         public const val THICKNESS_STEP: Float = 0.5f
-        public const val MAX_PRESSURE: Int = ViveBrushes.MAX_CALLIGRAPHY_PRESSURE
-        public const val MAX_STABILIZATION: Int = ViveBrushes.MAX_STABILIZATION
+        public const val MAX_PRESSURE: Int = InkBrushCatalog.MAX_CALLIGRAPHY_PRESSURE
+        public const val MAX_STABILIZATION: Int = InkBrushCatalog.MAX_STABILIZATION
     }
 }

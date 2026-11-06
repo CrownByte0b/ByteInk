@@ -47,6 +47,8 @@ class PublishedConsumerSmokeTest {
             "-PbyteinkVersion=${property("version")}",
             "-PbyteinkNativeLoaderVersion=${property("nativeloaderVersion")}",
         )
+        val portable = System.getProperty("byteink.test.portable") == "true"
+        if (portable) arguments += listOf("portableSmoke", "-PbyteinkPortable=true")
         val included = if (composite) temporary.newFolder("byteink") else null
         if (composite) {
             // Deliberately omit the local Maven repository. Every ByteInk module must come from the
@@ -66,7 +68,11 @@ class PublishedConsumerSmokeTest {
         }
         reports.resolve("gradle.log").writeText(result.output)
         assertContains(result.output, "byteink-consumer-smoke: passed")
-        for (module in listOf("byteink-core", "byteink-compose", "byteink-kit", "ink-nativeloader")) {
+        if (portable) {
+            assertContains(result.output, "byteink-portable-consumer: passed")
+            assertContains(result.output, "byteink-consumer-component: byteink-portable=" + if (composite) "project" else "published")
+        }
+        for (module in listOf("byteink-core", "byteink-model", "byteink-compose", "byteink-kit", "ink-nativeloader")) {
             assertContains(result.output, "byteink-consumer-component: $module=" + if (composite) "project" else "published")
         }
         val report = Properties().apply { reports.resolve("smoke.properties").inputStream().use { load(it) } }

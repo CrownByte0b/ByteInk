@@ -12,7 +12,7 @@ kotlin {
     wasmJs { binaries.executable() }
     sourceSets.wasmJsMain {
         dependencies {
-            implementation(project(":byteink-wasm"))
+            implementation(project(":byteink-portable"))
             implementation(libs.kotlinx.coroutines.core)
         }
         resources.srcDir(engineDirectory)

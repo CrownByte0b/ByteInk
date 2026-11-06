@@ -22,9 +22,11 @@
 <body>
   <main>
     <h1>ByteInk on WebAssembly</h1>
-    <p>Draw on the page. Save and reload rebuilds the strokes from their Android input blobs.</p>
+    <p>Draw, erase or move ink. Save and reload replays the stored strokes and operations.</p>
     <nav aria-label="Drawing tools">
-      <label>Tool <select id="tool"><option value="marker">Pen</option><option value="highlighter">Highlighter</option></select></label>
+      <label>Tool <select id="tool"><option value="marker">Pen</option><option value="highlighter">Highlighter</option><option value="erase">Partial eraser</option><option value="object">Object eraser</option></select></label>
+      <button id="move" disabled>Move ink right</button>
+      <button id="undo" disabled>Undo operation</button>
       <button id="reload" disabled>Save and reload</button>
       <button id="clear" disabled>Clear page</button>
     </nav>

@@ -25,7 +25,15 @@ internal external interface NativeStroke : JsAny {
     fun inputs(): NativeNumbers
     fun encodeInputs(): NativeNumbers
     fun encodeAndroidInputs(): NativeNumbers
+    fun bounds(): NativeNumbers?
+    fun copy(): NativeStroke
+    fun intersects(other: NativeStroke, thisToPage: NativeNumbers, otherToPage: NativeNumbers): Boolean
+    fun subtract(mask: NativeStroke, thisToPage: NativeNumbers): NativeStroke
+    fun split(thisToPage: NativeNumbers): JsArray<NativeStroke>
+    fun touchesTriangle(points: NativeNumbers, thisToPage: NativeNumbers): Boolean
+    fun overlapsPolygon(points: NativeNumbers, thisToPage: NativeNumbers): Boolean
     fun contains(x: Float, y: Float): Boolean
+    fun coverage(left: Float, top: Float, right: Float, bottom: Float): Float
     fun delete()
 }
 
@@ -42,6 +50,7 @@ internal external interface NativeLive : JsAny {
 internal external interface NativeModule : JsAny {
     fun abiVersion(): Int
     fun engineCommit(): String
+    fun catalogFamily(kind: Int, pressure: Int, windowMillis: Int, minSize: Float, maxSize: Float): NativeNumbers
     fun createStroke(family: Int, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke
     fun decodeStroke(family: Int, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke
     fun createStrokeWithFamily(family: NativeNumbers, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke
@@ -60,6 +69,17 @@ internal fun numberArray(length: Int): NativeNumbers = js("new Float64Array(leng
 internal fun byteArray(length: Int): NativeNumbers = js("new Uint8Array(length)")
 internal fun numberAt(array: NativeNumbers, index: Int): Double = js("array[index]")
 internal fun setNumber(array: NativeNumbers, index: Int, value: Double): Unit = js("{ array[index] = value; }")
+internal fun isDataError(value: kotlin.js.JsAny?): Boolean = js("value != null && value.name === 'ByteInkDataError'")
+internal inline fun <T> dataOperation(block: () -> T): T = try { block() } catch (error: kotlin.js.JsException) {
+    if (isDataError(error.thrownValue)) throw IllegalArgumentException(error.message, error)
+    throw error
+}
+
+internal fun FloatArray.nativeNumbers(): NativeNumbers {
+    val values = numberArray(size)
+    forEachIndexed { i, value -> setNumber(values, i, value.toDouble()) }
+    return values
+}
 
 internal fun ByteArray.nativeBytes(): NativeNumbers {
     require(size <= 64 * 1024 * 1024) { "Protobuf exceeds 64 MiB" }

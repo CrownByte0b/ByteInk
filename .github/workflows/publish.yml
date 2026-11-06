@@ -114,6 +114,7 @@ jobs:
           :upstream:checkLinuxArm64Library :upstream:checkWindowsArm64Library
           :ink-nativeloader:publishAllPublicationsToGitHubPackagesRepository
           :byteink-core:publishAllPublicationsToGitHubPackagesRepository
+          :byteink-model:publishAllPublicationsToGitHubPackagesRepository
           :byteink-kit:publishAllPublicationsToGitHubPackagesRepository
           :byteink-compose:publishAllPublicationsToGitHubPackagesRepository
           :byteink-testing:publishAllPublicationsToGitHubPackagesRepository
@@ -126,6 +127,7 @@ jobs:
           :upstream:checkLinuxArm64Library :upstream:checkWindowsArm64Library
           :ink-nativeloader:publishAllPublicationsToBuildRepository
           :byteink-core:publishAllPublicationsToBuildRepository
+          :byteink-model:publishAllPublicationsToBuildRepository
           :byteink-kit:publishAllPublicationsToBuildRepository
           :byteink-compose:publishAllPublicationsToBuildRepository
           :byteink-testing:publishAllPublicationsToBuildRepository

@@ -78,6 +78,37 @@ def main():
                     assert reloaded > marker_pixels + 1000
                     page.screenshot(path=str(args.output / f"drawing-{width}.png"), full_page=True)
 
+                    def alpha_at(x, y):
+                        return canvas.evaluate("(canvas, point) => canvas.getContext('2d').getImageData(point[0], point[1], 1, 1).data[3]", [x, y])
+
+                    page.click("#move")
+                    assert alpha_at(100, 260) == 0
+                    assert alpha_at(200, 260) == 0x66
+                    moved = pixels()
+                    page.click("#reload")
+                    assert pixels() == moved
+                    assert "1 operations" in page.locator("#status").inner_text()
+                    page.click("#undo")
+                    assert pixels() == reloaded
+
+                    page.select_option("#tool", "erase")
+                    draw([(200, 220), (200, 300)])
+                    assert alpha_at(200, 260) == 0
+                    assert alpha_at(100, 260) == 0x66
+                    cut = pixels()
+                    page.click("#reload")
+                    assert pixels() == cut
+                    page.select_option("#tool", "object")
+                    draw([(100, 260), (100, 260)])
+                    assert alpha_at(100, 260) == 0
+                    assert pixels() < cut
+                    page.click("#undo")
+                    assert pixels() == cut
+                    page.click("#undo")
+                    assert pixels() == reloaded
+                    page.click("#reload")
+                    assert pixels() == reloaded
+
                     # A cancelled pointer gesture must not become another saved stroke.
                     page.mouse.move(*position(500, 400))
                     page.mouse.down()
@@ -91,6 +122,8 @@ def main():
                     assert not errors, errors
                     results.append({"width": width, "marker_pixels": marker_pixels, "combined_pixels": visible,
                                     "reloaded_pixels": reloaded, "highlighter_alpha": alpha,
+                                    "move_reload_undo": True, "partial_erase_reload_undo": True,
+                                    "object_erase_undo": True,
                                     "cancel_preserved_stroke_count": True, "clear_pixels": 0})
                     page.close()
             finally:

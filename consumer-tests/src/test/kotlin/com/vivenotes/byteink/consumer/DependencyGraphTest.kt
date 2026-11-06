@@ -41,7 +41,7 @@ class DependencyGraphTest {
 
     @Test
     fun byteinkKitBringsTheCoreWithIt() {
-        assertEquals(coreClasspath + "byteink-kit-$byteink.jar", inkJars(resolve("kit")))
+        assertEquals(coreClasspath + setOf("byteink-kit-$byteink.jar", "byteink-model-jvm-$byteink.jar"), inkJars(resolve("kit")))
     }
 
     @Test

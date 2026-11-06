@@ -52,9 +52,13 @@ tasks.test {
     dependsOn(
         ":ink-nativeloader:publishAllPublicationsToBuildRepository",
         ":byteink-core:publishAllPublicationsToBuildRepository",
+        ":byteink-model:publishAllPublicationsToBuildRepository",
         ":byteink-kit:publishAllPublicationsToBuildRepository",
         ":byteink-compose:publishAllPublicationsToBuildRepository",
     )
+    val portable = rootProject.findProject(":byteink-portable") != null
+    systemProperty("byteink.test.portable", portable)
+    if (portable) dependsOn(":byteink-portable:publishAllPublicationsToBuildRepository")
     systemProperty("byteink.test.repository", rootProject.layout.buildDirectory.dir("repo").get().asFile.path)
     systemProperty("byteink.test.group", publishedGroup)
     systemProperty("byteink.test.version", publishedVersion)

@@ -50,6 +50,7 @@ include(":upstream")
 // Published library modules; each build file says what it holds.
 include(":ink-nativeloader")
 include(":byteink-core")
+include(":byteink-model")
 include(":byteink-compose")
 include(":byteink-kit")
 include(":byteink-testing")
@@ -57,6 +58,8 @@ include(":byteink-testing")
 if (providers.gradleProperty("byteinkWasm").orNull == "true") {
     include(":byteink-wasm", ":samples:wasm")
 }
+if (providers.gradleProperty("byteinkWasm").orNull == "true" || providers.gradleProperty("byteinkPortable").orNull == "true")
+    include(":byteink-portable")
 
 // Unpublished verification and sample code.
 include(":conformance")

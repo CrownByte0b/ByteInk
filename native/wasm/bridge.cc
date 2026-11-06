@@ -17,8 +17,12 @@
 #include "ink/brush/stock_brushes.h"
 #include "ink/color/color.h"
 #include "ink/geometry/angle.h"
+#include "ink/geometry/affine_transform.h"
+#include "ink/geometry/internal/polyline_processing.h"
 #include "ink/geometry/partitioned_mesh.h"
 #include "ink/geometry/rect.h"
+#include "ink/geometry/tessellator.h"
+#include "ink/geometry/triangle.h"
 #include "ink/storage/brush.h"
 #include "ink/storage/proto/stroke_input_batch.pb.h"
 #include "ink/storage/stroke_input_batch.h"
@@ -32,13 +36,16 @@ constexpr size_t kInputStride = 8;
 constexpr size_t kMaxInputs = 1'000'000;
 constexpr size_t kMaxProtoBytes = 64 * 1024 * 1024;
 
-[[noreturn]] void Fail(const std::string& message) {
-  val::global("Error").new_(message).throw_();
+[[noreturn]] void Fail(const std::string& message, bool data_error = true) {
+  auto error = val::global("Error").new_(message);
+  error.set("name", std::string(data_error ? "ByteInkDataError" : "ByteInkEngineError"));
+  error.throw_();
   std::abort();
 }
 
 void Check(const absl::Status& status) {
-  if (!status.ok()) Fail(status.ToString());
+  if (!status.ok()) Fail(status.ToString(), status.code() == absl::StatusCode::kInvalidArgument ||
+      status.code() == absl::StatusCode::kFailedPrecondition || status.code() == absl::StatusCode::kOutOfRange);
 }
 
 template <typename T>
@@ -65,17 +72,17 @@ val EncodeAndroid(const ink::StrokeInputBatch& inputs) {
   std::string bytes = EncodeProto(inputs);
   bytes.append("\x55\0\0\0\0", 5);
   z_stream stream{};
-  if (deflateInit2(&stream, 6, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY) != Z_OK) Fail("Cannot initialize gzip");
+  if (deflateInit2(&stream, 6, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY) != Z_OK) Fail("Cannot initialize gzip", false);
   struct End { z_stream* s; ~End() { deflateEnd(s); } } end{&stream};
   gz_header header{};
   header.os = 255;
-  if (deflateSetHeader(&stream, &header) != Z_OK) Fail("Cannot initialize gzip header");
+  if (deflateSetHeader(&stream, &header) != Z_OK) Fail("Cannot initialize gzip header", false);
   std::string output(deflateBound(&stream, bytes.size()), '\0');
   stream.next_in = reinterpret_cast<Bytef*>(bytes.data());
   stream.avail_in = bytes.size();
   stream.next_out = reinterpret_cast<Bytef*>(output.data());
   stream.avail_out = output.size();
-  if (deflate(&stream, Z_FINISH) != Z_STREAM_END) Fail("Cannot finish gzip");
+  if (deflate(&stream, Z_FINISH) != Z_STREAM_END) Fail("Cannot finish gzip", false);
   output.resize(stream.total_out);
   return ByteArray(output);
 }
@@ -100,7 +107,7 @@ ink::StrokeInputBatch DecodeAndroid(const val& bytes) {
   if (bytes["length"].as<size_t>() > kMaxProtoBytes) Fail("Input gzip exceeds 64 MiB");
   auto data = emscripten::convertJSArrayToNumberVector<uint8_t>(bytes);
   z_stream stream{};
-  if (inflateInit2(&stream, 31) != Z_OK) Fail("Cannot initialize gzip decoder");
+  if (inflateInit2(&stream, 31) != Z_OK) Fail("Cannot initialize gzip decoder", false);
   struct End { z_stream* s; ~End() { inflateEnd(s); } } end{&stream};
   stream.next_in = data.data();
   stream.avail_in = data.size();
@@ -114,6 +121,7 @@ ink::StrokeInputBatch DecodeAndroid(const val& bytes) {
     stream.next_out = output.data() + offset;
     stream.avail_out = chunk;
     status = inflate(&stream, Z_NO_FLUSH);
+    if (status == Z_MEM_ERROR) Fail("Cannot allocate gzip decoder storage", false);
     if (status != Z_OK && status != Z_STREAM_END) Fail("Invalid or truncated input gzip");
     output.resize(offset + chunk - stream.avail_out);
   } while (status != Z_STREAM_END);
@@ -191,6 +199,59 @@ ink::Brush MakeBrush(const val& encoded_family, uint32_t argb, float size, float
   return MakeBrush(*family, argb, size, epsilon);
 }
 
+val CatalogFamily(int kind, int pressure, int window_millis, float min_size, float max_size) {
+  if (kind < 0 || kind > 4 || pressure < 0 || pressure > 5 || window_millis < -1 || window_millis > 120 ||
+      !std::isfinite(min_size) || !std::isfinite(max_size)) Fail("Invalid catalog definition");
+  ink::BrushFamily family;
+  if (kind == 4) {
+    using B = ink::BrushBehavior;
+    std::vector<B> behaviors;
+    if (pressure != 0) {
+      auto behavior = [&](B::Source source, float end, float low, float high, B::EnabledToolTypes tools,
+                          std::string comment) {
+        return B{.nodes = {
+            B::SourceNode{.source = source, .source_value_range = {0.f, end}},
+            B::DampingNode{.damping_source = B::ProgressDomain::kDistanceInMultiplesOfBrushSize, .damping_gap = .75f},
+            B::ToolTypeFilterNode{.enabled_tool_types = tools},
+            B::TargetNode{.target = B::Target::kSizeMultiplier, .target_modifier_range = {low, high}}},
+            .developer_comment = std::move(comment)};
+      };
+      behaviors.push_back(behavior(B::Source::kNormalizedPressure, 1, min_size, max_size, {.stylus = true},
+          "Stylus pressure flex for calligraphy level " + std::to_string(pressure) + "."));
+      behaviors.push_back(behavior(B::Source::kSpeedInMultiplesOfBrushSizePerSecond, 20, max_size, min_size,
+          {.unknown = true, .mouse = true, .touch = true},
+          "Speed fallback for calligraphy level " + std::to_string(pressure) + "."));
+    }
+    auto result = ink::BrushFamily::Create(
+        ink::BrushTip{.scale = {1.f, .22f}, .corner_rounding = .2f, .rotation = ink::Angle::Degrees(45),
+                      .behaviors = std::move(behaviors)}, ink::BrushPaint{}, ink::BrushFamily::DefaultInputModel(),
+        {.developer_comment = "ViveNotes calligraphy v1: fixed 45-degree broad nib, pressure level " + std::to_string(pressure) + "."});
+    if (!result.ok()) Fail(result.status().ToString());
+    family = *std::move(result);
+  } else family = MakeBrush(kind, 0xff000000, 4, .25f).GetFamily();
+  if (window_millis >= 0) {
+    ink::BrushFamily::InputModel model = ink::BrushFamily::PassthroughModel{};
+    if (window_millis > 0) model = ink::BrushFamily::SlidingWindowModel{
+        .window_size = ink::Duration32::Millis(window_millis), .upsampling_period = ink::Duration32::Seconds(1) / 180.f};
+    auto result = ink::BrushFamily::Create(family.GetCoats(), model, family.GetMetadata());
+    if (!result.ok()) Fail(result.status().ToString());
+    family = *std::move(result);
+  }
+  ink::proto::BrushFamily proto;
+  ink::EncodeBrushFamily(family, proto);
+  return ByteArray(proto.SerializeAsString());
+}
+
+ink::AffineTransform Transform(const val& values) {
+  if (values["length"].as<size_t>() != 4) Fail("Invalid page transform length");
+  auto v = emscripten::convertJSArrayToNumberVector<float>(values);
+  for (float value : v) if (!std::isfinite(value)) Fail("Non-finite page transform");
+  if (v[0] <= 0 || v[1] <= 0) Fail("Page scales must be positive");
+  ink::AffineTransform transform(v[0], 0, v[2], 0, v[1], v[3]);
+  if (!transform.Inverse()) Fail("Non-invertible page transform");
+  return transform;
+}
+
 template <typename Mesh>
 val MeshSnapshot(const Mesh& mesh) {
   std::vector<float> positions;
@@ -241,6 +302,52 @@ class WasmStroke {
   val Inputs() const { return InputArray(stroke_.GetInputs()); }
   val EncodeInputs() const { return Encode(stroke_.GetInputs()); }
   val EncodeAndroidInputs() const { return EncodeAndroid(stroke_.GetInputs()); }
+  val Bounds() const {
+    auto bounds = stroke_.GetShape().Bounds().AsRect();
+    if (!bounds) return val::null();
+    return CopyArray(std::vector<float>{bounds->XMin(), bounds->YMin(), bounds->XMax(), bounds->YMax()}, "Float32Array");
+  }
+  std::unique_ptr<WasmStroke> Copy() const { return std::make_unique<WasmStroke>(stroke_); }
+  bool Intersects(const WasmStroke& other, const val& this_to_page, const val& other_to_page) const {
+    auto transform = *Transform(this_to_page).Inverse() * Transform(other_to_page);
+    if (stroke_.GetShape().Bounds().IsEmpty() || other.stroke_.GetShape().Bounds().IsEmpty()) return false;
+    return stroke_.GetShape().CoverageIsGreaterThan(other.stroke_.GetShape(), 0.f, transform);
+  }
+  std::unique_ptr<WasmStroke> Subtract(const WasmStroke& mask, const val& this_to_page) const {
+    return std::make_unique<WasmStroke>(stroke_.Subtract(mask.stroke_.GetShape(), {}, Transform(this_to_page)));
+  }
+  val Split(const val& this_to_page) const {
+    auto result = val::array();
+    uint32_t i = 0;
+    for (auto& stroke : stroke_.Split(Transform(this_to_page), 0.f))
+      result.set(i++, val(std::make_unique<WasmStroke>(std::move(stroke))));
+    return result;
+  }
+  bool TouchesTriangle(const val& points, const val& this_to_page) const {
+    if (points["length"].as<size_t>() != 6) Fail("A triangle needs three points");
+    auto p = emscripten::convertJSArrayToNumberVector<float>(points);
+    for (float value : p) if (!std::isfinite(value)) Fail("Non-finite triangle");
+    if (stroke_.GetShape().Bounds().IsEmpty()) return false;
+    return stroke_.GetShape().CoverageIsGreaterThan(ink::Triangle{{p[0], p[1]}, {p[2], p[3]}, {p[4], p[5]}}, 0.f,
+                                                    *Transform(this_to_page).Inverse());
+  }
+  bool OverlapsPolygon(const val& coordinates, const val& this_to_page) const {
+    const size_t count = coordinates["length"].as<size_t>();
+    if (count < 6 || count % 2 || count > kMaxInputs * 2) Fail("Invalid polygon length");
+    auto values = emscripten::convertJSArrayToNumberVector<float>(coordinates);
+    std::vector<ink::Point> points;
+    for (size_t i = 0; i < values.size(); i += 2) {
+      if (!std::isfinite(values[i]) || !std::isfinite(values[i + 1])) Fail("Non-finite polygon");
+      ink::Point point{values[i], values[i + 1]};
+      if (points.empty() || point != points.back()) points.push_back(point);
+    }
+    if (points.front() != points.back()) points.push_back(points.front());
+    auto mesh = ink::CreateMeshFromPolyline(ink::geometry_internal::CreateClosedShape(points));
+    if (!mesh.ok() || stroke_.GetShape().Bounds().IsEmpty()) return false;
+    auto region = ink::PartitionedMesh::FromMeshes(absl::MakeSpan(&*mesh, 1));
+    if (!region.ok()) Fail(region.status().ToString());
+    return stroke_.GetShape().CoverageIsGreaterThan(*region, 0.f, *Transform(this_to_page).Inverse());
+  }
   bool Contains(float x, float y) const {
     if (!std::isfinite(x) || !std::isfinite(y)) Fail("Hit point must be finite");
     if (stroke_.GetShape().Bounds().IsEmpty()) return false;
@@ -358,7 +465,7 @@ std::unique_ptr<WasmLiveStroke> StartStrokeWithFamily(const val& family, uint32_
 
 EMSCRIPTEN_BINDINGS(byteink) {
   using namespace byteink::wasm;
-  emscripten::function("abiVersion", +[]() { return 1; });
+  emscripten::function("abiVersion", +[]() { return 2; });
   emscripten::function("engineCommit", +[]() { return std::string(BYTEINK_ENGINE_COMMIT); });
   emscripten::function("createStroke", &CreateStroke);
   emscripten::function("decodeStroke", &DecodeStroke);
@@ -368,11 +475,19 @@ EMSCRIPTEN_BINDINGS(byteink) {
   emscripten::function("decodeAndroidStrokeWithFamily", &DecodeAndroidStrokeWithFamily);
   emscripten::function("startStroke", &StartStroke);
   emscripten::function("startStrokeWithFamily", &StartStrokeWithFamily);
+  emscripten::function("catalogFamily", &CatalogFamily);
   emscripten::class_<WasmStroke>("Stroke")
       .function("geometry", &WasmStroke::Geometry)
       .function("inputs", &WasmStroke::Inputs)
       .function("encodeInputs", &WasmStroke::EncodeInputs)
       .function("encodeAndroidInputs", &WasmStroke::EncodeAndroidInputs)
+      .function("bounds", &WasmStroke::Bounds)
+      .function("copy", &WasmStroke::Copy)
+      .function("intersects", &WasmStroke::Intersects)
+      .function("subtract", &WasmStroke::Subtract)
+      .function("split", &WasmStroke::Split)
+      .function("touchesTriangle", &WasmStroke::TouchesTriangle)
+      .function("overlapsPolygon", &WasmStroke::OverlapsPolygon)
       .function("coverage", &WasmStroke::Coverage)
       .function("contains", &WasmStroke::Contains);
   emscripten::class_<WasmLiveStroke>("LiveStroke")

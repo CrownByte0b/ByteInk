@@ -173,7 +173,7 @@ jobs:
       - name: Build, consumer smoke, full suites and synthetic fidelity comparison
         run: |
           reference="$PWD/linux-reference/byteink-testing/build/desktop-parity"
-          ./gradlew build :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary \
+          ./gradlew build -PbyteinkPortable=true :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary \
             :upstream:checkLinuxArm64Library :upstream:checkWindowsArm64Library \
             :conformance:oracle:oracleProduction :conformance:oracle:installDist \
             :byteink-testing:desktopParityCompare :byteink-testing:androidFidelityMatrix --continue \
