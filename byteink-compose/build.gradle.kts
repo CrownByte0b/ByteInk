@@ -7,6 +7,19 @@ plugins {
     id("byteink.compose")
 }
 
+// The same vertex preparation and fragment shader source is compiled for desktop and Wasm.
+sourceSets.main { kotlin.srcDir("src/shared/kotlin") }
+
+tasks.register<JavaExec>("exportWasmRenderingFixtures") {
+    group = "verification"
+    description = "Exports synthetic desktop brush/PNG controls for browser renderer acceptance."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass = "com.vivenotes.byteink.compose.WasmRenderingFixtureExporter"
+    args(layout.buildDirectory.file("fixtures/wasm-rendering.json").get().asFile.absolutePath)
+    systemProperty("java.awt.headless", "true")
+}
+
 dependencies {
     api(project(":byteink-core"))
     api(libs.compose.runtime)

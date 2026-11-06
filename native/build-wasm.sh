@@ -49,7 +49,7 @@ install -m 644 "$root/ink-nativeloader/src/jvmMain/resources/com/vivenotes/bytei
   echo "google.ink.commit=$commit"
   echo "emscripten.version=$(pin wasm.emscripten.version)"
   echo "emsdk.commit=$(pin wasm.emsdk.commit)"
-  echo "bridge.abi=2"
+  echo "bridge.abi=3"
   echo "bridge.source.sha256=$(sha256sum "$native/wasm/bridge.cc" | cut -d' ' -f1)"
   for patch in "${patches[@]}"; do
     echo "patch.$(basename "$patch")=$(sha256sum "$patch" | cut -d' ' -f1)"

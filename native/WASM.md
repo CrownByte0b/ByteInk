@@ -1,7 +1,7 @@
 # Wasm port: plan and implementation status
 
 The 2026-11-05 request is to plan WebAssembly support and start implementing it. The engine
-milestone and shared API/storage milestone are implemented. The browser preview is opt-in with
+milestone, shared API/storage and rendering/browser-authoring milestones are implemented. The browser preview is opt-in with
 `-PbyteinkWasm=true`; existing desktop build commands and publication coordinates stay intact.
 It is not part of the published 0.1.0-alpha.1 release.
 
@@ -21,9 +21,10 @@ typed arrays and owned C++ objects; it does not approximate or reimplement strok
   build `native/build/wasm`; no reuse/reset of the desktop source checkout. Both protoc and
   linked protobuf come from the existing protobuf 33.5 pin.
 - Outputs: `native/build/out/<google.ink.commit>/wasm/byteink-engine.{mjs,wasm}`,
-  `build.properties` and `licenses/`. The manifest records ABI 2, engine/toolchain pins,
+  `build.properties` and `licenses/`. The manifest records ABI 3, engine/toolchain pins,
   bridge-source and patch hashes and both output hashes. Gradle checks them before testing
-  and packaging. Runtime loading also checks the ABI and engine pin.
+  and packaging. Runtime loading also checks the ABI (now 3) and engine pin. The new rendering
+  snapshot/custom-family flags require replacing both assets when upgrading the preview.
 - Maven preview coordinates `com.vivenotes.byteink:byteink-wasm:0.1.0-SNAPSHOT`; engine static
   assets in the root publication's `engine@zip` classifier. No local npm dependency paths
   enter published metadata. Kotlin-only compilation needs no C++ toolchain.
@@ -61,11 +62,22 @@ typed arrays and owned C++ objects; it does not approximate or reimplement strok
       pages / 840 input encodings / 891 replayed projections / 3,564 native coverage probes on both
       backends. The browser sample
       now persists rows and operations, with reload/undo checks for partial/Object erase and move.
-- [ ] **5 — Library rendering / browser authoring.** Compose/Wasm path rendering, complete mesh
-      attributes/shaders/textures and animations, retained geometry/cache lifetime; browser
-      coalesced/predicted samples, pressure/tilt/orientation/physical-unit normalization, time
-      precision, pointer capture/cancel and multiple contacts. The sample adapter is deliberately
-      a small single-pointer consumer, not this production input layer.
+- [x] **5 — Library rendering / browser authoring.** Opt-in `byteink-compose-wasm` supplies path
+      and full-attribute mesh renderers, sharing the desktop vertex/preparation/fragment source.
+      Owned ABI3 snapshots expose paints, all canonical attributes, texture metadata and origins.
+      Bounded finished/live geometry and texture caches have explicit retirement/close. Tiling,
+      stamping, blends, vertex opacity/HSL, prediction fade, timed effects and atlas animation are
+      checked against 63 synthetic desktop software controls. Atlas metadata is supplied separately:
+      the pinned upstream protobuf drops atlas fields and cannot serialize animation-offset targets.
+      `InkTextureAnimations` carries application texture definitions; direct snapshot drawing tests
+      nonzero per-particle offsets without patching stored protobufs. Development family decoding
+      is an explicit per-brush opt-in; its default version gate remains unchanged.
+      `byteink-wasm` provides UI-independent browser normalization and multi-pointer authoring
+      sessions: coalesced history, replacement/expiring predictions, pressure/shaft axes, inverse
+      transforms, calibrated physical units and fractional time, capture and lifecycle cancellation.
+      The Compose sample uses these library APIs rather than its previous single-pointer adapter.
+      Chromium checks actual pen capture/axes/fractional history and simultaneous touch finish/cancel
+      at 1280/390 widths; the independent Maven-only Compose consumer renders and disposes cleanly.
 - [ ] **6 — Full parity / release.** Add operation round trips in both directions, browser
       engine/renderer matrices (Chromium/Firefox/WebKit), independent packaged consumers,
       compatibility/performance measurements, and publication wiring only after acceptance.
@@ -93,6 +105,22 @@ python -m pip install playwright==1.63.0
 python -m playwright install chromium
 python native/wasm/browser-test.py
 ```
+
+Milestone 5 additionally stages `:byteink-compose-wasm:publishAllPublicationsToBuildRepository`.
+Its standalone browser consumer uses the engine ZIP and Kotlin artifacts solely from Maven:
+
+```sh
+./gradlew -p consumer-tests/wasm-compose-fixture wasmJsBrowserDistribution
+python native/wasm/consumer-browser-test.py
+```
+
+The committed 63-case synthetic control can be regenerated with
+`:byteink-compose:exportWasmRenderingFixtures` (desktop native required only for regeneration).
+The exporter writes `byteink-compose/build/fixtures/wasm-rendering.json`; compare that file with
+`native/wasm/fixtures/rendering.json`. Browser CI consumes the committed fixture and needs no
+desktop native. `?verify=1` on the sample enables the software raster/ownership checks. The
+unchanged pixel gate allows at most 2/255 per premultiplied channel; actual Compose window pixels
+are additionally smoke-checked with pen/highlighter drawing, not a 63-case hardware GPU matrix.
 
 After staging the preview, `consumer-tests/wasm-fixture` is a standalone Node application using
 only Maven coordinates. Set `BYTEINK_WASM_ENGINE` to the absolute engine `.mjs` file URL and run
@@ -130,8 +158,12 @@ buffer ordering as well; it currently fails at `marker-s0-mouse-brush`. That str
 gate remains open and is not presented as passing CI. No Android pixel/shader fidelity,
 physical-pen or pen-to-photon measurement is part of this milestone.
 
-The C++ bridge exports only positions, indices and outlines. Arbitrary family geometry can be
-built, but textures, vertex opacity, prediction fade and other effects need a renderer. Android
+The C++ bridge exports lightweight geometry plus full owned rendering snapshots and paint
+preferences. The Wasm Compose renderer handles their textures, vertex effects and prediction fade.
+Arbitrary serialized families retain the pinned upstream codec's limits: atlas layout/timing is
+application texture metadata, and authoring an animation-offset behavior through protobuf is not
+supported. Default family decoding rejects development versions; explicit opt-in accepts only
+what the same pinned upstream decoder actually supports. Android
 input blobs and complete note/operation rows are supported; databases and transaction/undo
 integration remain application-owned. Reading never authorizes rewriting an original stored blob
 or dropping unknown fields. `InkPage` retains original rows separately from derived geometry.
@@ -143,4 +175,5 @@ or dropping unknown fields. `InkPage` retains original rows separately from deri
 - https://kotlinlang.org/docs/js-project-setup.html
 - https://emscripten.org/docs/porting/connecting_cpp_and_javascript/embind.html
 - https://emscripten.org/docs/compiling/Modularized-Output.html
+- https://www.w3.org/TR/pointerevents3/
 - Pinned engine headers and implementation; existing native/ANGLE-MATH.md and eight patches.

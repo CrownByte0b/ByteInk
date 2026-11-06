@@ -13,13 +13,15 @@ public class InkBrush private constructor(
     public val size: Float,
     public val epsilon: Float,
     internal val encodedFamily: ByteArray?,
+    /** Explicit opt-in to the pinned engine's unstable development brush serialization. */
+    public val allowDevelopmentVersion: Boolean,
 ) {
     public constructor(
         family: InkStockBrush = InkStockBrush.MARKER,
         colorArgb: Int = 0xff000000.toInt(),
         size: Float = 4f,
         epsilon: Float = 0.25f,
-    ) : this(family, colorArgb, size, epsilon, null)
+    ) : this(family, colorArgb, size, epsilon, null, false)
 
     public companion object {
         /** Use an upstream BrushFamily protobuf, including custom tips, behaviors and input models.
@@ -30,9 +32,10 @@ public class InkBrush private constructor(
             colorArgb: Int = 0xff000000.toInt(),
             size: Float = 4f,
             epsilon: Float = 0.25f,
+            allowDevelopmentVersion: Boolean = false,
         ): InkBrush {
             require(encodedFamily.isNotEmpty() && encodedFamily.size <= 64 * 1024 * 1024) { "Invalid brush family protobuf size" }
-            return InkBrush(null, colorArgb, size, epsilon, encodedFamily.copyOf())
+            return InkBrush(null, colorArgb, size, epsilon, encodedFamily.copyOf(), allowDevelopmentVersion)
         }
     }
 

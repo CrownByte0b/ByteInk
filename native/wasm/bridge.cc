@@ -14,6 +14,7 @@
 
 #include "absl/status/status.h"
 #include "ink/brush/brush.h"
+#include "ink/brush/color_function.h"
 #include "ink/brush/stock_brushes.h"
 #include "ink/color/color.h"
 #include "ink/geometry/angle.h"
@@ -189,12 +190,12 @@ ink::Brush MakeBrush(int family, uint32_t argb, float size, float epsilon) {
   return MakeBrush(brush_family, argb, size, epsilon);
 }
 
-ink::Brush MakeBrush(const val& encoded_family, uint32_t argb, float size, float epsilon) {
+ink::Brush MakeBrush(const val& encoded_family, uint32_t argb, float size, float epsilon, bool allow_development = false) {
   if (encoded_family["length"].as<size_t>() > kMaxProtoBytes) Fail("Brush protobuf exceeds 64 MiB");
   auto data = emscripten::convertJSArrayToNumberVector<uint8_t>(encoded_family);
   ink::proto::BrushFamily proto;
   if (!proto.ParseFromArray(data.data(), data.size())) Fail("Invalid brush family protobuf");
-  auto family = ink::DecodeBrushFamily(proto);
+  auto family = ink::DecodeBrushFamily(proto, allow_development ? ink::Version::kDevelopment() : ink::Version::kMaxSupported());
   if (!family.ok()) Fail(family.status().ToString());
   return MakeBrush(*family, argb, size, epsilon);
 }
@@ -295,10 +296,107 @@ val Geometry(const ink::PartitionedMesh& shape) {
   return groups;
 }
 
+// The canonical desktop rendering layout, decoded by Ink rather than reinterpreting packed bytes.
+template <typename Mesh>
+val RenderingMesh(const Mesh& mesh) {
+  using Id = ink::MeshFormat::AttributeId;
+  constexpr Id ids[] = {Id::kPosition, Id::kOpacityShift, Id::kColorShiftHsl,
+      Id::kSideDerivative, Id::kSideLabel, Id::kForwardDerivative, Id::kForwardLabel,
+      Id::kSurfaceUv, Id::kAnimationOffset};
+  constexpr int offsets[] = {0, 2, 3, 6, 8, 9, 11, 12, 14};
+  constexpr int components[] = {2, 1, 3, 2, 1, 2, 1, 2, 1};
+  auto result = MeshSnapshot(mesh);
+  std::vector<float> vertices(mesh.VertexCount() * 15, 0.f);
+  int mask = 0;
+  const auto attributes = mesh.Format().Attributes();
+  for (size_t a = 0; a < attributes.size(); ++a) {
+    for (int k = 0; k < 9; ++k) {
+      if (attributes[a].id != ids[k]) continue;
+      if (ink::MeshFormat::ComponentCount(attributes[a].type) != components[k])
+        Fail("Incompatible rendering attribute component count");
+      mask |= 1 << k;
+      for (uint32_t v = 0; v < mesh.VertexCount(); ++v) {
+        const auto decoded = mesh.FloatVertexAttribute(v, a);
+        for (int c = 0; c < components[k]; ++c) vertices[v * 15 + offsets[k] + c] = decoded[c];
+      }
+    }
+  }
+  result.set("vertices", CopyArray(vertices, "Float32Array"));
+  result.set("attributeMask", mask);
+  return result;
+}
+
+val Paints(const ink::Brush& brush, uint32_t coat, const ink::MeshFormat& format) {
+  auto paints = val::array();
+  uint32_t p = 0;
+  for (const auto& paint : brush.GetFamily().GetCoats()[coat].paint_preferences) {
+    auto result = val::object();
+    absl::flat_hash_set<ink::MeshFormat::AttributeId> required;
+    ink::brush_internal::AddAttributeIdsRequiredByPaint(paint, required);
+    for (const auto& attribute : format.Attributes()) required.erase(attribute.id);
+    result.set("compatible", required.empty());
+    result.set("overlap", static_cast<int>(paint.self_overlap));
+    auto color = ink::ColorFunction::ApplyAll(paint.color_functions, brush.GetColor()).InColorSpace(ink::ColorSpace::kSrgb);
+    auto linear = color.AsFloat(ink::Color::Format::kLinear);
+    auto srgb = color.AsFloat(ink::Color::Format::kGammaEncoded);
+    result.set("linearColor", CopyArray(std::vector<float>{linear.r, linear.g, linear.b, linear.a}, "Float32Array"));
+    result.set("srgbColor", CopyArray(std::vector<float>{srgb.r, srgb.g, srgb.b, srgb.a}, "Float32Array"));
+    auto layers = val::array();
+    uint32_t t = 0;
+    for (const auto& layer : paint.texture_layers) {
+      auto texture = val::object();
+      std::visit([&](const auto& value) {
+        texture.set("id", value.client_texture_id);
+        texture.set("blend", static_cast<int>(value.blend_mode));
+        if constexpr (std::is_same_v<std::decay_t<decltype(value)>, ink::BrushPaint::TilingTexture>) {
+          texture.set("mapping", 0);
+          texture.set("parameters", CopyArray(std::vector<float>{
+              static_cast<float>(value.origin), static_cast<float>(value.size_unit),
+              static_cast<float>(value.wrap_x), static_cast<float>(value.wrap_y),
+              value.size.x, value.size.y, value.offset.x, value.offset.y, value.rotation.ValueInRadians()}, "Float32Array"));
+        } else {
+          texture.set("mapping", 1);
+          texture.set("parameters", CopyArray(std::vector<float>{static_cast<float>(value.animation_frames),
+              static_cast<float>(value.animation_rows), static_cast<float>(value.animation_columns),
+              static_cast<float>(absl::ToInt64Milliseconds(value.animation_duration)),
+              static_cast<float>(value.animation_repeat_mode)}, "Float32Array"));
+        }
+      }, layer);
+      layers.set(t++, texture);
+    }
+    result.set("textures", layers);
+    paints.set(p++, result);
+  }
+  return paints;
+}
+
+val RenderingHeader(const ink::Brush& brush, const ink::StrokeInputBatch& inputs, const val& groups) {
+  auto result = val::object();
+  result.set("groups", groups);
+  result.set("brushSize", brush.GetSize());
+  const auto first = inputs.IsEmpty() ? ink::Point{} : inputs.Get(0).position;
+  const auto last = inputs.IsEmpty() ? ink::Point{} : inputs.Get(inputs.Size() - 1).position;
+  result.set("inputPositions", CopyArray(std::vector<float>{first.x, first.y, last.x, last.y}, "Float32Array"));
+  return result;
+}
+
+val Rendering(const ink::Stroke& stroke) {
+  auto groups = wasm::Geometry(stroke.GetShape());
+  for (uint32_t g = 0; g < stroke.GetShape().RenderGroupCount(); ++g) {
+    auto meshes = val::array();
+    uint32_t m = 0;
+    for (const auto& mesh : stroke.GetShape().RenderGroupMeshes(g)) meshes.set(m++, RenderingMesh(mesh));
+    groups[g].set("meshes", meshes);
+    groups[g].set("paints", Paints(stroke.GetBrush(), g, stroke.GetShape().RenderGroupFormat(g)));
+  }
+  return RenderingHeader(stroke.GetBrush(), stroke.GetInputs(), groups);
+}
+
 class WasmStroke {
  public:
   explicit WasmStroke(ink::Stroke stroke) : stroke_(std::move(stroke)) {}
   val Geometry() const { return wasm::Geometry(stroke_.GetShape()); }
+  val Rendering() const { return wasm::Rendering(stroke_); }
   val Inputs() const { return InputArray(stroke_.GetInputs()); }
   val EncodeInputs() const { return Encode(stroke_.GetInputs()); }
   val EncodeAndroidInputs() const { return EncodeAndroid(stroke_.GetInputs()); }
@@ -380,13 +478,13 @@ std::unique_ptr<WasmStroke> DecodeStroke(int family, uint32_t color, float size,
 }
 
 std::unique_ptr<WasmStroke> CreateStrokeWithFamily(const val& family, uint32_t color, float size,
-                                                 float epsilon, const val& samples) {
-  return std::make_unique<WasmStroke>(ink::Stroke(MakeBrush(family, color, size, epsilon), ReadInputs(samples)));
+                                                 float epsilon, const val& samples, bool allow_development) {
+  return std::make_unique<WasmStroke>(ink::Stroke(MakeBrush(family, color, size, epsilon, allow_development), ReadInputs(samples)));
 }
 
 std::unique_ptr<WasmStroke> DecodeStrokeWithFamily(const val& family, uint32_t color, float size,
-                                                 float epsilon, const val& bytes) {
-  return std::make_unique<WasmStroke>(ink::Stroke(MakeBrush(family, color, size, epsilon), Decode(bytes)));
+                                                 float epsilon, const val& bytes, bool allow_development) {
+  return std::make_unique<WasmStroke>(ink::Stroke(MakeBrush(family, color, size, epsilon, allow_development), Decode(bytes)));
 }
 
 std::unique_ptr<WasmStroke> DecodeAndroidStroke(int family, uint32_t color, float size, float epsilon,
@@ -395,8 +493,8 @@ std::unique_ptr<WasmStroke> DecodeAndroidStroke(int family, uint32_t color, floa
 }
 
 std::unique_ptr<WasmStroke> DecodeAndroidStrokeWithFamily(const val& family, uint32_t color, float size,
-                                                        float epsilon, const val& bytes) {
-  return std::make_unique<WasmStroke>(ink::Stroke(MakeBrush(family, color, size, epsilon), DecodeAndroid(bytes)));
+                                                        float epsilon, const val& bytes, bool allow_development) {
+  return std::make_unique<WasmStroke>(ink::Stroke(MakeBrush(family, color, size, epsilon, allow_development), DecodeAndroid(bytes)));
 }
 
 class WasmLiveStroke {
@@ -433,6 +531,18 @@ class WasmLiveStroke {
     }
     return groups;
   }
+  val Rendering() const {
+    if (finished_) return wasm::Rendering(*finished_);
+    auto groups = Geometry();
+    for (uint32_t g = 0; g < live_.BrushCoatCount(); ++g) {
+      auto meshes = val::array();
+      meshes.set(0, RenderingMesh(live_.GetMesh(g)));
+      groups[g].set("meshes", meshes);
+      groups[g].set("paints", Paints(*live_.GetBrush(), g, live_.GetMesh(g).Format()));
+    }
+    return RenderingHeader(*live_.GetBrush(), live_.GetInputs(), groups);
+  }
+  bool NeedsUpdate() const { return !finished_ && live_.NeedsUpdate(); }
   std::unique_ptr<WasmStroke> Finish(float elapsed_millis) {
     // Validate before mutating, then clear predictions and consume any remaining real inputs.
     if (!std::isfinite(elapsed_millis) || elapsed_millis < last_elapsed_millis_ || elapsed_millis < 0)
@@ -458,14 +568,14 @@ std::unique_ptr<WasmLiveStroke> StartStroke(int family, uint32_t color, float si
   return std::make_unique<WasmLiveStroke>(MakeBrush(family, color, size, epsilon));
 }
 
-std::unique_ptr<WasmLiveStroke> StartStrokeWithFamily(const val& family, uint32_t color, float size, float epsilon) {
-  return std::make_unique<WasmLiveStroke>(MakeBrush(family, color, size, epsilon));
+std::unique_ptr<WasmLiveStroke> StartStrokeWithFamily(const val& family, uint32_t color, float size, float epsilon, bool allow_development) {
+  return std::make_unique<WasmLiveStroke>(MakeBrush(family, color, size, epsilon, allow_development));
 }
 }  // namespace byteink::wasm
 
 EMSCRIPTEN_BINDINGS(byteink) {
   using namespace byteink::wasm;
-  emscripten::function("abiVersion", +[]() { return 2; });
+  emscripten::function("abiVersion", +[]() { return 3; });
   emscripten::function("engineCommit", +[]() { return std::string(BYTEINK_ENGINE_COMMIT); });
   emscripten::function("createStroke", &CreateStroke);
   emscripten::function("decodeStroke", &DecodeStroke);
@@ -478,6 +588,7 @@ EMSCRIPTEN_BINDINGS(byteink) {
   emscripten::function("catalogFamily", &CatalogFamily);
   emscripten::class_<WasmStroke>("Stroke")
       .function("geometry", &WasmStroke::Geometry)
+      .function("rendering", &WasmStroke::Rendering)
       .function("inputs", &WasmStroke::Inputs)
       .function("encodeInputs", &WasmStroke::EncodeInputs)
       .function("encodeAndroidInputs", &WasmStroke::EncodeAndroidInputs)
@@ -494,6 +605,8 @@ EMSCRIPTEN_BINDINGS(byteink) {
       .function("enqueue", &WasmLiveStroke::Enqueue)
       .function("update", &WasmLiveStroke::Update)
       .function("geometry", &WasmLiveStroke::Geometry)
+      .function("rendering", &WasmLiveStroke::Rendering)
+      .function("needsUpdate", &WasmLiveStroke::NeedsUpdate)
       .function("finish", &WasmLiveStroke::Finish)
       .function("realInputCount", &WasmLiveStroke::RealInputCount)
       .function("predictedInputCount", &WasmLiveStroke::PredictedInputCount);

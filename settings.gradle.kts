@@ -56,7 +56,7 @@ include(":byteink-kit")
 include(":byteink-testing")
 // Experimental browser engine/client. Existing desktop builds do not need Emscripten or Node.
 if (providers.gradleProperty("byteinkWasm").orNull == "true") {
-    include(":byteink-wasm", ":samples:wasm")
+    include(":byteink-wasm", ":byteink-compose-wasm", ":samples:wasm")
 }
 if (providers.gradleProperty("byteinkWasm").orNull == "true" || providers.gradleProperty("byteinkPortable").orNull == "true")
     include(":byteink-portable")

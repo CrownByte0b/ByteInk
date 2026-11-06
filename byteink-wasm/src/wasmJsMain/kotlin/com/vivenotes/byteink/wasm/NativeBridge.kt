@@ -22,6 +22,7 @@ internal external interface NativeGroup : JsAny {
 
 internal external interface NativeStroke : JsAny {
     fun geometry(): JsArray<NativeGroup>
+    fun rendering(): NativeRendering
     fun inputs(): NativeNumbers
     fun encodeInputs(): NativeNumbers
     fun encodeAndroidInputs(): NativeNumbers
@@ -41,11 +42,62 @@ internal external interface NativeLive : JsAny {
     fun enqueue(real: NativeNumbers, predicted: NativeNumbers)
     fun update(elapsedMillis: Float)
     fun geometry(): JsArray<NativeGroup>
+    fun rendering(): NativeRendering
+    fun needsUpdate(): Boolean
     fun finish(elapsedMillis: Float): NativeStroke
     fun realInputCount(): Int
     fun predictedInputCount(): Int
     fun delete()
 }
+
+internal external interface NativeRendering : JsAny {
+    val groups: JsArray<NativeRenderingGroup>
+    val brushSize: Float
+    val inputPositions: NativeNumbers
+}
+internal external interface NativeRenderingGroup : JsAny {
+    val meshes: JsArray<NativeRenderingMesh>
+    val outlines: JsArray<NativeNumbers>
+    val paints: JsArray<NativePaint>
+}
+internal external interface NativeRenderingMesh : JsAny {
+    val vertices: NativeNumbers
+    val triangles: NativeNumbers
+    val attributeMask: Int
+}
+internal external interface NativePaint : JsAny {
+    val compatible: Boolean
+    val overlap: Int
+    val linearColor: NativeNumbers
+    val srgbColor: NativeNumbers
+    val textures: JsArray<NativeTexture>
+}
+internal external interface NativeTexture : JsAny {
+    val id: String
+    val blend: Int
+    val mapping: Int
+    val parameters: NativeNumbers
+}
+
+private fun NativeNumbers.floats(): FloatArray = FloatArray(length) { numberAt(this, it).toFloat() }
+internal fun renderingSnapshot(value: NativeRendering): InkRendering = InkRendering(
+    List(value.groups.length) { index ->
+        val group = value.groups[index]!!
+        InkRenderingGroup(List(group.meshes.length) { meshIndex ->
+            val mesh = group.meshes[meshIndex]!!
+            InkRenderingMesh(mesh.vertices.floats(), IntArray(mesh.triangles.length) { numberAt(mesh.triangles, it).toInt() }, mesh.attributeMask)
+        }, List(group.outlines.length) { group.outlines[it]!!.floats() }, List(group.paints.length) { paintIndex ->
+            val paint = group.paints[paintIndex]!!
+            InkRenderingPaint(paint.compatible, InkSelfOverlap.entries[paint.overlap], paint.linearColor.floats(),
+                paint.srgbColor.floats(), List(paint.textures.length) { textureIndex ->
+                    val texture = paint.textures[textureIndex]!!
+                    val p = texture.parameters.floats()
+                    if (texture.mapping == 0) InkTilingTexture(texture.id, texture.blend, p[0].toInt(), p[1].toInt(),
+                        p[2].toInt(), p[3].toInt(), p[4], p[5], p[6], p[7], p[8])
+                    else InkStampingTexture(texture.id, texture.blend, p[0].toInt(), p[1].toInt(), p[2].toInt(), p[3].toLong(), p[4] == 1f)
+                })
+        })
+    }, value.brushSize, value.inputPositions.floats())
 
 internal external interface NativeModule : JsAny {
     fun abiVersion(): Int
@@ -53,12 +105,12 @@ internal external interface NativeModule : JsAny {
     fun catalogFamily(kind: Int, pressure: Int, windowMillis: Int, minSize: Float, maxSize: Float): NativeNumbers
     fun createStroke(family: Int, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke
     fun decodeStroke(family: Int, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke
-    fun createStrokeWithFamily(family: NativeNumbers, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke
-    fun decodeStrokeWithFamily(family: NativeNumbers, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke
+    fun createStrokeWithFamily(family: NativeNumbers, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers, allowDevelopment: Boolean): NativeStroke
+    fun decodeStrokeWithFamily(family: NativeNumbers, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers, allowDevelopment: Boolean): NativeStroke
     fun startStroke(family: Int, color: Double, size: Float, epsilon: Float): NativeLive
-    fun startStrokeWithFamily(family: NativeNumbers, color: Double, size: Float, epsilon: Float): NativeLive
+    fun startStrokeWithFamily(family: NativeNumbers, color: Double, size: Float, epsilon: Float, allowDevelopment: Boolean): NativeLive
     fun decodeAndroidStroke(family: Int, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke
-    fun decodeAndroidStrokeWithFamily(family: NativeNumbers, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke
+    fun decodeAndroidStrokeWithFamily(family: NativeNumbers, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers, allowDevelopment: Boolean): NativeStroke
 }
 
 // An application supplies its own static URL; no npm path or global Module is needed.

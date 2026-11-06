@@ -15,7 +15,7 @@ const createStroke = (family = 0, inputs = samples) => engine.createStroke(famil
 const empty = new Float64Array();
 
 test('loads the pinned engine and authors all four version 1 stock brushes', () => {
-    assert.equal(engine.abiVersion(), 2);
+    assert.equal(engine.abiVersion(), 3);
     assert.equal(engine.engineCommit(), commit);
     for (let family = 0; family < 4; ++family) {
         const stroke = createStroke(family);
@@ -105,7 +105,7 @@ test('rejects invalid values without poisoning later engine calls', () => {
     for (const invalid of [gzip.slice(0, -1), badCrc, new Uint8Array([...gzip, 0])]) {
         assert.throws(() => engine.decodeAndroidStroke(0, 0xff000000, 4, .25, invalid));
     }
-    assert.throws(() => engine.decodeStrokeWithFamily(new Uint8Array([255]), 0xff000000, 4, .25, gzip));
+    assert.throws(() => engine.decodeStrokeWithFamily(new Uint8Array([255]), 0xff000000, 4, .25, gzip, false));
     const live = engine.startStroke(0, 0xff000000, 4, .25);
     try {
         live.enqueue(samples, empty);
@@ -119,6 +119,30 @@ test('rejects invalid values without poisoning later engine calls', () => {
     } finally { live.delete(); }
     const stroke = createStroke();
     stroke.delete();
+});
+
+test('full rendering snapshots own attributes and paints, with explicit development-family opt-in', async () => {
+    const fixtures = JSON.parse(await readFile(new URL('native/wasm/fixtures/rendering.json', root), 'utf8'));
+    for (const fixture of fixtures.cases) {
+        const family = Buffer.from(fixture.family, 'base64');
+        const inputs = new Float64Array(fixture.inputs.flatMap(p => [p[0], p[1], p[2], 3, p[3], -1, -1, 0]));
+        const development = fixture.name.startsWith('atlas');
+        if (development) assert.throws(() => engine.createStrokeWithFamily(family, fixture.color >>> 0, fixture.size, .25, inputs, false), /Version must/);
+        const stroke = engine.createStrokeWithFamily(family, fixture.color >>> 0, fixture.size, .25, inputs, development);
+        const snapshot = stroke.rendering();
+        const before = snapshot.groups[0].meshes[0].vertices.slice();
+        stroke.delete();
+        assert.deepEqual(snapshot.groups[0].meshes[0].vertices, before);
+        for (const group of snapshot.groups) {
+            for (const mesh of group.meshes) {
+                assert.equal(mesh.vertices.length, mesh.positions.length / 2 * 15);
+                assert.ok(mesh.attributeMask & 1);
+                assert.ok(mesh.vertices.every(Number.isFinite));
+            }
+            assert.ok(group.paints.length > 0);
+            for (const paint of group.paints) assert.equal(paint.linearColor.length, 4);
+        }
+    }
 });
 
 test('Android input bytes, closed boundaries, mesh vertices and coverage agree with the pinned engine', async () => {
@@ -158,7 +182,7 @@ test('Android input bytes, closed boundaries, mesh vertices and coverage agree w
             const bytes = await readFile(new URL(`${row.id}.inputs.pb.gz`, directory));
             const expectedGzip = await readFile(new URL(`${row.id}.roundtrip.pb.gz`, directory));
             const expectedBytes = gunzipSync(expectedGzip);
-            const stroke = engine.decodeAndroidStrokeWithFamily(family, row.colorArgb >>> 0, row.size, .25, bytes);
+            const stroke = engine.decodeAndroidStrokeWithFamily(family, row.colorArgb >>> 0, row.size, .25, bytes, false);
             try {
                 assert.deepEqual(Buffer.from(stroke.encodeAndroidInputs()), expectedGzip, `${name}/${row.id} Android gzip`);
                 assert.deepEqual(expectedBytes.subarray(-5), Buffer.from([0x55, 0, 0, 0, 0]), 'Android private field 10');

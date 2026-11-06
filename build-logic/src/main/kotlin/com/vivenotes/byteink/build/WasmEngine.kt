@@ -37,7 +37,7 @@ abstract class CheckWasmEngine : DefaultTask() {
         val metadata = Properties().apply { files.getValue("build.properties").inputStream().use(::load) }
         check(metadata.getProperty("google.ink.commit") == engineCommit.get()) { "Wasm engine pin mismatch" }
         check(metadata.getProperty("emscripten.version") == emscriptenVersion.get()) { "Wasm toolchain pin mismatch" }
-        check(metadata.getProperty("bridge.abi") == "2") { "Wasm bridge ABI mismatch" }
+        check(metadata.getProperty("bridge.abi") == "3") { "Wasm bridge ABI mismatch" }
         fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it) }
         check(metadata.getProperty("bridge.source.sha256") == sha256(bridgeSource.get().asFile.readBytes())) {

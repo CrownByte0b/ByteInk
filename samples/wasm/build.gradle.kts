@@ -2,6 +2,7 @@ import com.vivenotes.byteink.build.upstreamPins
 
 plugins {
     id("byteink.kotlin-multiplatform-wasm")
+    id("byteink.compose")
 }
 
 val engineDirectory = rootProject.layout.projectDirectory.dir(
@@ -13,9 +14,13 @@ kotlin {
     sourceSets.wasmJsMain {
         dependencies {
             implementation(project(":byteink-portable"))
+            implementation(project(":byteink-compose-wasm"))
+            implementation(libs.compose.foundation)
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.serialization.json)
         }
         resources.srcDir(engineDirectory)
+        resources.srcDir(rootProject.layout.projectDirectory.dir("native/wasm/fixtures"))
     }
 }
 

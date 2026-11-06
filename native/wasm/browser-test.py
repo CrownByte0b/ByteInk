@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the compiled Kotlin/Wasm browser consumer with Chromium and actual pointer events."""
 import argparse
+import base64
 import functools
 import json
 import threading
@@ -36,17 +37,21 @@ def main():
                     page = browser.new_page(viewport={"width": width, "height": 860})
                     errors = []
                     page.on("pageerror", lambda error: errors.append(str(error)))
-                    page.goto(f"http://127.0.0.1:{server.server_port}/")
-                    page.wait_for_function("globalThis.byteinkReady === true")
+                    page.on("pageerror", lambda error: page.evaluate("message => globalThis.byteinkFailure = message", str(error)))
+                    page.goto(f"http://127.0.0.1:{server.server_port}/?verify=1")
+                    page.wait_for_function("globalThis.byteinkReady === true || globalThis.byteinkFailure")
+                    if errors:
+                        diagnostics = page.evaluate("globalThis.byteinkRenderDiagnostics || []")
+                        for item in diagnostics:
+                            (args.output / f"failed-{item['name']}.png").write_bytes(base64.b64decode(item.pop("png")))
+                        (args.output / "render-failures.json").write_text(json.dumps(diagnostics, indent=2) + "\n")
+                    assert not errors, errors
+                    rendering = page.evaluate("byteinkRenderingChecks")
+                    assert rendering["cases"] == 63, rendering
                     canvas = page.locator("canvas")
 
                     def pixels():
-                        return canvas.evaluate("""canvas => {
-                            const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
-                            let visible = 0;
-                            for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) visible++;
-                            return visible;
-                        }""")
+                        return page.evaluate("byteinkVisible()")
 
                     def position(x, y):
                         box = canvas.bounding_box()
@@ -70,7 +75,7 @@ def main():
                     visible = pixels()
                     assert visible > marker_pixels + 1000
                     # DISCARD self overlap: a doubled-back highlight is filled once.
-                    alpha = canvas.evaluate("canvas => canvas.getContext('2d').getImageData(200, 260, 1, 1).data[3]")
+                    alpha = page.evaluate("byteinkPixel(200, 260) >>> 24")
                     assert alpha == 0x66, alpha
                     page.click("#reload")
                     page.locator("#status").filter(has_text="2 strokes reloaded").wait_for()
@@ -79,7 +84,7 @@ def main():
                     page.screenshot(path=str(args.output / f"drawing-{width}.png"), full_page=True)
 
                     def alpha_at(x, y):
-                        return canvas.evaluate("(canvas, point) => canvas.getContext('2d').getImageData(point[0], point[1], 1, 1).data[3]", [x, y])
+                        return page.evaluate("point => byteinkPixel(point[0], point[1]) >>> 24", [x, y])
 
                     page.click("#move")
                     assert alpha_at(100, 260) == 0
@@ -119,11 +124,76 @@ def main():
                     assert "2 strokes reloaded" in page.locator("#status").inner_text()
                     page.click("#clear")
                     assert pixels() == 0
+
+                    # Real browser pen/capture, then injected coalesced/predicted observations on
+                    # that active pointer. Synthetic history makes fractional times deterministic.
+                    page.select_option("#tool", "marker")
+                    surface = page.locator("#ink-surface")
+                    surface.evaluate("element => element.addEventListener('pointerdown', event => globalThis.byteinkDown = {id:event.pointerId, time:event.timeStamp}, {once:true})")
+                    cdp = page.context.new_cdp_session(page)
+                    x, y = position(240, 380)
+                    cdp.send("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y, "pointerType": "pen"})
+                    cdp.send("Input.dispatchMouseEvent", {"type": "mousePressed", "x": x, "y": y, "button": "left", "buttons": 1,
+                                                         "clickCount": 1, "pointerType": "pen", "force": .4, "tiltX": 20, "tiltY": 30})
+                    assert page.evaluate("byteinkActive()") == 1
+                    assert surface.evaluate("element => element.hasPointerCapture(byteinkDown.id)")
+                    predicted_count = surface.evaluate("""element => {
+                        const rect = element.getBoundingClientRect(), down = byteinkDown;
+                        const sample = (x, time, pressure) => {
+                            const event = new PointerEvent('pointermove', {pointerId:down.id, pointerType:'pen', buttons:1,
+                                clientX:rect.left + x / 960 * rect.width, clientY:rect.top + 380 / 500 * rect.height,
+                                pressure, tiltX:20, tiltY:30, bubbles:true});
+                            Object.defineProperty(event, 'timeStamp', {value:down.time + time}); return event;
+                        };
+                        const real = [sample(280, .25, .65), sample(320, .5, .8)], prediction = sample(900, 8, 1);
+                        const event = real[1];
+                        Object.defineProperty(event, 'getCoalescedEvents', {value:() => real});
+                        Object.defineProperty(event, 'getPredictedEvents', {value:() => [prediction]});
+                        element.dispatchEvent(event); return byteinkPredicted();
+                    }""")
+                    assert predicted_count == 1
+                    page.wait_for_function("byteinkPredicted() === 0")
+                    x, y = position(340, 380)
+                    cdp.send("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": x, "y": y, "button": "left", "buttons": 0,
+                                                         "clickCount": 1, "pointerType": "pen"})
+                    pen = page.evaluate("byteinkLastInput")
+                    assert pen["count"] == 4, pen
+                    assert [point[2] for point in pen["samples"]][1:3] == [.25, .5], pen
+                    assert all(point[0] < 400 for point in pen["samples"]), pen
+                    assert abs(pen["samples"][1][3] - .65) < .0001, pen
+                    assert pen["samples"][1][4] > 0 and pen["samples"][1][5] > 0, pen
+                    assert page.evaluate("byteinkActive()") == 0
+                    assert not surface.evaluate("element => element.hasPointerCapture(byteinkDown.id)")
+
+                    # Two actual simultaneous browser touch contacts complete independently.
+                    cdp.send("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 10})
+                    contacts = [{"id": index, "x": position(x, 430)[0], "y": position(x, 430)[1]} for index, x in [(11, 500), (12, 650)]]
+                    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": contacts})
+                    assert page.evaluate("byteinkActive()") == 2
+                    for contact in contacts:
+                        contact["x"] += 20
+                    cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": contacts})
+                    cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+                    assert page.evaluate("byteinkActive()") == 0
+                    assert "3 strokes" in page.locator("#status").inner_text()
+                    assert page.evaluate("byteinkLastInput.samples.every(point => point[3] === null && point[4] === null && point[5] === null)")
+                    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": contacts})
+                    assert page.evaluate("byteinkActive()") == 2
+                    cdp.send("Input.dispatchTouchEvent", {"type": "touchCancel", "touchPoints": []})
+                    assert page.evaluate("byteinkActive()") == 0
+                    page.click("#reload")
+                    assert "3 strokes reloaded" in page.locator("#status").inner_text()
+                    cdp.detach()
+                    page.click("#clear")
+                    assert pixels() == 0
                     assert not errors, errors
-                    results.append({"width": width, "marker_pixels": marker_pixels, "combined_pixels": visible,
+                    results.append({"width": width, "rendering": rendering, "marker_pixels": marker_pixels, "combined_pixels": visible,
                                     "reloaded_pixels": reloaded, "highlighter_alpha": alpha,
                                     "move_reload_undo": True, "partial_erase_reload_undo": True,
                                     "object_erase_undo": True,
+                                    "pen_coalesced_fractional_axes_prediction_expiry": True,
+                                    "prediction_free_saved_inputs": pen["count"],
+                                    "simultaneous_touch_finish_and_cancel": True,
                                     "cancel_preserved_stroke_count": True, "clear_pixels": 0})
                     page.close()
             finally:

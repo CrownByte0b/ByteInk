@@ -17,7 +17,7 @@ public class InkWasm private constructor(private val module: NativeModule) {
         public suspend fun load(moduleUrl: String): InkWasm {
             require(moduleUrl.isNotBlank()) { "Engine module URL must not be blank" }
             val module = importEngine(moduleUrl).await()
-            check(module.abiVersion() == 2) { "Incompatible ByteInk Wasm bridge ABI" }
+            check(module.abiVersion() == 3) { "Incompatible ByteInk Wasm bridge ABI" }
             check(module.engineCommit() == ENGINE_COMMIT) { "Incompatible Ink engine pin" }
             return InkWasm(module)
         }
@@ -42,7 +42,7 @@ public class InkWasm private constructor(private val module: NativeModule) {
         val nativeInputs = inputs.nativeInputs()
         val color = brush.colorArgb.toUInt().toDouble()
         val native = dataOperation { if (family != null) module.createStroke(family.ordinal, color, brush.size, brush.epsilon, nativeInputs)
-            else module.createStrokeWithFamily(brush.encodedFamily!!.nativeBytes(), color, brush.size, brush.epsilon, nativeInputs) }
+            else module.createStrokeWithFamily(brush.encodedFamily!!.nativeBytes(), color, brush.size, brush.epsilon, nativeInputs, brush.allowDevelopmentVersion) }
         return InkStroke(brush, native, this)
     }
 
@@ -52,7 +52,7 @@ public class InkWasm private constructor(private val module: NativeModule) {
         val family = brush.family
         val color = brush.colorArgb.toUInt().toDouble()
         val native = dataOperation { if (family != null) module.decodeStroke(family.ordinal, color, brush.size, brush.epsilon, bytes)
-            else module.decodeStrokeWithFamily(brush.encodedFamily!!.nativeBytes(), color, brush.size, brush.epsilon, bytes) }
+            else module.decodeStrokeWithFamily(brush.encodedFamily!!.nativeBytes(), color, brush.size, brush.epsilon, bytes, brush.allowDevelopmentVersion) }
         return InkStroke(brush, native, this)
     }
 
@@ -62,7 +62,7 @@ public class InkWasm private constructor(private val module: NativeModule) {
         val family = brush.family
         val color = brush.colorArgb.toUInt().toDouble()
         val native = dataOperation { if (family != null) module.decodeAndroidStroke(family.ordinal, color, brush.size, brush.epsilon, bytes)
-            else module.decodeAndroidStrokeWithFamily(brush.encodedFamily!!.nativeBytes(), color, brush.size, brush.epsilon, bytes) }
+            else module.decodeAndroidStrokeWithFamily(brush.encodedFamily!!.nativeBytes(), color, brush.size, brush.epsilon, bytes, brush.allowDevelopmentVersion) }
         return InkStroke(brush, native, this)
     }
 
@@ -70,7 +70,7 @@ public class InkWasm private constructor(private val module: NativeModule) {
         val family = brush.family
         val color = brush.colorArgb.toUInt().toDouble()
         val native = dataOperation { if (family != null) module.startStroke(family.ordinal, color, brush.size, brush.epsilon)
-            else module.startStrokeWithFamily(brush.encodedFamily!!.nativeBytes(), color, brush.size, brush.epsilon) }
+            else module.startStrokeWithFamily(brush.encodedFamily!!.nativeBytes(), color, brush.size, brush.epsilon, brush.allowDevelopmentVersion) }
         return InkLiveStroke(brush, native, this)
     }
 }
@@ -79,6 +79,9 @@ public class InkWasm private constructor(private val module: NativeModule) {
 public class InkStroke internal constructor(public val brush: InkBrush, private val native: NativeStroke, private val owner: InkWasm) : AutoCloseable {
     private var closed = false
     private fun checkOpen(): Unit = check(!closed) { "Stroke is closed" }
+    public val isClosed: Boolean get() = closed
+    /** Owned canonical vertices and all compatible paint preferences, with engine-applied colors. */
+    public fun rendering(): InkRendering { checkOpen(); return renderingSnapshot(native.rendering()) }
 
     public fun geometry(): List<InkGeometryGroup> {
         checkOpen()
@@ -166,6 +169,12 @@ public class InkLiveStroke internal constructor(public val brush: InkBrush, priv
     private var closed = false
     private var finished = false
     private fun checkOpen(): Unit = check(!closed) { "Live stroke is closed" }
+    public val isClosed: Boolean get() = closed
+    /** Changes after every successful shape update, including timed effects and prediction removal. */
+    public var version: Long = 0L
+        private set
+    public val needsUpdate: Boolean get() { checkOpen(); return native.needsUpdate() }
+    public fun rendering(): InkRendering { checkOpen(); return renderingSnapshot(native.rendering()) }
 
     public val realInputCount: Int get() { checkOpen(); return native.realInputCount() }
     public val predictedInputCount: Int get() { checkOpen(); return native.predictedInputCount() }
@@ -180,6 +189,7 @@ public class InkLiveStroke internal constructor(public val brush: InkBrush, priv
         checkOpen()
         check(!finished) { "Inputs are finished" }
         dataOperation { native.update(checkedTime(elapsedTimeMillis)) }
+        version++
     }
 
     public fun geometry(): List<InkGeometryGroup> {
@@ -195,6 +205,7 @@ public class InkLiveStroke internal constructor(public val brush: InkBrush, priv
         check(!finished) { "Inputs are finished" }
         val result = dataOperation { native.finish(checkedTime(elapsedTimeMillis)) }
         finished = true
+        version++
         return InkStroke(brush, result, owner)
     }
 
