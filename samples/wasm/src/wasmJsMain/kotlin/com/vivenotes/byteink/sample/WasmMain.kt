@@ -14,12 +14,15 @@ import com.vivenotes.byteink.kit.*
 import com.vivenotes.byteink.portable.*
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
+import kotlin.time.TimeSource
 
 private fun moduleUrl(): String = js("new URL('byteink-engine.mjs', document.baseURI).href")
 private fun selectedTool(): String = js("document.getElementById('tool').value")
 private fun status(text: String): Unit = js("{ document.getElementById('status').textContent = text; }")
 private fun now(): Double = js("performance.now()")
 private fun verify(): Boolean = js("new URL(location.href).searchParams.has('verify')")
+private fun gpuMatrix(): Boolean = js("new URL(location.href).searchParams.has('gpu')")
+private fun benchmark(): Boolean = js("new URL(location.href).searchParams.has('benchmark')")
 private fun ready(): Unit = js("{ for (const button of document.querySelectorAll('button')) button.disabled = false; globalThis.byteinkReady = true; }")
 private fun buttons(clear: () -> Unit, reload: () -> Unit, move: () -> Unit, undo: () -> Unit, dispose: () -> Unit): Unit = js("""{
     document.getElementById('clear').onclick = clear; document.getElementById('reload').onclick = reload;
@@ -36,7 +39,13 @@ private fun inputReport(count: Int, time: Double, samples: String): Unit = js(""
 fun main() {
     MainScope().launch {
         try {
+            val start=TimeSource.Monotonic.markNow()
             val engine = WasmInkEngine.load(moduleUrl())
+            if (benchmark()) {
+                runBrowserBenchmark(engine.wasm,start.elapsedNow().inWholeNanoseconds/1e6)
+                status("Benchmark complete");return@launch
+            }
+            if (gpuMatrix()) { showGpuMatrix(engine.wasm); return@launch }
             if (verify()) checkRendering(engine.wasm)
             val kit = InkKit(engine)
             val renderer = InkMeshRenderer()

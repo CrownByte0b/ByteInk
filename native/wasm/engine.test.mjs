@@ -15,8 +15,9 @@ const createStroke = (family = 0, inputs = samples) => engine.createStroke(famil
 const empty = new Float64Array();
 
 test('loads the pinned engine and authors all four version 1 stock brushes', () => {
-    assert.equal(engine.abiVersion(), 3);
+    assert.equal(engine.abiVersion(), 4);
     assert.equal(engine.engineCommit(), commit);
+    assert.equal(engine.mathProfile(), "bionic-acosf-v1");
     for (let family = 0; family < 4; ++family) {
         const stroke = createStroke(family);
         try {
@@ -147,7 +148,7 @@ test('full rendering snapshots own attributes and paints, with explicit developm
 
 test('Android input bytes, closed boundaries, mesh vertices and coverage agree with the pinned engine', async () => {
     const cases = new URL('conformance/android/fixtures/matrix/cases/', root);
-    let count = 0, maxGap = 0, reorderedMeshes = 0, rotatedOutlines = 0;
+    let count = 0, maxGap = 0, directMeshes = 0, directOutlines = 0;
     const close = (actual, expected, label) => {
         assert.equal(actual.length, expected.length, label);
         for (let i = 0; i < actual.length; ++i) {
@@ -155,24 +156,6 @@ test('Android input bytes, closed boundaries, mesh vertices and coverage agree w
             maxGap = Math.max(maxGap, gap);
             assert.ok(gap <= 1e-4 + Math.abs(expected[i]) * 1e-6, `${label}[${i}]: ${actual[i]} != ${expected[i]}`);
         }
-    };
-    const closeOutline = (actual, expected, label) => {
-        assert.equal(actual.length, expected.length, label);
-        if (!actual.length) return;
-        // A closed contour can begin at any one of its vertices. Preserve direction and every
-        // repeated vertex; only the starting index is normalized, never the shape or tolerance.
-        let offset = -1;
-        for (let candidate = 0; candidate < expected.length; candidate += 2) {
-            if (Array.from(actual).every((value, i) =>
-                Math.abs(value - expected[(i + candidate) % expected.length]) <= 1e-4 + Math.abs(value) * 1e-6)) {
-                offset = candidate;
-                break;
-            }
-        }
-        assert.ok(offset >= 0, `${label}: different closed boundary`);
-        if (offset) ++rotatedOutlines;
-        close(actual, expected.map((_, i) => expected[(i + offset) % expected.length]), label);
-        if (process.env.BYTEINK_WASM_STRICT_TOPOLOGY) assert.equal(offset, 0, `${label}: contour start differs`);
     };
     for (const name of (await readdir(cases)).sort()) {
         const directory = new URL(`${name}/`, cases);
@@ -197,30 +180,15 @@ test('Android input bytes, closed boundaries, mesh vertices and coverage agree w
                         const golden = expected.meshes[m];
                         assert.equal(mesh.positions.length, golden.positions.length * 2, `${name} vertex count`);
                         assert.equal(mesh.triangles.length, golden.triangleIndices.length, `${name} triangle count`);
-                        const indexIdentical = Array.from(mesh.triangles).every((index, t) => index === golden.triangleIndices[t]);
-                        if (indexIdentical) close(mesh.positions, golden.positions.flat(), `${name} positions`);
-                        else {
-                            ++reorderedMeshes;
-                            // Mesh packing/tessellation order differs in 32-bit Wasm for some
-                            // round marker caps. Require a bijection of the actual vertices, then
-                            // independently compare every boundary and native coverage below.
-                            const unmatched = golden.positions.map(point => point.slice());
-                            for (let v = 0; v < mesh.positions.length; v += 2) {
-                                const point = mesh.positions.slice(v, v + 2);
-                                const match = unmatched.findIndex(p => p.every((value, j) =>
-                                    Math.abs(point[j] - value) <= 1e-4 + Math.abs(value) * 1e-6));
-                                assert.ok(match >= 0, `${name}: different vertex position`);
-                                close(point, unmatched[match], `${name} remapped position`);
-                                unmatched.splice(match, 1);
-                            }
-                            assert.equal(unmatched.length, 0);
-                        }
+                        assert.deepEqual(Array.from(mesh.triangles), golden.triangleIndices, `${name} triangle index order`);
+                        close(mesh.positions, golden.positions.flat(), `${name} positions in direct order`);
                         for (const index of mesh.triangles) assert.ok(index < mesh.positions.length / 2, `${name} index bounds`);
-                        if (process.env.BYTEINK_WASM_STRICT_TOPOLOGY) {
-                            assert.ok(indexIdentical, `${name}: triangle index order differs`);
-                        }
+                        ++directMeshes;
                     });
-                    group.outlines.forEach((outline, o) => closeOutline(outline, expected.outlines[o].flat(), `${name} outline`));
+                    group.outlines.forEach((outline, o) => {
+                        close(outline, expected.outlines[o].flat(), `${name} outline in direct order`);
+                        ++directOutlines;
+                    });
                 });
                 for (const probe of row.coverage) close([stroke.coverage(...probe.box)], [probe.value], `${name} native coverage`);
                 ++count;
@@ -228,5 +196,5 @@ test('Android input bytes, closed boundaries, mesh vertices and coverage agree w
         }
     }
     assert.equal(count, 840, 'Every Android matrix input stroke must run');
-    console.log(JSON.stringify({ androidStrokes: count, largestGeometryGap: maxGap, reorderedMeshes, rotatedOutlines }));
+    console.log(JSON.stringify({ androidStrokes: count, largestGeometryGap: maxGap, directMeshes, directOutlines, reorderedMeshes: 0, rotatedOutlines: 0 }));
 });

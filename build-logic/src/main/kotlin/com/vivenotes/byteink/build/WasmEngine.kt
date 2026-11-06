@@ -22,6 +22,9 @@ abstract class CheckWasmEngine : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val bridgeSource: RegularFileProperty
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val floatMathSource: RegularFileProperty
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val patches: ConfigurableFileCollection
@@ -37,11 +40,15 @@ abstract class CheckWasmEngine : DefaultTask() {
         val metadata = Properties().apply { files.getValue("build.properties").inputStream().use(::load) }
         check(metadata.getProperty("google.ink.commit") == engineCommit.get()) { "Wasm engine pin mismatch" }
         check(metadata.getProperty("emscripten.version") == emscriptenVersion.get()) { "Wasm toolchain pin mismatch" }
-        check(metadata.getProperty("bridge.abi") == "3") { "Wasm bridge ABI mismatch" }
+        check(metadata.getProperty("bridge.abi") == "4") { "Wasm bridge ABI mismatch" }
+        check(metadata.getProperty("float.math.profile") == "bionic-acosf-v1") { "Wasm float math profile mismatch" }
         fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it) }
         check(metadata.getProperty("bridge.source.sha256") == sha256(bridgeSource.get().asFile.readBytes())) {
             "Wasm bridge source has changed; rerun native/build-wasm.sh"
+        }
+        check(metadata.getProperty("float.math.source.sha256") == sha256(floatMathSource.get().asFile.readBytes())) {
+            "Wasm float math source has changed; rerun native/build-wasm.sh"
         }
         for (patch in patches.files) {
             check(metadata.getProperty("patch.${patch.name}") == sha256(patch.readBytes())) {

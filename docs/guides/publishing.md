@@ -3,8 +3,11 @@
 The [ci workflow](https://github.com/CrownByte0b/ByteInk/actions/workflows/ci.yml)
 publishes to `https://maven.pkg.github.com/crownbyte0b/byteink` after the native
 builds, native tests, pin checks and Linux/Windows JVM test matrices pass.
-It publishes all five modules, sources and metadata; the native loader includes
-both platform binaries and a separate Linux debug-symbol archive.
+The source release configuration includes the desktop libraries, shared `byteink-model`,
+`byteink-portable`, `byteink-wasm` and `byteink-compose-wasm`, with sources and metadata. The
+Wasm engine has a separate `engine@zip` asset classifier; see the [Wasm setup](wasm.md).
+The native loader includes Linux/Windows x86_64 and arm64 binaries and separate Linux
+debug-symbol archives. These Wasm artifacts are absent from the existing `0.1.0-alpha.1` release.
 
 To publish a version from a tag, push `v<major.minor.patch[-prerelease]>`:
 

@@ -3,7 +3,8 @@
 Use the real AndroidX Ink engine in Kotlin/JVM applications on **Linux and Windows, on x86_64 and arm64**. ByteInk supplies native loading, Compose/Skia rendering, live input, and ViveNotes-compatible storage and operation replay.
 
 An experimental [WebAssembly preview](guides/wasm.md) adds a Kotlin/Wasm engine client, shared
-storage/replay, Compose rendering and browser pen input. It is available from a source checkout; the current published release and
+storage/replay, Compose rendering and browser pen input, with local Chromium/Firefox/WebKit
+acceptance. It is available from a source checkout; the current published release and
 desktop kit/Compose APIs remain JVM-only.
 
 | Start here                                          | What you get                                                            |

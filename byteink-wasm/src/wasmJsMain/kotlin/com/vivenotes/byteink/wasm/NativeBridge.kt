@@ -101,6 +101,7 @@ internal fun renderingSnapshot(value: NativeRendering): InkRendering = InkRender
 
 internal external interface NativeModule : JsAny {
     fun abiVersion(): Int
+    fun mathProfile(): String
     fun engineCommit(): String
     fun catalogFamily(kind: Int, pressure: Int, windowMillis: Int, minSize: Float, maxSize: Float): NativeNumbers
     fun createStroke(family: Int, color: Double, size: Float, epsilon: Float, inputs: NativeNumbers): NativeStroke

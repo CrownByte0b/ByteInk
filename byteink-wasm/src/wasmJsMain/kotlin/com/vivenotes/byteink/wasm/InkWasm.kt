@@ -11,14 +11,16 @@ import com.vivenotes.byteink.kit.InkFamilyDefinition
 public class InkWasm private constructor(private val module: NativeModule) {
     private val families: MutableMap<InkFamilyDefinition, ByteArray> = mutableMapOf()
     public val engineCommit: String get() = module.engineCommit()
+    public val mathProfile: String get() = module.mathProfile()
 
     public companion object {
         /** Load byteink-engine.mjs; its .wasm file must be served beside it. Propagates load errors. */
         public suspend fun load(moduleUrl: String): InkWasm {
             require(moduleUrl.isNotBlank()) { "Engine module URL must not be blank" }
             val module = importEngine(moduleUrl).await()
-            check(module.abiVersion() == 3) { "Incompatible ByteInk Wasm bridge ABI" }
+            check(module.abiVersion() == 4) { "Incompatible ByteInk Wasm bridge ABI" }
             check(module.engineCommit() == ENGINE_COMMIT) { "Incompatible Ink engine pin" }
+            check(module.mathProfile() == "bionic-acosf-v1") { "Incompatible Wasm float math profile" }
             return InkWasm(module)
         }
     }

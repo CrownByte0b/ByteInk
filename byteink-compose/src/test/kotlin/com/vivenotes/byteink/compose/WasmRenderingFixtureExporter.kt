@@ -44,6 +44,18 @@ internal object WasmRenderingFixtureExporter {
             val live = if (predicted != null) InProgressStroke().apply {
                 start(brush); enqueueInputs(inputs(points), inputs(predicted)); updateShape(update)
             } else null
+            // Desktop native geometry is also rendered on each browser's WebGL backend. This
+            // separates engine parity from the backend's own software-vs-GPU raster variation.
+            val geometry = family.coats.indices.joinToString(prefix = "[", postfix = "]") { coat ->
+                val meshes = if (stroke != null) com.vivenotes.byteink.core.InkMeshes.rendering(stroke.shape, coat)
+                    else com.vivenotes.byteink.core.InkMeshes.rendering(live!!, coat)
+                val outlines = if (stroke != null) com.vivenotes.byteink.core.InkMeshes.outlines(stroke.shape, coat)
+                    else com.vivenotes.byteink.core.InkMeshes.outlines(live!!, coat)
+                val meshJson = meshes.joinToString(prefix = "[", postfix = "]") { mesh ->
+                    """{"vertices":${mesh.vertices.joinToString(prefix="[",postfix="]")},"triangles":${mesh.triangles.joinToString(prefix="[",postfix="]")}}"""
+                }
+                """{"meshes":$meshJson,"outlines":${numbers(outlines)}}"""
+            }
             val png = try {
                 InkMeshRenderer(InkTextureStore { images[it] }, textureCacheCapacity = 1).use { renderer ->
                     renderer.animationTimeMillis = animation
@@ -60,7 +72,7 @@ internal object WasmRenderingFixtureExporter {
             }.let(::numbers) else "null"
             val atlas = family.coats.first().paintPreferences.first().textureLayers.firstOrNull() as? BrushPaint.StampingTexture
             val atlasJson = atlas?.let { """{"frames":${it.animationFrames},"rows":${it.animationRows},"columns":${it.animationColumns},"duration":${it.animationDurationMillis},"reverse":${it.animationRepeatMode == BrushPaint.TextureLayer.AnimationRepeatMode.REVERSE}}""" } ?: "null"
-            cases += """{"name":"$name","family":"${b64(proto)}","color":$color,"size":$size,"inputs":${numbers(points)},"predicted":${predicted?.let(::numbers) ?: "null"},"update":$update,"animation":$animation,"atlas":$atlasJson,"offsets":$offsets,"png":"${b64(png)}"}"""
+            cases += """{"name":"$name","family":"${b64(proto)}","color":$color,"size":$size,"inputs":${numbers(points)},"predicted":${predicted?.let(::numbers) ?: "null"},"update":$update,"animation":$animation,"atlas":$atlasJson,"offsets":$offsets,"geometry":$geometry,"png":"${b64(png)}"}"""
         }
         try {
             for (id in listOf(ViveBrushes.MARKER, ViveBrushes.PRESSURE_PEN, ViveBrushes.DASHED_LINE, ViveBrushes.HIGHLIGHTER) + (0..5).map(ViveBrushes::calligraphy))

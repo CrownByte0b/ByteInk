@@ -2,8 +2,9 @@
 
 `byteink-portable` supplies a common JVM/Wasm API for ViveNotes brushes, stored strokes, erase
 masks, move/resize operations and page replay. Its Wasm adapter calls `byteink-wasm`, which runs
-the pinned Google Ink C++ engine in a browser or Node. Both preview modules are experimental
-source-checkout artifacts; they are **not included in `0.1.0-alpha.1`**. The opt-in
+the pinned Google Ink C++ engine in a browser or Node. These experimental artifacts are
+**not included in `0.1.0-alpha.1`**. Use the source-checkout setup below until a subsequent
+release containing them is published. The opt-in
 `byteink-compose-wasm` artifact adds Compose rendering; browser input lives in `byteink-wasm`.
 
 The existing JVM APIs and coordinates remain available. Portable settings and stored-row types
@@ -55,8 +56,9 @@ Extract the ZIP into an application static asset directory, for example `public/
 Serve `.wasm` as `application/wasm` and `.mjs` as JavaScript. Use HTTP(S), including for local
 development; a browser cannot load the module from a local `file:` page. The initial backend is
 single-threaded and does not require cross-origin isolation or `SharedArrayBuffer`.
-The current client requires **bridge ABI 3**. Replace both engine assets together when updating
-the preview. Compose also packages its own Skiko Wasm runtime, separately from the Ink engine.
+The current client requires **bridge ABI 4** and the `bionic-acosf-v1` math profile. Replace both
+engine assets together when updating the preview. This profile preserves Android's cap midpoint
+rounding. Compose also packages its own Skiko Wasm runtime, separately from the Ink engine.
 
 ## Shared brushes, stored rows and replay
 
@@ -158,8 +160,8 @@ engine.decodeAndroidStroke(brush, blob).use { reloaded ->
 }
 ```
 
-`load` propagates fetch, compilation and initialization errors and rejects a bridge ABI or engine
-pin mismatch. Node accepts an absolute `file:` module URL. Each load creates an isolated engine
+`load` propagates fetch, compilation and initialization errors and rejects a bridge ABI, math
+profile or engine pin mismatch. Node accepts an absolute `file:` module URL. Each load creates an isolated engine
 instance; normally reuse one instance for an application.
 
 Persist the brush specification with the input blob. Raw input encoding (`encodeInputs` /
@@ -368,25 +370,63 @@ erase, Object erase, moving ink, operation undo, stored-row reload, cancel and c
 `InkKit.load` for every replay and the reusable browser input/session APIs for pen axes, coalesced
 history, prediction and simultaneous contacts.
 
-The browser software raster checks cover 63 synthetic desktop controls (all texture blends,
+Chromium, Firefox and WebKit software raster checks cover 63 synthetic desktop controls (all texture blends,
 wrapping/origins, vertex effects, atlas frames/reverse loops, prediction/timed effects and
 multi-coat paints), within 2/255 per premultiplied channel. Cache retirement/budgets, clipping,
-alpha, prediction replacement and split shapes without outlines are also checked. Actual Compose
-window drawing is smoke-tested with pen/highlighter; a full hardware GPU/browser matrix remains
-part of release acceptance.
+alpha, prediction replacement and split shapes without outlines are also checked. In each browser,
+actual Compose/WebGL canvas screenshots of Wasm geometry match independently exported desktop-native
+geometry exactly for the same 63 controls on black and white backgrounds. The comparison uses the
+same browser raster backend for both geometries. Some headless backends use software GL; this is
+not a physical-GPU or Safari-on-Apple-device certification.
 
-The native-backed Kotlin tests and Chromium consumer checks cover loading, authoring, prediction
+GPU and software rasterization are not pixel-identical. Separate measurements against the desktop
+software PNGs reached 44/255 at DISCARD path edges in Firefox/WebKit and 255/255 at a rotated,
+nearest-sampled red/green texture boundary in Chromium. These measurements do not change the
+software 2/255 gate or the same-backend geometry gate. Applications requiring reproducible raster
+pixels should validate their chosen browser/backend rather than assume cross-backend equality.
+
+The native-backed Kotlin tests and browser consumer checks cover loading, authoring, prediction
 replacement, finishing, hit testing, ownership and Android input reload. All 840 committed Android
 input fixtures re-encode to identical gzip bytes. Their closed boundaries, vertex counts/positions
-and native coverage probes match within the existing float tolerance; the largest measured
-coordinate difference is about 0.000023 stroke units. The same common facade contract runs
+and native coverage probes match within the existing float tolerance. All 840 now also match
+triangle-index order and contour start directly; the largest measured coordinate difference is
+about 0.000016 stroke units. The same common facade contract runs
 against JVM and Wasm: all 280 Android pages replay their erase/move/resize records into 891
 projections, with matching family protobufs, bounds/transforms and spatial geometry. Ownership,
-unknown-data retention, tombstones and invalid-data handling are also checked. Chromium checks
-operation reload and undo at desktop and phone widths.
+unknown-data retention, tombstones and invalid-data handling are also checked. A real file exchange
+has JVM write rows and operations, Wasm verify and extend them, and JVM verify the returned rows:
+29 strokes, six erases, seven moves and 13 replay/undo states. Original blobs, unknown records,
+fractional browser times and timestamps above JavaScript's exact-integer range survive.
 
-**Buffer order differs:** 28 width-20 marker fixtures have reindexed/retriangulated caps and a
-cyclic change of contour start. Counts, vertex positions, oriented closed boundaries and coverage
-match, but direct triangle-index/contour-start parity is not established. Android pixel equivalence,
-physical input latency, WASI, complete custom-brush serialization and official preview publication
-remain outside this acceptance. The existing desktop APIs remain unchanged.
+All three browsers check operation reload/undo and actual mouse capture at desktop and phone
+widths. Their synthetic Pointer Events contract checks coalesced history, fractional time, axes,
+prediction replacement, simultaneous contacts and capture/blur/resize cancellation. Chromium also
+checks trusted CDP pen and touch injection. Physical pens and native pen/touch injection in
+Firefox/WebKit remain unmeasured. Independent Maven-only Node and Compose browser consumers pass,
+including disposal during an active gesture.
+
+## Measured costs and remaining scope
+
+On the local Linux x86_64 acceptance host, three fresh browser processes per engine measured the
+following median ranges for a deterministic 120-observation pressure-pen workload:
+
+| Operation | Chromium | Firefox | WebKit |
+| --- | --- | --- | --- |
+| Create stroke and copy rendering snapshot | 0.41–0.50 ms | 0.40 ms | 0.40 ms |
+| Decode and re-encode Android inputs | 0.35–0.43 ms | 0.40 ms | 0.40 ms |
+| Live gesture: 30 updates/snapshots, then finish | 2.9–3.1 ms | 3.0 ms | 3.0 ms |
+| Cached 128×128 software frame, clear and pixel readback | 8.22–8.27 ms | 9.2–10.8 ms | 6.5–6.7 ms |
+
+These are local CPU/software baselines, with ten warm-up batches and forty measured batches per
+fork; browser timer precision affects the results. Engine loading from a local HTTP server took
+21–55 ms with warm OS file caches. The example serves roughly 2.23 MB of Ink Wasm plus 77 KB of
+engine JavaScript, 1.66 MB of Kotlin Wasm, 8.65 MB of Skiko Wasm and 339 KB of application JavaScript
+before HTTP compression. Application code/assets and these sizes can change with a build.
+GPU presentation, network cold starts, mobile devices, physical input latency and competitor
+performance are outside these measurements.
+
+Android pixel equivalence, WASI and complete custom-brush serialization remain outside this
+acceptance. Atlas metadata and animation-offset serialization retain the upstream limits described
+above. The existing desktop APIs remain unchanged. Local acceptance and staged publications do
+not mean a GitHub release has occurred; the next release still requires the hosted checks and
+publication to succeed.

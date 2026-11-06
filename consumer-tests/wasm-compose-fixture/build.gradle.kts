@@ -8,7 +8,8 @@ plugins.withType<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsPlugi
     extensions.configure<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsEnvSpec> { download = false }
 }
 val engineAssets by configurations.creating
-dependencies { engineAssets("com.vivenotes.byteink:byteink-wasm:0.1.0-SNAPSHOT:engine@zip") }
+val byteinkVersion=providers.gradleProperty("byteinkVersion").orElse("0.1.0-SNAPSHOT").get()
+dependencies { engineAssets("com.vivenotes.byteink:byteink-wasm:$byteinkVersion:engine@zip") }
 val unpackEngine by tasks.registering(Sync::class) {
     from(engineAssets.map { zipTree(it) }); into(layout.buildDirectory.dir("engine-assets"))
 }
@@ -18,7 +19,7 @@ kotlin {
     sourceSets.wasmJsMain {
         resources.srcDir(unpackEngine)
         dependencies {
-            implementation("com.vivenotes.byteink:byteink-compose-wasm:0.1.0-SNAPSHOT")
+            implementation("com.vivenotes.byteink:byteink-compose-wasm:$byteinkVersion")
             implementation("org.jetbrains.compose.foundation:foundation:1.12.2")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
         }

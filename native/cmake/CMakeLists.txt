@@ -129,7 +129,8 @@ endif()
 list(TRANSFORM ink_sources PREPEND "${INK_SOURCE_DIR}/")
 
 if(EMSCRIPTEN)
-  add_executable(ink ${ink_sources} ${proto_sources} "${CMAKE_CURRENT_LIST_DIR}/../wasm/bridge.cc")
+  add_executable(ink ${ink_sources} ${proto_sources} "${CMAKE_CURRENT_LIST_DIR}/../wasm/bridge.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/../wasm/float_math.cc")
   target_compile_definitions(ink PRIVATE BYTEINK_ENGINE_COMMIT="${BYTEINK_ENGINE_COMMIT}")
   set_target_properties(ink PROPERTIES OUTPUT_NAME byteink-engine SUFFIX .mjs)
 else()

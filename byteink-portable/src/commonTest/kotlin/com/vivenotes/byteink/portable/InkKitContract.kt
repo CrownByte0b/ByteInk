@@ -292,13 +292,13 @@ private fun JsonObject.long(name: String): Long = getValue(name).jsonPrimitive.l
 private fun JsonObject.nullString(name: String): String? = getValue(name).jsonPrimitive.contentOrNull
 private fun JsonObject.deleted(): Long? = getValue("deletedAt").jsonPrimitive.longOrNull
 private fun JsonObject.targets(): List<String> = getValue("targetIds").jsonArray.map { it.jsonPrimitive.content }
-private fun strokeRow(o: JsonObject): StoredInkStroke = StoredInkStroke(o.string("id"),o.string("pageId"),o.int("seq"),
+internal fun strokeRow(o: JsonObject): StoredInkStroke = StoredInkStroke(o.string("id"),o.string("pageId"),o.int("seq"),
     o.string("brushFamily"),o.int("brushVersion"),o.float("sizeDp"),o.int("colorArgb"),
     o["colorFollowsTheme"]!!.jsonPrimitive.intOrNull?.let { it!=0 },o.float("epsilon"),o.int("stabilization"),
     o.float("minX"),o.float("minY"),o.float("maxX"),o.float("maxY"),Base64.decode(o.string("points")),o.string("enc"),
     o.long("createdAt"),o.nullString("groupId"),o.deleted())
-private fun eraseRow(o: JsonObject): StoredInkErase = StoredInkErase(o.string("id"),o.string("pageId"),o.string("mode"),
+internal fun eraseRow(o: JsonObject): StoredInkErase = StoredInkErase(o.string("id"),o.string("pageId"),o.string("mode"),
     o.float("sizeDp"),Base64.decode(o.string("points")),o.string("enc"),o.long("createdAt"),o.deleted(),o.targets())
-private fun moveRow(o: JsonObject): StoredInkMove = StoredInkMove(o.string("id"),o.string("pageId"),o.float("dxDp"),o.float("dyDp"),
+internal fun moveRow(o: JsonObject): StoredInkMove = StoredInkMove(o.string("id"),o.string("pageId"),o.float("dxDp"),o.float("dyDp"),
     o.float("scaleX"),o.float("scaleY"),o.float("anchorX"),o.float("anchorY"),Base64.decode(o.string("points")),
     o.string("enc"),o.long("createdAt"),o.deleted(),o.targets())

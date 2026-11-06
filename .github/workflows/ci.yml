@@ -50,8 +50,13 @@ jobs:
     uses: ./.github/workflows/native-pin.yml
 
   wasm:
-    needs: [release]
+    needs: [release, native-linux]
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/wasm.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
 
   # The JVM and publish jobs request actions: read to download another run's artifacts when
   # started alone. A caller must grant every permission its called jobs request.

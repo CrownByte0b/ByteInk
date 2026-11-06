@@ -17,6 +17,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--site", type=Path, default=Path("consumer-tests/wasm-compose-fixture/build/dist/wasmJs/productionExecutable"))
     parser.add_argument("--output", type=Path, default=Path("build/wasm-published-compose-browser"))
+    parser.add_argument("--engine", choices=["chromium", "firefox", "webkit"], default="chromium")
     parser.add_argument("--browser")
     args = parser.parse_args()
     assert (args.site / "index.html").is_file()
@@ -29,7 +30,7 @@ def main():
     results = []
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(executable_path=args.browser, headless=True)
+            browser = getattr(playwright, args.engine).launch(executable_path=args.browser, headless=True)
             try:
                 for width in [1280, 390]:
                     page = browser.new_page(viewport={"width": width, "height": 600})
@@ -47,7 +48,7 @@ def main():
                     page.wait_for_function("globalThis.publishedWasmComposeDisposed === true")
                     page.wait_for_timeout(100)
                     assert not errors, errors
-                    results.append({"width": width, "rendered": True, "disposed_during_gesture": True})
+                    results.append({"engine": args.engine, "version": browser.version, "width": width, "rendered": True, "disposed_during_gesture": True})
                     page.close()
             finally:
                 browser.close()

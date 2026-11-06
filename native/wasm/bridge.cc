@@ -575,7 +575,8 @@ std::unique_ptr<WasmLiveStroke> StartStrokeWithFamily(const val& family, uint32_
 
 EMSCRIPTEN_BINDINGS(byteink) {
   using namespace byteink::wasm;
-  emscripten::function("abiVersion", +[]() { return 3; });
+  emscripten::function("abiVersion", +[]() { return 4; });
+  emscripten::function("mathProfile", +[]() { return std::string("bionic-acosf-v1"); });
   emscripten::function("engineCommit", +[]() { return std::string(BYTEINK_ENGINE_COMMIT); });
   emscripten::function("createStroke", &CreateStroke);
   emscripten::function("decodeStroke", &DecodeStroke);

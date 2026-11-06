@@ -19,6 +19,7 @@ val checkWasmEngine = tasks.register<CheckWasmEngine>("checkWasmEngine") {
     engineFiles.from(engineFileNames.map(engineDirectory::file))
     engineCommit = pinnedEngineCommit
     bridgeSource = rootProject.layout.projectDirectory.file("native/wasm/bridge.cc")
+    floatMathSource = rootProject.layout.projectDirectory.file("native/wasm/float_math.cc")
     patches.from(rootProject.fileTree("native/patches") { include("*.patch") })
     emscriptenVersion = upstreamPins().map { it.getProperty("wasm.emscripten.version") }
 }
@@ -40,7 +41,8 @@ val wasmEngineZip = tasks.register<Zip>("wasmEngineZip") {
 publishing.publications.withType<MavenPublication>().configureEach {
     pom.description = "The pinned Google Ink stroke engine for Kotlin/Wasm browser and Node applications."
     pom.properties.set(pom.properties.get().filterKeys { it != "byteink.jvm.target" } + mapOf(
-        "byteink.wasm.bridge.abi" to "3",
+        "byteink.wasm.bridge.abi" to "4",
+        "byteink.wasm.float.math" to "bionic-acosf-v1",
         "byteink.wasm.emscripten.version" to upstreamPins().get().getProperty("wasm.emscripten.version"),
     ))
     if (name == "kotlinMultiplatform") artifact(wasmEngineZip)

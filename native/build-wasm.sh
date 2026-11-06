@@ -45,11 +45,14 @@ for library in libcxx libcxxabi libunwind compiler-rt; do
 done
 install -m 644 "$root/ink-nativeloader/src/jvmMain/resources/com/vivenotes/byteink/nativeloader/ANDROID-MATH-LICENSE.txt" \
   "$out/licenses/android-math.txt"
+install -m 644 "$native/wasm/float_math.cc" "$out/licenses/android-acosf.txt"
 {
   echo "google.ink.commit=$commit"
   echo "emscripten.version=$(pin wasm.emscripten.version)"
   echo "emsdk.commit=$(pin wasm.emsdk.commit)"
-  echo "bridge.abi=3"
+  echo "bridge.abi=4"
+  echo "float.math.profile=bionic-acosf-v1"
+  echo "float.math.source.sha256=$(sha256sum "$native/wasm/float_math.cc" | cut -d' ' -f1)"
   echo "bridge.source.sha256=$(sha256sum "$native/wasm/bridge.cc" | cut -d' ' -f1)"
   for patch in "${patches[@]}"; do
     echo "patch.$(basename "$patch")=$(sha256sum "$patch" | cut -d' ' -f1)"
