@@ -14,14 +14,19 @@ kotlin.compilerOptions {
 val desktopOs = when {
     System.getProperty("os.name").startsWith("Linux") -> "linux"
     System.getProperty("os.name").startsWith("Windows") -> "windows"
-    else -> error("The examples require Linux or Windows x86_64")
+    else -> error("The examples require Linux or Windows")
+}
+val desktopArch = when (System.getProperty("os.arch").lowercase()) {
+    "amd64", "x86_64" -> "x64"
+    "aarch64", "arm64" -> "arm64"
+    else -> error("The examples require x86_64 or arm64")
 }
 
 dependencies {
     implementation("com.vivenotes.byteink:byteink-compose:0.1.0-SNAPSHOT")
     implementation("com.vivenotes.byteink:byteink-kit:0.1.0-SNAPSHOT")
     implementation("com.vivenotes.byteink:byteink-testing:0.1.0-SNAPSHOT")
-    implementation("org.jetbrains.compose.desktop:desktop-jvm-$desktopOs-x64:1.12.1")
+    implementation("org.jetbrains.compose.desktop:desktop-jvm-$desktopOs-$desktopArch:1.12.1")
 }
 
 application {

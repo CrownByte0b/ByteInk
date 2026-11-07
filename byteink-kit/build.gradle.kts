@@ -7,6 +7,7 @@ plugins {
 
 dependencies {
     api(project(":byteink-core"))
+    api(project(":byteink-model"))
 }
 
 tasks.test {

@@ -2,7 +2,11 @@
 
 All patches apply to the `google.ink.commit` in `upstream/pins.properties`, in filename order.
 The Windows build uses Bazel 8.7.0 and hermetic_cc_toolchain 4.2.0 (Zig 0.14.0 / LLVM 19),
-MinGW-w64/UCRT, baseline x86-64, optimized code and static libc++/libunwind.
+MinGW-w64/UCRT, baseline x86-64, optimized code and static libc++/libunwind. The arm64 builds
+(Linux and Windows) select the same Zig toolchain that 0002 adds, with fused multiply-add
+contraction turned off; see [ARM64.md](ARM64.md). Patch 0002's MODULE.bazel comment still names
+only the Windows x86_64 use, which keeps its bytes, and so the patch hashes that existing
+binaries' build.properties record, unchanged.
 
 | Patch | Purpose | Upstream status |
 |---|---|---|

@@ -1,8 +1,8 @@
 // Unpublished. Gradle builds that consume byteink's published modules, run with TestKit against the
 // repository the publications go to (build/repo): the dependency graph a consumer really gets.
 
-import com.vivenotes.byteink.build.byteinkLinuxLibrary
-import com.vivenotes.byteink.build.byteinkWindowsLibrary
+import com.vivenotes.byteink.build.NativePlatform
+import com.vivenotes.byteink.build.byteinkLibrary
 import com.vivenotes.byteink.build.upstreamPins
 
 plugins {
@@ -39,13 +39,11 @@ val compositeSource = tasks.register<Sync>("prepareCompositeSource") {
         }
     }
     val nativeCommit = upstreamPins().get().getProperty("google.ink.commit")
-    from(byteinkLinuxLibrary()) {
-        into("native/build/out/$nativeCommit/linux-x86_64")
-        rename { "libink.so" }
-    }
-    from(byteinkWindowsLibrary()) {
-        into("native/build/out/$nativeCommit/windows-x86_64")
-        rename { "ink.dll" }
+    for (platform in NativePlatform.entries) {
+        from(byteinkLibrary(platform)) {
+            into("native/build/out/$nativeCommit/${platform.id}")
+            rename { platform.fileName }
+        }
     }
 }
 
@@ -54,9 +52,13 @@ tasks.test {
     dependsOn(
         ":ink-nativeloader:publishAllPublicationsToBuildRepository",
         ":byteink-core:publishAllPublicationsToBuildRepository",
+        ":byteink-model:publishAllPublicationsToBuildRepository",
         ":byteink-kit:publishAllPublicationsToBuildRepository",
         ":byteink-compose:publishAllPublicationsToBuildRepository",
     )
+    val portable = rootProject.findProject(":byteink-portable") != null
+    systemProperty("byteink.test.portable", portable)
+    if (portable) dependsOn(":byteink-portable:publishAllPublicationsToBuildRepository")
     systemProperty("byteink.test.repository", rootProject.layout.buildDirectory.dir("repo").get().asFile.path)
     systemProperty("byteink.test.group", publishedGroup)
     systemProperty("byteink.test.version", publishedVersion)

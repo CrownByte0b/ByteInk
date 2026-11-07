@@ -39,6 +39,15 @@ class PeFileTest {
     }
 
     @Test
+    fun anArm64DllMustBeArm64() {
+        val arm64 = PeFile(TestPe(machine = PeFile.MACHINE_ARM64, exports = surface.toList(), imports = listOf("KERNEL32.dll")).bytes())
+        val x8664 = PeFile(TestPe(exports = surface.toList(), imports = listOf("KERNEL32.dll")).bytes())
+
+        assertEquals(emptyList(), WindowsLibrary.problems(arm64, surface, Architecture.ARM64))
+        assertEquals(listOf("It is not an ARM64 DLL (machine 0x8664)"), WindowsLibrary.problems(x8664, surface, Architecture.ARM64))
+    }
+
+    @Test
     fun namesEveryReasonADllIsNotShippable() {
         val dll = PeFile(
             TestPe(

@@ -1,9 +1,14 @@
 package com.vivenotes.byteink.compose;
 
 import java.lang.foreign.*;
+import java.util.Locale;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.LockSupport;
 import static java.lang.foreign.ValueLayout.*;
 import static java.nio.charset.StandardCharsets.UTF_16LE;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /** Test-only OS input injection; no fabricated pen samples pass through production APIs. */
 final class DesktopInputInjection implements AutoCloseable {
@@ -87,15 +92,58 @@ final class DesktopInputInjection implements AutoCloseable {
             throw new IllegalStateException("ClientToScreen failed");
         int x = point.get(JAVA_INT, 0), y = point.get(JAVA_INT, 4);
         if (phase == 0) {
-            // Pen input is hit-tested against the composed desktop, so a contact can miss a window that
-            // appeared after the last composition. Wait until DWM presents the current window layout.
-            int flushed = api.integer("DwmFlush");
-            if (flushed != 0) throw new IllegalStateException("DwmFlush: 0x" + Integer.toHexString(flushed));
-            // Pointer input is routed by screen position. Fail clearly when another window would receive it.
-            target = api.pointer("WindowFromPoint", (y & 0xffffffffL) << 32 | (x & 0xffffffffL)).address();
-            if (root(target) != root(hwnd)) throw new IllegalStateException("The pen target is covered by " + describe(target));
+            target = composedWindowAt(x, y);
+            int dismissed = 0;
+            long deadline = 0;
+            while (root(target) != root(hwnd)) {
+                if (dismissed < 5 && dismissRunnerAccountPrompt(target)) {
+                    dismissed++;
+                    deadline = System.nanoTime() + 10_000_000_000L; // Its frame outlives it for a moment.
+                } else if (System.nanoTime() >= deadline) {
+                    // Pointer input is routed by screen position. Fail clearly when another window would receive it.
+                    throw new IllegalStateException("The pen target is covered by " + describe(target));
+                }
+                LockSupport.parkNanos(50_000_000L);
+                target = composedWindowAt(x, y);
+            }
         }
         pen(phase, x, y, pressure, tiltX, tiltY);
+    }
+    private long composedWindowAt(int x, int y) {
+        // Pen input is hit-tested against the composed desktop, so a contact can miss a window that
+        // appeared after the last composition. Wait until DWM presents the current window layout.
+        int flushed = api.integer("DwmFlush");
+        if (flushed != 0) throw new IllegalStateException("DwmFlush: 0x" + Integer.toHexString(flushed));
+        return api.pointer("WindowFromPoint", (y & 0xffffffffL) << 32 | (x & 0xffffffffL)).address();
+    }
+    /**
+     * Hosted windows-11-arm images can show this sign-in prompt above even a topmost window, before or
+     * during a job. Closes it on a hosted runner, and returns whether it did; anywhere else, or for any
+     * other window, the covered target stays a failure. The caption belongs to the prompt's own window
+     * (WWAHost's CoreWindow) and to its ApplicationFrameHost frame, not to WWAHost's main window, which it
+     * doesn't have: Process.MainWindowTitle can't find it. Ending WWAHost closes the frame too.
+     */
+    private boolean dismissRunnerAccountPrompt(long hwnd) {
+        if (!"true".equals(System.getenv("GITHUB_ACTIONS")) || hwnd == 0) return false;
+        try (Arena scratch = Arena.ofConfined()) {
+            MemorySegment pid = scratch.allocate(JAVA_INT), className = scratch.allocate(512), title = scratch.allocate(512);
+            api.integer("GetWindowThreadProcessId", MemorySegment.ofAddress(hwnd), pid);
+            api.integer("GetClassNameW", MemorySegment.ofAddress(hwnd), className, 256);
+            api.integer("GetWindowTextW", MemorySegment.ofAddress(hwnd), title, 256);
+            ProcessHandle owner = ProcessHandle.of(Integer.toUnsignedLong(pid.get(JAVA_INT, 0))).orElse(null);
+            if (owner == null || !"Windows.UI.Core.CoreWindow".equals(className.getString(0, UTF_16LE))
+                    || !"Microsoft account".equals(title.getString(0, UTF_16LE))
+                    || !owner.info().command().orElse("").toLowerCase(Locale.ROOT).endsWith("\\wwahost.exe")) return false;
+            System.out.println("Closing the hosted runner's account prompt, which covers the pen target: " + describe(hwnd));
+            if (!owner.destroyForcibly()) return false;
+            owner.onExit().get(5, SECONDS);
+            return true;
+        } catch (ExecutionException | TimeoutException failure) {
+            return false;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
     /** The desktop state relevant to pointer routing, for failure messages. */
     String describeDesktop() {

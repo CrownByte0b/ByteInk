@@ -76,7 +76,8 @@ jobs:
         run: |
           linux=$(bash .github/scripts/artifacts-run.sh "$ARTIFACTS_RUN_ID" libink-linux-x86_64 libink-linux-x86_64-debug-symbols oracle-baseline-linux-x64)
           windows=$(bash .github/scripts/artifacts-run.sh "$ARTIFACTS_RUN_ID" ink-windows-x86_64)
-          printf 'linux=%s\nwindows=%s\n' "$linux" "$windows" >> "$GITHUB_OUTPUT"
+          arm64=$(bash .github/scripts/artifacts-run.sh "$ARTIFACTS_RUN_ID" libink-linux-arm64 libink-linux-arm64-debug-symbols ink-windows-arm64)
+          printf 'linux=%s\nwindows=%s\narm64=%s\n' "$linux" "$windows" "$arm64" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: zulu
@@ -118,23 +119,43 @@ jobs:
           run-id: ${{ steps.artifacts.outputs.windows || github.run_id }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          name: libink-linux-arm64
+          path: native/build/out
+          github-token: ${{ steps.artifacts.outputs.arm64 && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.arm64 || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: libink-linux-arm64-debug-symbols
+          path: native/build/out
+          github-token: ${{ steps.artifacts.outputs.arm64 && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.arm64 || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ink-windows-arm64
+          path: native/build/out
+          github-token: ${{ steps.artifacts.outputs.arm64 && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.arm64 || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
           name: oracle-baseline-linux-x64
           path: native/build/oracle-linux-x64
           github-token: ${{ steps.artifacts.outputs.linux && github.token || '' }}
           run-id: ${{ steps.artifacts.outputs.linux || github.run_id }}
+      # Skiko links EGL even for headless software rendering in the main build/consumer tests.
+      - name: Install graphics runtime and offscreen test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libvulkan1 mesa-vulkan-drivers libxi6 libxtst6
       - name: Build, consumer smoke, full suites, engine oracle and synthetic fidelity reports
         run: >-
-          ./gradlew build :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary
+          ./gradlew build -PbyteinkPortable=true :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary
+          :upstream:checkLinuxArm64Library :upstream:checkWindowsArm64Library
           :conformance:oracle:oracleCompare :conformance:oracle:oracleProduction :conformance:oracle:installDist
           :byteink-testing:desktopParityDump :byteink-testing:androidFidelityMatrix --continue
           "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME"
           -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }}
           -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64,JAVA_HOME_27_X64
           -Porg.gradle.java.installations.auto-download=false
-      - name: Install offscreen OpenGL and EGL test dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libvulkan1 mesa-vulkan-drivers libxi6 libxtst6
       - name: Verify mesh shaders on OpenGL
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"

@@ -1,0 +1,164 @@
+name: WebAssembly
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Validated release version to test; empty uses development coordinates
+        required: false
+        default: ''
+        type: string
+      artifacts-run-id:
+        description: Run holding the Linux native artifact; empty means this run
+        required: false
+        default: ''
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to stage and test; empty uses development coordinates
+        required: false
+        default: ''
+        type: string
+      artifacts-run-id:
+        description: Run ID holding the Linux native artifact, or latest
+        required: true
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  wasm:
+    name: Real Ink engine and Kotlin/Wasm browser consumer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select exact release coordinates
+        if: inputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: bash .github/scripts/release-versions.sh "v$RELEASE_VERSION" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: zulu
+          java-version: 27
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            native/build/emsdk
+            native/build/cmake-deps
+          key: wasm-sdk-${{ runner.os }}-${{ hashFiles('upstream/pins.properties') }}
+      - name: Build the pinned engine
+        run: |
+          native/setup-wasm.sh
+          native/build-wasm.sh
+      - name: Verify native bindings and all Android input fixtures
+        run: |
+          source native/build/emsdk/emsdk_env.sh
+          bash native/wasm/test-math.sh
+          node native/wasm/engine.test.mjs
+      # At this point out/ contains only the built Wasm engine, before downloading JVM natives.
+      - name: Keep checked engine inputs for publication
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: byteink-wasm-engine
+          path: native/build/out/
+          if-no-files-found: error
+      - name: Verify Kotlin/Wasm and stage preview artifacts
+        run: |
+          source native/build/emsdk/emsdk_env.sh
+          ./gradlew -PbyteinkWasm=true :byteink-wasm:wasmJsNodeTest :byteink-model:wasmJsNodeTest \
+            :byteink-portable:wasmJsNodeTest :byteink-model:publishAllPublicationsToBuildRepository \
+            :byteink-portable:publishKotlinMultiplatformPublicationToBuildRepository \
+            :byteink-portable:publishWasmJsPublicationToBuildRepository \
+            :byteink-wasm:publishAllPublicationsToBuildRepository \
+            :byteink-compose-wasm:publishAllPublicationsToBuildRepository :samples:wasm:wasmJsBrowserDistribution
+      - name: Verify an independent published Wasm consumer
+        run: |
+          source native/build/emsdk/emsdk_env.sh
+          BYTEINK_WASM_ENGINE="$(python - <<'PY'
+          from pathlib import Path
+          import re
+          pins = Path("upstream/pins.properties").read_text()
+          commits = re.findall(r"^google\.ink\.commit=([0-9a-f]{40})$", pins, re.MULTILINE)
+          assert len(commits) == 1, "Expected exactly one pinned google.ink.commit"
+          print(Path("native/build/out", commits[0], "wasm/byteink-engine.mjs").resolve().as_uri())
+          PY
+          )"
+          export BYTEINK_WASM_ENGINE
+          ./gradlew -p consumer-tests/wasm-fixture wasmJsNodeDevelopmentRun
+          ./gradlew -p consumer-tests/wasm-compose-fixture wasmJsBrowserDistribution
+      - name: Exercise the actual browser consumer
+        run: |
+          python -m pip install playwright==1.63.0 pillow==12.3.0
+          python -m playwright install --with-deps chromium firefox webkit
+          # Compose/Wasm paints with WebGL2, and without a display headless Firefox refuses to create it.
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0
+          for engine in chromium firefox webkit; do
+            xvfb-run -a python native/wasm/browser-test.py --engine "$engine" --output "build/wasm-browser/$engine"
+            xvfb-run -a python native/wasm/gpu-browser-test.py --engine "$engine" --output "build/wasm-gpu-browser/$engine"
+            xvfb-run -a python native/wasm/consumer-browser-test.py --engine "$engine" --output "build/wasm-published-compose-browser/$engine"
+            xvfb-run -a python native/wasm/benchmark-browser.py --engine "$engine" --output "build/wasm-benchmark/$engine"
+          done
+      - name: Locate Linux native artifact for the storage exchange
+        id: native
+        if: inputs.artifacts-run-id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACTS_RUN_ID: ${{ inputs.artifacts-run-id }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          linux=$(bash .github/scripts/artifacts-run.sh "$ARTIFACTS_RUN_ID" libink-linux-x86_64)
+          printf 'linux=%s\n' "$linux" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: libink-linux-x86_64
+          path: native/build/out
+          github-token: ${{ steps.native.outputs.linux && github.token || '' }}
+          run-id: ${{ steps.native.outputs.linux || github.run_id }}
+      - name: Exchange actual JVM and Wasm rows, operations and undo states
+        run: |
+          source native/build/emsdk/emsdk_env.sh
+          ./gradlew -PbyteinkWasm=true -PbyteinkBundledPlatforms=linux-x86_64 \
+            -PbyteinkRoundTripPhase=seed :byteink-portable:jvmTest --tests '*JvmRoundTripTest'
+          ./gradlew -PbyteinkWasm=true -PbyteinkRoundTripPhase=wasm :byteink-portable:wasmJsNodeTest
+          ./gradlew -PbyteinkWasm=true -PbyteinkBundledPlatforms=linux-x86_64 \
+            -PbyteinkRoundTripPhase=return :byteink-portable:jvmTest --tests '*JvmRoundTripTest'
+      - name: Keep reports and the preview engine bundle
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: byteink-wasm-preview
+          path: |
+            byteink-wasm/build/distributions/
+            byteink-wasm/build/reports/
+            byteink-wasm/build/test-results/
+            byteink-portable/build/reports/
+            byteink-portable/build/test-results/
+            byteink-model/build/reports/
+            byteink-model/build/test-results/
+            byteink-compose-wasm/build/reports/
+            build/wasm-browser/
+            build/wasm-gpu-browser/
+            build/wasm-benchmark/
+            build/wasm-roundtrip/
+            build/wasm-published-compose-browser/
+            build/repo/com/vivenotes/byteink/byteink-wasm*/
+            build/repo/com/vivenotes/byteink/byteink-portable*/
+            build/repo/com/vivenotes/byteink/byteink-model*/
+            build/repo/com/vivenotes/byteink/byteink-compose-wasm*/
+          if-no-files-found: error

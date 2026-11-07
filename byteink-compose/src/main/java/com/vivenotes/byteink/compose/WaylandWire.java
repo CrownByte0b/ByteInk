@@ -47,7 +47,8 @@ final class WaylandWire implements AutoCloseable {
             wakeSignal = arena.allocate(JAVA_LONG);
             wakeSignal.set(JAVA_LONG, 0, 1L);
             MethodHandle eventFd = link("eventfd", FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT));
-            // Linux x86_64 EFD_CLOEXEC | EFD_NONBLOCK. This descriptor belongs only to this reader.
+            // EFD_CLOEXEC | EFD_NONBLOCK: Linux's asm-generic values, the same on x86_64 and aarch64.
+            // This descriptor belongs only to this reader.
             wakeDescriptor = (int) eventFd.invokeExact(0, 0x80000 | 0x800);
             if (wakeDescriptor < 0) throw new IllegalStateException("Cannot create Wayland reader wakeup");
         } catch (Throwable error) {

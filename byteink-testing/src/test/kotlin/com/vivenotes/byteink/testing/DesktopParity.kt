@@ -42,7 +42,8 @@ internal object DesktopParity {
         }
         val library = InkNativeLibrary.load()
         File(output, "runtime.txt").writeText(
-            "${System.getProperty("os.name")} / ${System.getProperty("java.vendor")} ${System.getProperty("java.version")}\n" +
+            "${System.getProperty("os.name")} ${System.getProperty("os.arch")} / ${System.getProperty("java.vendor")} " +
+                "${System.getProperty("java.version")}\n" +
                 "Ink SHA-256: ${library.sha256}\n",
         )
         val cases = mutableListOf<String>()
@@ -120,7 +121,7 @@ internal object DesktopParity {
         File(candidate, "comparison.md").writeText(buildString {
             append("# Desktop platform parity\n\nReference: ${File(reference, "runtime.txt").readText().trim()}\n\n")
             append("Candidate: ${File(candidate, "runtime.txt").readText().trim()}\n\n")
-            append("Same fixture archive bytes, stored replay, partial/object erases and move/resize. Geometry uses 1e-4 + 1e-5·max tolerance; identities and projection counts are exact. Software raster acceptance: maximum RGB delta ≤2.\n\n")
+            append("Same fixture archive bytes, stored replay, partial/object erases and move/resize. Geometry uses 1e-4 + 1e-5·max tolerance; identities and projection counts are exact. Software raster acceptance: maximum RGB delta ${SoftwareRaster.description}.\n\n")
             append("Bounds: ${bounds.rows} rows / ${bounds.mismatches} mismatches / max gap ${bounds.maxGap}.\n\n")
             append("Projections: ${projections.rows} rows / ${projections.mismatches} mismatches / max gap ${projections.maxGap}; exact counts: $equalCounts.\n\n")
             append("| Case | Max RGB delta | MAE | SSIM |\n|---|---:|---:|---:|\n")
@@ -128,7 +129,9 @@ internal object DesktopParity {
             (bounds.issues + projections.issues).take(10).forEach { append("\n- $it") }
         })
         check(equalCounts && bounds.mismatches == 0 && projections.mismatches == 0) { "Desktop replay geometry differs" }
-        check(pixels.all { it.second.maximum <= 2 }) { "Desktop software raster differs; see ${File(candidate, "comparison.md")}" }
+        check(pixels.all { it.second.maximum <= SoftwareRaster.maxChannelDelta }) {
+            "Desktop software raster differs; see ${File(candidate, "comparison.md")}"
+        }
         println("${cases.size} cases passed geometry, projection-count and raster parity")
     }
 }

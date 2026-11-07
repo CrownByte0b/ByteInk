@@ -77,7 +77,7 @@ The built-in panel retires live renderer caches on completion/cancellation and r
 
 | Platform/backend | Requirements |
 | --- | --- |
-| Windows x86_64 / `WINDOWS_POINTER` | Java 25+, `WM_POINTER` pen/history, touch and primary mouse |
+| Windows (x86_64, arm64) / `WINDOWS_POINTER` | Java 25+, `WM_POINTER` pen/history, touch and primary mouse |
 | Linux X11 or XWayland / `LINUX_XINPUT2` | Java 25+, `libX11.so.6`, `libXi.so.6`, `libc.so.6` |
 | Linux native Wayland / `LINUX_WAYLAND_TABLET` | Tested JBR 25 with WLToolkit, `libwayland-client.so.0`, `libc.so.6`, a live compositor; tablet-v2 for pen axes, `wl_touch` for touch |
 

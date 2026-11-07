@@ -1,8 +1,11 @@
 # Get started
 
+For the experimental browser target, use the [WebAssembly preview guide](guides/wasm.md).
+The setup below applies to the published JVM libraries.
+
 ## Add ByteInk to your project
 
-ByteInk is published to [GitHub Packages](https://github.com/orgs/CrownByte0b/packages). The current release is `0.1.0-alpha.1`. Use Java 25+, Kotlin 2.4.20 and Compose Multiplatform 1.12.1 for the tested setup. The Linux and Windows natives ship inside the dependency.
+ByteInk is published to [GitHub Packages](https://github.com/orgs/CrownByte0b/packages). The current release is `0.1.0-alpha.1`. Use Java 25+, Kotlin 2.4.20 and Compose Multiplatform 1.12.1 for the tested setup. The natives for Linux and Windows, on x86_64 and arm64, ship inside the dependency; the loader picks the one matching the JVM's `os.name` and `os.arch`.
 
 ### 1. Add a GitHub token
 
@@ -56,7 +59,7 @@ compose.desktop {
 }
 ```
 
-Apply the Kotlin Compose compiler and Compose Multiplatform plugins in your application. The application supplies its OS-specific Compose/Skiko runtime. `byteink-compose` and `byteink-kit` bring in core, the pinned AndroidX modules and the native loader. Add `com.vivenotes.byteink:byteink-testing:0.1.0-alpha.1` only if you need [notebook utilities](guides/notebooks.md).
+Apply the Kotlin Compose compiler and Compose Multiplatform plugins in your application. The application supplies its OS- and CPU-specific Compose/Skiko runtime: `compose.desktop.currentOs` selects it for the build machine, and a build that names one explicitly needs the matching `desktop-jvm-<linux|windows>-<x64|arm64>` artifact. `byteink-compose` and `byteink-kit` bring in core, the pinned AndroidX modules and the native loader. Add `com.vivenotes.byteink:byteink-testing:0.1.0-alpha.1` only if you need [notebook utilities](guides/notebooks.md).
 
 For a plain JVM project, put the same dependencies in `dependencies { ... }`. [The example build](examples/build.gradle.kts) uses a standalone JVM consumer.
 

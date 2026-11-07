@@ -6,9 +6,11 @@
 import com.vivenotes.byteink.build.BundleNativeLibraries
 import com.vivenotes.byteink.build.GitSparseCheckout
 import com.vivenotes.byteink.build.NativeDebugSymbolsMetadata
+import com.vivenotes.byteink.build.NativePlatform
 import com.vivenotes.byteink.build.PatchedSources
 import com.vivenotes.byteink.build.SyncForkSources
 import com.vivenotes.byteink.build.VerifyForkSources
+import com.vivenotes.byteink.build.byteinkLibrary
 import com.vivenotes.byteink.build.byteinkLinuxLibrary
 import com.vivenotes.byteink.build.byteinkWindowsLibrary
 import com.vivenotes.byteink.build.bytecodeTarget
@@ -30,34 +32,49 @@ check(version.toString().startsWith("${libs.versions.androidx.ink.get()}-byteink
 val bundledNatives = tasks.register<BundleNativeLibraries>("bundleNativeLibraries") {
     description = "Lays byteink's native libraries and their manifest out as resources of this jar."
     linux.from(byteinkLinuxLibrary())
+    linuxArm64.from(byteinkLibrary(NativePlatform.LINUX_ARM64))
     windows.from(byteinkWindowsLibrary())
+    windowsArm64.from(byteinkLibrary(NativePlatform.WINDOWS_ARM64))
     googleInkCommit = upstreamPins().map { it.getProperty("google.ink.commit") }
+    // -PbyteinkBundledPlatforms=linux-x86_64 builds a jar for one platform without the others' libraries.
+    platforms = providers.gradleProperty("byteinkBundledPlatforms")
+        .map { it.split(',').map(String::trim).filter(String::isNotEmpty).toSet() }
+        .orElse(NativePlatform.entries.map { it.id }.toSet())
     directory = layout.buildDirectory.dir("natives")
 }
 
 // Symbols are addressable separately by classifier and never enter the runtime resources or jar.
-val linuxLibrary = byteinkLinuxLibrary()
 val symbolsProjectRoot = rootProject.layout.projectDirectory
-val linuxSymbols = layout.file(providers.gradleProperty("byteinkLinuxDebugSymbols")
-    .map(symbolsProjectRoot::file).map { it.asFile }
-    .orElse(linuxLibrary.map { it.asFile.resolveSibling("libink.so.debug") }))
-val symbolsMetadata = tasks.register<NativeDebugSymbolsMetadata>("linuxDebugSymbolsMetadata") {
-    library = linuxLibrary
-    symbols = linuxSymbols
-    buildMetadata = layout.file(linuxLibrary.map { it.asFile.resolveSibling("build.properties") })
-    manifest = layout.buildDirectory.file("debug-symbols/build.properties")
+
+/** A zip of [platform]'s separate debug ELF, published under the `<platform id>-debug-symbols` classifier. */
+fun linuxDebugSymbols(platform: NativePlatform, taskPrefix: String, symbolsProperty: String): TaskProvider<Zip> {
+    val library = byteinkLibrary(platform)
+    val symbols = layout.file(providers.gradleProperty(symbolsProperty)
+        .map(symbolsProjectRoot::file).map { it.asFile }
+        .orElse(library.map { it.asFile.resolveSibling("libink.so.debug") }))
+    val metadata = tasks.register<NativeDebugSymbolsMetadata>("${taskPrefix}DebugSymbolsMetadata") {
+        this.library = library
+        this.symbols = symbols
+        buildMetadata = layout.file(library.map { it.asFile.resolveSibling("build.properties") })
+        manifest = layout.buildDirectory.file("debug-symbols/${platform.id}/build.properties")
+    }
+    return tasks.register<Zip>("${taskPrefix}DebugSymbols") {
+        group = "publishing"
+        description = "Packages ${platform.id} native debug symbols separately from the runtime jar."
+        archiveClassifier = "${platform.id}-debug-symbols"
+        from(symbols) { into(platform.id) }
+        from(metadata.flatMap { it.manifest }) { into(platform.id) }
+        from(rootProject.layout.projectDirectory.file("LICENSE"))
+        from(layout.projectDirectory.file("src/jvmMain/resources/com/vivenotes/byteink/nativeloader/ANDROID-MATH-LICENSE.txt"))
+    }
 }
-val linuxDebugSymbols = tasks.register<Zip>("linuxDebugSymbols") {
-    group = "publishing"
-    description = "Packages Linux native debug symbols separately from the runtime jar."
-    archiveClassifier = "linux-x86_64-debug-symbols"
-    from(linuxSymbols) { into("linux-x86_64") }
-    from(symbolsMetadata.flatMap { it.manifest }) { into("linux-x86_64") }
-    from(rootProject.layout.projectDirectory.file("LICENSE"))
-    from(layout.projectDirectory.file("src/jvmMain/resources/com/vivenotes/byteink/nativeloader/ANDROID-MATH-LICENSE.txt"))
-}
+val linuxDebugSymbols = linuxDebugSymbols(NativePlatform.LINUX_X86_64, "linux", "byteinkLinuxDebugSymbols")
+val linuxArm64DebugSymbols = linuxDebugSymbols(NativePlatform.LINUX_ARM64, "linuxArm64", "byteinkLinuxArm64DebugSymbols")
 publishing.publications.withType<MavenPublication>().configureEach {
-    if (name == "jvm") artifact(linuxDebugSymbols)
+    if (name == "jvm") {
+        artifact(linuxDebugSymbols)
+        artifact(linuxArm64DebugSymbols)
+    }
 }
 
 kotlin {

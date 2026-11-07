@@ -2,14 +2,16 @@
 
 | Symptom | Check / fix |
 | --- | --- |
-| Unsupported platform | Use Linux or Windows x86_64 with a matching JVM; macOS/ARM64 are not bundled. |
+| Unsupported platform | Use Linux or Windows on x86_64 or arm64; macOS is not bundled. The loader follows the JVM's `os.arch`: an x64 JVM on an arm64 machine loads the x86_64 library, so use an arm64 JDK with Compose's `-arm64` runtime there. |
 | Class-file version error | Run Java 25+; match the application's bytecode target. |
 | Native access warning | Add `--enable-native-access=ALL-UNNAMED` to application JVM args. |
 | Gradle loader capability conflict | Remove Google's loader dependencies, or exclude both `androidx.ink:ink-nativeloader` and `ink-nativeloader-jvm` where introduced. |
 | `InkRuntime.load` reports a loader conflict | Check runtime classpath for a second `androidx.ink.nativeloader.NativeLoader`; use ByteInk's transitive fork. |
-| Bundled native missing while building | Build both pinned native outputs or supply `-PbyteinkLinuxLibrary` / `-PbyteinkWindowsLibrary`; use matching ABI/pins. |
+| Bundled native missing while building | Build the four pinned native outputs, supply `-PbyteinkLinuxLibrary` / `-PbyteinkLinuxArm64Library` / `-PbyteinkWindowsLibrary` / `-PbyteinkWindowsArm64Library`, or bundle fewer with `-PbyteinkBundledPlatforms=linux-x86_64,…`; use matching ABI/pins. |
 | Native cache cannot be written | Default loading falls back to a private temp directory. An explicit `byteink.ink.cache` is used as supplied and has no default-location fallback. |
 | Windows native path fails under Zulu | Try an ASCII cache path such as `-Dbyteink.ink.cache=C:/byteink-cache`; pinned JBR 25 supports broader Unicode paths. |
+| Compose/Wasm: `org_jetbrains_skia_Paint__1nMake is not a function`, or a minified name such as `xn is not a function`, on some page loads | Skia was used before Skiko's Wasm runtime loaded. Call `awaitInkRendering()` first when using Skia outside `ComposeViewport` content; see the [WebAssembly guide](guides/wasm.md#compose-rendering). |
+| Compose/Wasm: blank drawing surface and `Exception while trying to handle coroutine exception` | The browser could not create a WebGL2 context. Headless Firefox on a machine with no display needs one: run it under `xvfb-run -a`; see the [WebAssembly guide](guides/wasm.md#compose-rendering). |
 | Native memory outlives collection, or a `byteink native frees` thread appears | Expected: Ink objects free their native memory 250 ms after finalization, on that daemon thread. A native call still using an object the collector found unreachable would have to stall that long to read freed memory. |
 | Drawing disappears at pointer release | Add the completed stroke to finished content and keep it in `drawContent`. |
 | Pointer samples arrive but wet shape stalls | Schedule frames from `hasPendingInputs` and `isUpdateNeeded`; call `advance`, not only `append`. |

@@ -48,7 +48,7 @@ public class NativeInkInputSource(
         System.getProperty("os.name").startsWith("Windows", ignoreCase = true) -> InkNativeBackend.WINDOWS_POINTER
         System.getProperty("os.name").startsWith("Linux", ignoreCase = true) && WaylandRuntime.isWayland() -> InkNativeBackend.LINUX_WAYLAND_TABLET
         System.getProperty("os.name").startsWith("Linux", ignoreCase = true) -> InkNativeBackend.LINUX_XINPUT2
-        else -> throw UnsupportedOperationException("Native ink supports Linux x86_64 and Windows x86_64")
+        else -> throw UnsupportedOperationException("Native ink supports Linux and Windows on x86_64 or arm64")
     }
     private var subscribed = false
     private var generation = 0L
@@ -58,7 +58,9 @@ public class NativeInkInputSource(
     init {
         require(windowHandle != 0L) { "A live native drawing-area handle is required" }
         require(centimetersPerNativePixel == null || centimetersPerNativePixel.isFinite() && centimetersPerNativePixel > 0f)
-        require(System.getProperty("os.arch").lowercase() in setOf("amd64", "x86_64")) { "Native ink requires x86_64" }
+        require(System.getProperty("os.arch").lowercase() in setOf("amd64", "x86_64", "aarch64", "arm64")) {
+            "Native ink requires x86_64 or arm64"
+        }
     }
 
     override public fun subscribe(listener: (InkInputEvent) -> Unit): AutoCloseable {

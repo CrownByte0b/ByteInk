@@ -172,36 +172,9 @@ public class LassoShape(
     }
 }
 
-private fun pointInPolygon(point: InkPoint, polygon: List<InkPoint>): Boolean {
-    var inside = false
-    var previous = polygon.last()
-    polygon.forEach { current ->
-        val crosses = (current.y > point.y) != (previous.y > point.y)
-        if (crosses) {
-            val crossingX = (previous.x - current.x) * (point.y - current.y) / (previous.y - current.y) + current.x
-            if (point.x < crossingX) inside = !inside
-        }
-        previous = current
-    }
-    return inside
-}
+private fun pointInPolygon(point: InkPoint, polygon: List<InkPoint>): Boolean = InkPolygonMath.inside(point, polygon)
 
-private fun isConvex(polygon: List<InkPoint>): Boolean {
-    if (polygon.size < 3) return false
-    var sign = 0
-    polygon.indices.forEach { index ->
-        val a = polygon[index]
-        val b = polygon[(index + 1) % polygon.size]
-        val c = polygon[(index + 2) % polygon.size]
-        val cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
-        // Collinear vertices turn neither way and constrain nothing.
-        if (cross != 0f) {
-            val turn = if (cross > 0f) 1 else -1
-            if (sign == 0) sign = turn else if (sign != turn) return false
-        }
-    }
-    return sign != 0
-}
+private fun isConvex(polygon: List<InkPoint>): Boolean = InkPolygonMath.convex(polygon)
 
 /**
  * Whether every outline vertex of this projection is in or near [polygon]; null when it has no
@@ -225,35 +198,12 @@ private fun PageStroke.containsExactly(polygon: List<InkPoint>, edgeTolerance: F
 }
 
 /** Whether [point] is inside [polygon] or within [edgeTolerance] of its edge. */
-public fun pointInOrNearPolygon(point: InkPoint, polygon: List<InkPoint>, edgeTolerance: Float): Boolean {
-    if (pointInPolygon(point, polygon)) return true
-    val toleranceSquared = edgeTolerance.coerceAtLeast(0f).let { it * it }
-    if (toleranceSquared == 0f) return false
-    var previous = polygon.last()
-    polygon.forEach { current ->
-        if (point.distanceSquaredToSegment(previous, current) <= toleranceSquared) return true
-        previous = current
-    }
-    return false
-}
+public fun pointInOrNearPolygon(point: InkPoint, polygon: List<InkPoint>, edgeTolerance: Float): Boolean =
+    InkPolygonMath.near(point, polygon, edgeTolerance)
 
 /** The squared distance from this point to the segment [start]–[end]. */
-public fun InkPoint.distanceSquaredToSegment(start: InkPoint, end: InkPoint): Float {
-    val dx = end.x - start.x
-    val dy = end.y - start.y
-    val lengthSquared = dx * dx + dy * dy
-    if (lengthSquared == 0f) {
-        val pointDx = x - start.x
-        val pointDy = y - start.y
-        return pointDx * pointDx + pointDy * pointDy
-    }
-    val fraction = (((x - start.x) * dx + (y - start.y) * dy) / lengthSquared).coerceIn(0f, 1f)
-    val nearestX = start.x + fraction * dx
-    val nearestY = start.y + fraction * dy
-    val pointDx = x - nearestX
-    val pointDy = y - nearestY
-    return pointDx * pointDx + pointDy * pointDy
-}
+public fun InkPoint.distanceSquaredToSegment(start: InkPoint, end: InkPoint): Float =
+    InkPolygonMath.squaredDistance(this, start, end)
 
 /**
  * Whether a lasso gesture is a closed path: somewhere the stroke meets the stroke, by crossing or by

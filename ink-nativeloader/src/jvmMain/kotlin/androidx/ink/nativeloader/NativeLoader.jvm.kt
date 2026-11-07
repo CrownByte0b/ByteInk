@@ -31,8 +31,8 @@ import com.vivenotes.byteink.nativeloader.InkNativeLibrary
 @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
 actual public object NativeLoader {
     actual public fun load() {
-        // byteink: the library bundled for Linux or Windows x86_64, from a per-user cache, or the one
-        // -Dbyteink.ink.library names. InkNativeLibrary loads it once.
+        // byteink: the library bundled for Linux or Windows (x86_64, arm64), from a per-user cache, or
+        // the one -Dbyteink.ink.library names. InkNativeLibrary loads it once.
         InkNativeLibrary.load()
     }
 }

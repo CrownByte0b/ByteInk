@@ -4,13 +4,17 @@ import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.util.*;
 
-/** Small x86_64 ABI boundary, independent of Ink's JNI library and engine pin. */
+/**
+ * Small native ABI boundary, independent of Ink's JNI library and engine pin. Calls take fixed
+ * arguments only, and callers read structs at LP64 (Linux) or LLP64 (Windows) offsets, which x86_64
+ * and arm64 share.
+ */
 final class NativeCalls {
     private final List<SymbolLookup> libraries;
     private final Map<String, MethodHandle> functions = new HashMap<>();
     NativeCalls(Arena arena, String... names) {
         libraries = Arrays.stream(names).map(name -> SymbolLookup.libraryLookup(name, arena)).toList();
-        if (ValueLayout.ADDRESS.byteSize() != 8) throw new UnsupportedOperationException("Native pen capture requires x86_64");
+        if (ValueLayout.ADDRESS.byteSize() != 8) throw new UnsupportedOperationException("Native pen capture requires a 64-bit JVM");
     }
     synchronized MethodHandle function(String name, MemoryLayout result, MemoryLayout... args) {
         return functions.computeIfAbsent(name, key -> {

@@ -47,6 +47,30 @@ class LinuxLibraryTest {
     }
 
     @Test
+    fun anArm64LibraryNeedsAArch64AndItsOwnLoader() {
+        val library = ElfFile(
+            TestElf(
+                machine = 183,
+                symbols = surface.map { TestElf.Symbol(it) },
+                needed = listOf("libm.so.6", "libc.so.6", "ld-linux-aarch64.so.1"),
+                versions = mapOf("libc.so.6" to listOf("GLIBC_2.17")),
+            ).bytes(),
+        )
+
+        assertEquals(183, library.machine)
+        assertEquals(emptyList(), LinuxLibrary.problems(library, surface, maxGlibc = "2.28", Architecture.ARM64))
+        assertEquals(
+            listOf("It is not an x86-64 library (ELF machine 183)", "It needs libraries beyond glibc: ld-linux-aarch64.so.1"),
+            LinuxLibrary.problems(library, surface, maxGlibc = "2.28", Architecture.X86_64),
+        )
+        val x8664 = ElfFile(TestElf(symbols = surface.map { TestElf.Symbol(it) }).bytes())
+        assertEquals(
+            listOf("It is not an ARM64 library (ELF machine 62)"),
+            LinuxLibrary.problems(x8664, surface, maxGlibc = "2.28", Architecture.ARM64),
+        )
+    }
+
+    @Test
     fun comparesGlibcVersionsNumerically() {
         assertTrue(LinuxLibrary.compareVersions("2.2.5", "2.26") < 0)
         assertTrue(LinuxLibrary.compareVersions("2.3.4", "2.26") < 0)
@@ -66,7 +90,7 @@ class LinuxLibraryTest {
         assertEquals(emptyList(), LinuxLibrary.problems(library, exports, maxGlibc = "2.26"))
         assertEquals("2.26", LinuxLibrary.newestGlibc(library))
         assertEquals(
-            LinuxLibrary.allowedLibraries,
+            LinuxLibrary.allowedLibraries(Architecture.X86_64),
             library.neededLibraries.toSet(),
             "Google's binary needs exactly the glibc family",
         )

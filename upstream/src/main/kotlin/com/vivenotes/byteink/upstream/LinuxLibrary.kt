@@ -3,24 +3,32 @@ package com.vivenotes.byteink.upstream
 import java.io.File
 
 /**
- * What a Linux `libink.so` has to be before byteink ships it: the declared JNI surface (the pinned
- * Google release plus explicit ByteInk extensions), and only the C library below a given glibc.
+ * What a Linux `libink.so` has to be before byteink ships it: built for its architecture, the
+ * declared JNI surface (the pinned Google release plus explicit ByteInk extensions), and only the C
+ * library below a given glibc.
  */
 internal object LinuxLibrary {
 
-    /** The glibc family, and the only libraries Google's own binary needs. */
-    val allowedLibraries = setOf(
-        "libc.so.6",
-        "libm.so.6",
-        "libpthread.so.0",
-        "libdl.so.2",
-        "librt.so.1",
-        "ld-linux-x86-64.so.2",
-    )
+    private val glibc = setOf("libc.so.6", "libm.so.6", "libpthread.so.0", "libdl.so.2", "librt.so.1")
+
+    /**
+     * The glibc family on [architecture], whose dynamic loader is named after it: on x86-64, exactly
+     * the libraries Google's own binary needs.
+     */
+    fun allowedLibraries(architecture: Architecture): Set<String> = glibc + architecture.linuxLoader
 
     private val glibcVersion = Regex("""GLIBC_(\d+(?:\.\d+)*)""")
 
-    fun problems(library: ElfFile, expectedExports: Set<String>, maxGlibc: String): List<String> = buildList {
+    fun problems(
+        library: ElfFile,
+        expectedExports: Set<String>,
+        maxGlibc: String,
+        architecture: Architecture = Architecture.X86_64,
+    ): List<String> = buildList {
+        val allowedLibraries = allowedLibraries(architecture)
+        if (library.machine != architecture.elfMachine) {
+            add("It is not an ${architecture.displayName} library (ELF machine ${library.machine})")
+        }
         SymbolList.difference(expectedExports, library.exportedFunctions.filterTo(sortedSetOf()) { it.startsWith("Java_") })
             ?.let { add("Its Java_* exports differ from the pinned surface:\n$it") }
         (library.neededLibraries - allowedLibraries).takeIf { it.isNotEmpty() }
@@ -62,7 +70,7 @@ internal fun checkLinuxLibraryCommand(arguments: Arguments): Int {
             "needs ${library.neededLibraries.joinToString()}; " +
             "newest glibc symbol ${LinuxLibrary.newestGlibc(library)?.let { "GLIBC_$it" } ?: "none"}",
     )
-    val problems = LinuxLibrary.problems(library, LibraryExportContract.read(arguments), maxGlibc)
+    val problems = LinuxLibrary.problems(library, LibraryExportContract.read(arguments), maxGlibc, Architecture.of(arguments))
     if (problems.isNotEmpty()) {
         throw CheckFailed("$binary is not shippable:\n" + problems.joinToString("\n") { "- $it" })
     }

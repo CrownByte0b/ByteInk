@@ -3,7 +3,7 @@ package com.vivenotes.byteink.upstream
 import java.io.File
 
 /**
- * What a Windows `ink.dll` has to be before byteink ships it: an x86-64 DLL exporting exactly the
+ * What a Windows `ink.dll` has to be before byteink ships it: a DLL for its architecture exporting exactly the
  * pinned Google JNI surface plus declared ByteInk extensions, importing only what every Windows 10
  * or later provides — no C++ runtime, unwinder or threads library of its own.
  */
@@ -20,8 +20,14 @@ internal object WindowsLibrary {
      */
     private val unwinderExport = Regex("_Unwind_[A-Za-z]+|unw_[a-z_]+|_GCC_specific_handler")
 
-    fun problems(library: PeFile, expectedExports: Set<String>): List<String> = buildList {
-        if (library.machine != PeFile.MACHINE_AMD64) add("It is not an x86-64 DLL (machine 0x${library.machine.toString(16)})")
+    fun problems(
+        library: PeFile,
+        expectedExports: Set<String>,
+        architecture: Architecture = Architecture.X86_64,
+    ): List<String> = buildList {
+        if (library.machine != architecture.peMachine) {
+            add("It is not an ${architecture.displayName} DLL (machine 0x${library.machine.toString(16)})")
+        }
         if (library.debugKinds.any { it != 16 }) add("It carries path-dependent debug information: ${library.debugKinds}")
         SymbolList.difference(expectedExports, library.exportedNames.filterTo(sortedSetOf()) { it.startsWith("Java_") })
             ?.let { add("Its Java_* exports differ from the pinned surface:\n$it") }
@@ -42,7 +48,7 @@ internal fun checkWindowsLibraryCommand(arguments: Arguments): Int {
         "$binary: ${library.exportedNames.count { it.startsWith("Java_") }} JNI functions; " +
             "imports ${library.importedLibraries.joinToString()}",
     )
-    val problems = WindowsLibrary.problems(library, LibraryExportContract.read(arguments))
+    val problems = WindowsLibrary.problems(library, LibraryExportContract.read(arguments), Architecture.of(arguments))
     if (problems.isNotEmpty()) {
         throw CheckFailed("$binary is not shippable:\n" + problems.joinToString("\n") { "- $it" })
     }

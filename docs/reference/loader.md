@@ -62,7 +62,7 @@ public class LoadedInkLibrary
 | `sha256` | `String` | `Returned value` | Loaded native file's lowercase SHA-256 digest. |
 | `origin` | `Origin` | `Returned value` | BUNDLED for the packaged native, PROPERTY for an explicit library override. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/ink-nativeloader/src/jvmMain/kotlin/com/vivenotes/byteink/nativeloader/InkNativeLibrary.kt#L90)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/ink-nativeloader/src/jvmMain/kotlin/com/vivenotes/byteink/nativeloader/InkNativeLibrary.kt#L91)
 
 ### `LoadedInkLibrary.Origin`
 
@@ -72,4 +72,4 @@ Values: BUNDLED (packaged native) and PROPERTY (explicit path override).
 public enum class Origin
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/ink-nativeloader/src/jvmMain/kotlin/com/vivenotes/byteink/nativeloader/InkNativeLibrary.kt#L99)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/ink-nativeloader/src/jvmMain/kotlin/com/vivenotes/byteink/nativeloader/InkNativeLibrary.kt#L100)

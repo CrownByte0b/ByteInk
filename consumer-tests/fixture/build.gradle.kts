@@ -11,12 +11,19 @@ val byteinkGroup = providers.gradleProperty("byteinkGroup").getOrElse("com.viven
 val byteinkVersion = providers.gradleProperty("byteinkVersion").getOrElse("0.1.0-SNAPSHOT")
 val composeVersion = providers.gradleProperty("composeVersion").getOrElse("1.12.1")
 val composite = providers.gradleProperty("byteinkCompositePath").isPresent
+val portable = providers.gradleProperty("byteinkPortable").orNull == "true"
 val operatingSystem = System.getProperty("os.name").let {
     when {
         it.startsWith("Linux") -> "linux"
         it.startsWith("Windows") -> "windows"
-        else -> error("ByteInk supports Linux x86_64 and Windows x86_64: $it")
+        else -> error("ByteInk supports Linux and Windows on x86_64 and arm64: $it")
     }
+}
+// Compose's desktop runtimes are per OS and CPU: desktop-jvm-linux-x64, desktop-jvm-windows-arm64…
+val architecture = when (System.getProperty("os.arch").lowercase()) {
+    "amd64", "x86_64" -> "x64"
+    "aarch64", "arm64" -> "arm64"
+    else -> error("ByteInk supports Linux and Windows on x86_64 and arm64: ${System.getProperty("os.arch")}")
 }
 
 kotlin.compilerOptions {
@@ -28,8 +35,21 @@ tasks.withType<JavaCompile>().configureEach { options.release = 25 }
 dependencies {
     implementation("$byteinkGroup:byteink-compose:$byteinkVersion")
     implementation("$byteinkGroup:byteink-kit:$byteinkVersion")
+    if (portable) implementation("$byteinkGroup:byteink-portable:$byteinkVersion")
     // The application's OS-specific Compose runtime supplies Skia. ByteInk itself stays portable.
-    runtimeOnly("org.jetbrains.compose.desktop:desktop-jvm-$operatingSystem-x64:$composeVersion")
+    runtimeOnly("org.jetbrains.compose.desktop:desktop-jvm-$operatingSystem-$architecture:$composeVersion")
+}
+
+if (portable) {
+    kotlin.sourceSets.main { kotlin.srcDir("src/portable/kotlin") }
+    tasks.register<JavaExec>("portableSmoke") {
+        classpath = sourceSets.main.get().runtimeClasspath
+        mainClass = "com.vivenotes.byteink.consumer.PortableSmokeKt"
+        jvmArgs("--enable-native-access=ALL-UNNAMED")
+        providers.gradleProperty("consumerJavaHome").orNull?.let {
+            setExecutable(file("$it/bin/" + if (operatingSystem == "windows") "java.exe" else "java").absolutePath)
+        }
+    }
 }
 
 application {
@@ -41,7 +61,9 @@ val verifyConsumerClasspath = tasks.register("verifyConsumerClasspath") {
     val runtime = configurations.runtimeClasspath
     doLast {
         val components = runtime.get().incoming.resolutionResult.allComponents.map { it.id }
-        for (module in listOf("byteink-core", "byteink-compose", "byteink-kit", "ink-nativeloader")) {
+        val expected = listOf("byteink-core", "byteink-model", "byteink-compose", "byteink-kit", "ink-nativeloader") +
+            if (portable) listOf("byteink-portable") else emptyList()
+        for (module in expected) {
             val matching = components.filter { component ->
                 when (component) {
                     is ModuleComponentIdentifier -> component.group == byteinkGroup &&

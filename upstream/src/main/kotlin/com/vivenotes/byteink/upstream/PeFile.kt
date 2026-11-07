@@ -37,7 +37,7 @@ internal class PeFile(bytes: ByteArray) {
     private val sections get() = headers.sections
     private val directories get() = headers.directories
 
-    /** The COFF machine type: 0x8664 is x86-64. */
+    /** The COFF machine type: 0x8664 is x86-64, 0xaa64 is ARM64. */
     val machine: Int get() = headers.machine
 
     /** PE debug-directory kinds. CodeView (2) embeds a PDB GUID/path; REPRO (16) is path-free. */
@@ -113,6 +113,7 @@ internal class PeFile(bytes: ByteArray) {
 
     companion object {
         const val MACHINE_AMD64 = 0x8664
+        const val MACHINE_ARM64 = 0xaa64
         private const val PE32_PLUS = 0x20b
         private const val EXPORT = 0
         private const val IMPORT = 1

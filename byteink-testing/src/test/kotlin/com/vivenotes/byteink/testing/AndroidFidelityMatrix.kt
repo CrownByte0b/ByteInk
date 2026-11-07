@@ -310,7 +310,9 @@ internal object AndroidFidelityMatrix {
             val hardware = MatrixComparison.pixels(MatrixComparison.readImage(File(reference, "images/hardware/${case.id}.png")), image,
                 case.family != "highlighter", compositeOnWhite(SyntheticFidelityMatrix.colors[1]))
             val path = MatrixComparison.pixels(MatrixComparison.readImage(File(reference, "images/path/${case.id}.png")), image, false)
-            if (software.maximum > 2) issues += "Software path maximum RGB delta ${software.maximum} exceeds 2"
+            if (software.maximum > SoftwareRaster.maxChannelDelta) {
+                issues += "Software path maximum RGB delta ${software.maximum} exceeds ${SoftwareRaster.maxChannelDelta}"
+            }
             issues += MatrixComparison.hardwareIssues(hardware)
             // Forced-path hardware capture separates mesh/self-overlap from hardware rasterization.
             if (fallbackGroups == 0) issues += MatrixComparison.hardwareIssues(path).map { "forced path: $it" }
@@ -321,7 +323,7 @@ internal object AndroidFidelityMatrix {
             "runtime" to Json.parseToJsonElement(File(desktop, "runtime.json").readText()),
             "caseCount" to JsonPrimitive(results.size), "passed" to JsonPrimitive(results.all { it.issues.isEmpty() }),
             "thresholds" to JsonObject(mapOf(
-                "softwareMaxChannelDelta" to JsonPrimitive(2), "floatAbsolute" to JsonPrimitive(1e-4), "floatRelative" to JsonPrimitive(1e-5),
+                "softwareMaxChannelDelta" to JsonPrimitive(SoftwareRaster.maxChannelDelta), "floatAbsolute" to JsonPrimitive(1e-4), "floatRelative" to JsonPrimitive(1e-5),
                 "hardwareMinimumSsim" to JsonPrimitive(0.95), "hardwareMaximumMae" to JsonPrimitive(5.0),
                 "hardwareMinimumInkAreaRatio" to JsonPrimitive(0.85), "hardwareMaximumInkAreaRatio" to JsonPrimitive(1.15),
                 "hardwareMaximumUnexplainedInteriorPixels" to JsonPrimitive(0),
@@ -364,7 +366,7 @@ internal object AndroidFidelityMatrix {
             "All geometry JSON fields are compared: integer counts and triangle indices, identities, input tool/times, " +
             "coverage threshold booleans and null geometry are exact; floating point values pass only within " +
             "1e-4 + 1e-5 × max(abs(a), abs(b)).\n\n")
-        append("Software path acceptance requires maximum RGB channel delta ≤2 at every pixel. " +
+        append("Software path acceptance requires maximum RGB channel delta ${SoftwareRaster.description} at every pixel. " +
             "Hardware default and forced-path captures require SSIM ≥0.95, mean absolute RGB channel error ≤5, " +
             "ink area ratio 0.85–1.15 and zero unexplained interior pixels with delta >16. " +
             "Existing accepted hardware deviations are restricted to a two-pixel RGB/coverage-edge band, including internal overlap edges, " +
@@ -374,7 +376,7 @@ internal object AndroidFidelityMatrix {
             "These gates reject missing ink, wrong colours, changed scale/position and unrelated interior changes.\n\n")
         append("The pinned Android CanvasPathRenderer omits split meshes with triangles but no outlines. " +
             "Desktop intentionally renders those pieces through its triangle union fallback. For only these geometry-identified cases, " +
-            "the strict ≤2 software gate uses an independent Android Canvas triangle-union reference; default hardware still covers " +
+            "the strict software gate uses an independent Android Canvas triangle-union reference; default hardware still covers " +
             "every piece. Original software and forced-path hardware deltas remain reported. " +
             "Their omission is a documented Android reference limitation, so forced-path hardware is informational for these cases.\n\n")
         append("SSIM uses 8×8 luminance windows and population variance, C1=(0.01×255)², C2=(0.03×255)². " +

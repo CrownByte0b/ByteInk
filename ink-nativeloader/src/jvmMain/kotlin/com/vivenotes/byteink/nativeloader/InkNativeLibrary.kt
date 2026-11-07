@@ -7,8 +7,8 @@ import java.nio.file.Paths
  * The Ink native library of this process. AndroidX Ink loads it through `NativeLoader.load()` the
  * first time any of its classes needs native code; [load] does the same explicitly.
  *
- * By default it is the library this jar bundles for the platform — Linux x86_64 or Windows x86_64 —
- * extracted once into a per-user cache and loaded from there:
+ * By default it is the library this jar bundles for the platform — Linux or Windows, each on x86_64
+ * or arm64 — extracted once into a per-user cache and loaded from there:
  * - Linux: `$XDG_CACHE_HOME/byteink/natives/<sha256>/libink.so`, or under `~/.cache`.
  * - Windows: `%LOCALAPPDATA%\byteink\natives\<sha256>\ink.dll`.
  *
@@ -77,10 +77,11 @@ public object InkNativeLibrary {
     internal fun userCache(platform: Platform, environment: (String) -> String?, userHome: String): Path {
         fun absolute(variable: String): Path? =
             environment(variable)?.takeIf { it.isNotBlank() }?.let { Paths.get(it) }?.takeIf { it.isAbsolute }
-        val base = when (platform) {
+        val base = if (platform.windows) {
+            absolute("LOCALAPPDATA") ?: Paths.get(userHome, "AppData", "Local")
+        } else {
             // The XDG base directory spec: ignore a relative or empty value.
-            Platform.LINUX_X86_64 -> absolute("XDG_CACHE_HOME") ?: Paths.get(userHome, ".cache")
-            Platform.WINDOWS_X86_64 -> absolute("LOCALAPPDATA") ?: Paths.get(userHome, "AppData", "Local")
+            absolute("XDG_CACHE_HOME") ?: Paths.get(userHome, ".cache")
         }
         return base.resolve("byteink").resolve("natives")
     }

@@ -22,8 +22,6 @@ import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInputBatch
 import androidx.ink.strokes.createClosedShape
 import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 /** The brush families ViveNotes stores strokes with, by the ids its rows carry. */
 object Families {
@@ -96,6 +94,12 @@ object Families {
         ),
     )
 }
+
+// The inputs must be bit-identical on every JVM and CPU, so that dumps from different platforms
+// (x86_64 and arm64) compare like for like. kotlin.math's sin and cos call java.lang.Math, which may
+// differ by an ulp between HotSpot's x86_64 and aarch64 intrinsics; StrictMath is fdlibm everywhere.
+private fun sin(x: Float): Float = StrictMath.sin(x.toDouble()).toFloat()
+private fun cos(x: Float): Float = StrictMath.cos(x.toDouble()).toFloat()
 
 /** Deterministic input paths, sampled at 120 Hz; stylus paths carry pressure, tilt and orientation. */
 object Paths {

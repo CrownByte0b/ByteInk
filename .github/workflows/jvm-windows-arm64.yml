@@ -1,0 +1,213 @@
+name: JVM Windows arm64
+
+# Called by ci after JVM Linux. Runs the full build, the arm64 upstream C++ subset and native
+# WM_POINTER input on a Windows arm64 runner, and compares engine geometry and notebook output with
+# the Linux x86_64 reference strictly. Run alone, it takes the native libraries, C++ tests and
+# reference from earlier runs that .github/scripts/artifacts-run.sh selects.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Validated release version whose coordinates to test; empty uses development coordinates
+        required: false
+        default: ''
+        type: string
+      runtime:
+        description: all, zulu25, zulu27 or jbr25
+        required: false
+        default: all
+        type: string
+      artifacts-run-id:
+        description: Run that holds the native artifacts and Linux reference, or latest; empty means this run
+        required: false
+        default: ''
+        type: string
+  workflow_dispatch:
+    inputs:
+      runtime:
+        description: Test runtime
+        required: true
+        default: all
+        type: choice
+        options: [all, zulu25, zulu27, jbr25]
+      artifacts-run-id:
+        description: 'Run ID holding the native artifacts and Linux reference; latest takes the newest on this branch, then the default branch'
+        required: true
+        default: latest
+        type: string
+      version:
+        description: 'Release version whose coordinates to test (e.g. 0.1.0); leave empty for development coordinates'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  jvm-windows-arm64:
+    name: Windows arm64 / ${{ matrix.runtime }}
+    runs-on: windows-11-arm
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: ${{ fromJSON(inputs.runtime == 'all' && '["zulu25","zulu27","jbr25"]' || format('["{0}"]', inputs.runtime)) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      # setup-java names its homes after the architecture it installs, given explicitly below.
+      GRADLE_JAVA_ARGS: >-
+        -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_AARCH64,JAVA_HOME_27_AARCH64
+        -Porg.gradle.java.installations.auto-download=false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select exact release coordinates
+        if: inputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: bash .github/scripts/release-versions.sh "v$RELEASE_VERSION" >> "$GITHUB_ENV"
+      - name: Locate native artifacts and Linux reference from earlier runs
+        id: artifacts
+        if: inputs.artifacts-run-id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACTS_RUN_ID: ${{ inputs.artifacts-run-id }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          linux=$(bash .github/scripts/artifacts-run.sh "$ARTIFACTS_RUN_ID" libink-linux-x86_64 libink-linux-x86_64-debug-symbols)
+          windows=$(bash .github/scripts/artifacts-run.sh "$ARTIFACTS_RUN_ID" ink-windows-x86_64)
+          arm64=$(bash .github/scripts/artifacts-run.sh "$ARTIFACTS_RUN_ID" libink-linux-arm64 libink-linux-arm64-debug-symbols ink-windows-arm64 native-windows-arm64-tests)
+          reference=$(bash .github/scripts/artifacts-run.sh "$ARTIFACTS_RUN_ID" linux-parity-reference)
+          printf 'linux=%s\nwindows=%s\narm64=%s\nreference=%s\n' "$linux" "$windows" "$arm64" "$reference" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: zulu
+          architecture: aarch64
+          java-version: |
+            25
+            27
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+      - name: Select Zulu test runtime
+        if: matrix.runtime != 'jbr25'
+        run: |
+          if [[ '${{ matrix.runtime }}' == zulu25 ]]; then
+            echo "BYTEINK_TEST_JAVA_HOME=$JAVA_HOME_25_AARCH64" >> "$GITHUB_ENV"
+          else
+            echo "BYTEINK_TEST_JAVA_HOME=$JAVA_HOME_27_AARCH64" >> "$GITHUB_ENV"
+          fi
+      - name: Install pinned JBR 25 SDK
+        if: matrix.runtime == 'jbr25'
+        run: bash .github/scripts/setup-jbr.sh windows-aarch64
+      # Every platform's library: the loader jar the suites and consumer smoke test use bundles all
+      # four, and publishing it packages both Linux debug-symbol files.
+      # Without a token, download-artifact reads the current run; a token selects run-id instead.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: libink-linux-x86_64
+          path: native/build/out
+          github-token: ${{ steps.artifacts.outputs.linux && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.linux || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: libink-linux-x86_64-debug-symbols
+          path: native/build/out
+          github-token: ${{ steps.artifacts.outputs.linux && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.linux || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ink-windows-x86_64
+          path: native/build/out
+          github-token: ${{ steps.artifacts.outputs.windows && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.windows || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: libink-linux-arm64
+          path: native/build/out
+          github-token: ${{ steps.artifacts.outputs.arm64 && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.arm64 || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: libink-linux-arm64-debug-symbols
+          path: native/build/out
+          github-token: ${{ steps.artifacts.outputs.arm64 && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.arm64 || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ink-windows-arm64
+          path: native/build/out
+          github-token: ${{ steps.artifacts.outputs.arm64 && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.arm64 || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-windows-arm64-tests
+          path: native/build/windows-arm64-tests
+          github-token: ${{ steps.artifacts.outputs.arm64 && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.arm64 || github.run_id }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-parity-reference
+          path: linux-reference
+          github-token: ${{ steps.artifacts.outputs.reference && github.token || '' }}
+          run-id: ${{ steps.artifacts.outputs.reference || github.run_id }}
+      - name: Run upstream Windows arm64 C++ subset
+        run: |
+          shopt -s nullglob
+          tests=(native/build/windows-arm64-tests/*.exe)
+          [[ ${#tests[@]} == 5 ]]
+          mkdir -p native/build/windows-arm64-tests/results
+          for test in "${tests[@]}"; do
+            "$test" "--gtest_output=xml:native/build/windows-arm64-tests/results/$(basename "$test").xml"
+          done
+      - name: Build, consumer smoke, full suites and synthetic fidelity comparison
+        run: |
+          reference=$(cygpath -w "$PWD/linux-reference/byteink-testing/build/desktop-parity")
+          ./gradlew.bat build -PbyteinkPortable=true :upstream:checkLinuxLibrary :upstream:checkWindowsLibrary \
+            :upstream:checkLinuxArm64Library :upstream:checkWindowsArm64Library \
+            :conformance:oracle:oracleProduction :byteink-testing:desktopParityCompare \
+            :byteink-testing:androidFidelityMatrix --continue \
+            "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME" \
+            "-PbyteinkParityFixtures=$reference\fixtures" "-PbyteinkParityReference=$reference" \
+            -PbyteinkFuzzIterations=20000 -PbyteinkFuzzSeed=${{ github.run_number }} \
+            $GRADLE_JAVA_ARGS
+      - name: Verify native Windows input and immediate Skia authoring
+        run: >-
+          ./gradlew.bat :byteink-compose:desktopPenTest --no-daemon
+          "-PbyteinkTestJavaHome=$BYTEINK_TEST_JAVA_HOME" $GRADLE_JAVA_ARGS
+      - name: Compare shipped Windows arm64 and Linux x86_64 engine geometry strictly
+        run: |
+          java=$(cygpath -u "$BYTEINK_TEST_JAVA_HOME")/bin/java.exe
+          ./gradlew.bat :conformance:oracle:installDist $GRADLE_JAVA_ARGS
+          "$java" -cp 'conformance/oracle/build/install/oracle/lib/*' com.vivenotes.byteink.oracle.OracleKt \
+            compare --reference linux-reference/conformance/oracle/build/oracle/oracleProduction.tsv \
+            --candidate conformance/oracle/build/oracle/oracleProduction.tsv \
+            --report conformance/oracle/build/reports/windows-arm64-vs-linux-x86_64-production.md
+      - name: Stop Gradle daemons before saving the Windows cache
+        if: always()
+        run: ./gradlew.bat --stop
+      - name: Upload Windows arm64 reports and parity results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-arm64-${{ matrix.runtime }}-reports
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
+            conformance/oracle/build/oracle/
+            conformance/oracle/build/reports/
+            byteink-testing/build/desktop-parity/
+            byteink-compose/build/reports/performance/
+            byteink-testing/build/reports/performance/
+            byteink-testing/build/reports/android-matrix*/
+            native/build/windows-arm64-tests/results/
+            consumer-tests/build/reports/consumer/
+            **/hs_err_pid*.log
+          if-no-files-found: error

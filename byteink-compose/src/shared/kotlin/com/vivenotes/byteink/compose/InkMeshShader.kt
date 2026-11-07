@@ -11,7 +11,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.VertexMode
 import androidx.compose.ui.graphics.Vertices
-import com.vivenotes.byteink.core.StrokeMesh
 import org.jetbrains.skia.Shader
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -37,7 +36,7 @@ internal class MeshChunk(val vertices: Vertices, val varyings: FloatArray) {
 
 /** The prior state is consumed by the next preparation; close only the latest returned state. */
 internal class PreparedMesh(
-    val mesh: StrokeMesh,
+    val mesh: RenderingMesh,
     val transform: MeshLinearTransform,
     val color: MeshColor,
     val stamp: StampAnimation?,
@@ -66,7 +65,7 @@ private class MeshVertexTemplate(val count: Int) {
 // Immutable constructor lists avoid allocating/boxing two point lists and an index list per chunk.
 private val vertexTemplates = Array(MESH_TRIANGLES_PER_DRAW) { MeshVertexTemplate(it + 1) }
 
-private fun meshChunk(mesh: StrokeMesh, positions: FloatArray, varying: FloatArray, start: Int, count: Int): MeshChunk {
+private fun meshChunk(mesh: RenderingMesh, positions: FloatArray, varying: FloatArray, start: Int, count: Int): MeshChunk {
     val vertices = vertexTemplates[count - 1].vertices()
     val data = FloatArray(MESH_TRIANGLES_PER_DRAW * 3 * VARYING_STRIDE)
     repeat(count * 3) { corner ->
@@ -79,7 +78,7 @@ private fun meshChunk(mesh: StrokeMesh, positions: FloatArray, varying: FloatArr
 }
 
 /** CPU equivalent of Ink's vertex shader. Skiko exposes fragment RuntimeEffects and drawVertices. */
-internal fun prepareMesh(mesh: StrokeMesh, transform: MeshLinearTransform, color: MeshColor, stamp: StampAnimation?): List<MeshChunk> {
+internal fun prepareMesh(mesh: RenderingMesh, transform: MeshLinearTransform, color: MeshColor, stamp: StampAnimation?): List<MeshChunk> {
     val positions = FloatArray(mesh.vertexCount * 2)
     val varying = FloatArray(mesh.vertexCount * VARYING_STRIDE)
     prepareVertices(mesh, transform, color, stamp, positions, varying, null)
@@ -88,7 +87,7 @@ internal fun prepareMesh(mesh: StrokeMesh, transform: MeshLinearTransform, color
     }
 }
 
-private fun prepareVertices(mesh: StrokeMesh, transform: MeshLinearTransform, color: MeshColor, stamp: StampAnimation?,
+private fun prepareVertices(mesh: RenderingMesh, transform: MeshLinearTransform, color: MeshColor, stamp: StampAnimation?,
     positions: FloatArray, varying: FloatArray, changed: BooleanArray?) {
     val v = mesh.vertices
     val det = abs(transform.a * transform.e - transform.b * transform.d)
@@ -106,7 +105,7 @@ private fun prepareVertices(mesh: StrokeMesh, transform: MeshLinearTransform, co
     }
     repeat(mesh.vertexCount) { vertex ->
         if (changed != null && !changed[vertex]) return@repeat
-        val i = vertex * StrokeMesh.VERTEX_STRIDE
+        val i = vertex * RenderingMesh.VERTEX_STRIDE
         val o = vertex * VARYING_STRIDE
         val sx = v[i + 6]; val sy = v[i + 7]; val sl = v[i + 8]
         val fx = v[i + 9]; val fy = v[i + 10]; val fl = v[i + 11]
@@ -120,10 +119,10 @@ private fun prepareVertices(mesh: StrokeMesh, transform: MeshLinearTransform, co
         val sideCapped = minOf(sideTarget, sideMargin)
         val sideOutset = sideTarget + (sideCapped - sideTarget) * clamp(4f * sidePixels - 1f)
         val forwardOutset = minOf(forwardTarget, forwardMargin)
-        val sox = Math.signum(sl) * sideOutset * sx
-        val soy = Math.signum(sl) * sideOutset * sy
-        val fox = Math.signum(fl) * forwardOutset * fx
-        val foy = Math.signum(fl) * forwardOutset * fy
+        val sox = kotlin.math.sign(sl) * sideOutset * sx
+        val soy = kotlin.math.sign(sl) * sideOutset * sy
+        val fox = kotlin.math.sign(fl) * forwardOutset * fx
+        val foy = kotlin.math.sign(fl) * forwardOutset * fy
         val common = clamp((sox * fox + soy * foy) / maxOf(.000001f, fox * fox + foy * foy))
         val px = v[i] + sox + (1f - common) * fox
         val py = v[i + 1] + soy + (1f - common) * foy
@@ -131,7 +130,7 @@ private fun prepareVertices(mesh: StrokeMesh, transform: MeshLinearTransform, co
 
         val alpha = clamp((v[i + 2] + 1f) * color.a)
         if (hasHsl) {
-            val hue = baseHue - v[i + 3] * (2f * Math.PI.toFloat())
+            val hue = baseHue - v[i + 3] * (2f * kotlin.math.PI.toFloat())
             val chroma = baseChroma * (v[i + 4] + 1f)
             val y = baseY + v[i + 5]
             val shiftedI = chroma * cos(hue); val shiftedQ = chroma * sin(hue)
@@ -168,7 +167,7 @@ private fun prepareVertices(mesh: StrokeMesh, transform: MeshLinearTransform, co
 }
 
 /** Exact owned-snapshot comparison, independent of native damage resets or assumed stable prefixes. */
-internal fun prepareMeshIncrementally(mesh: StrokeMesh, transform: MeshLinearTransform, color: MeshColor,
+internal fun prepareMeshIncrementally(mesh: RenderingMesh, transform: MeshLinearTransform, color: MeshColor,
     stamp: StampAnimation?, previous: PreparedMesh? = null): PreparedMesh {
     val old = previous?.mesh
     val sameKey = previous != null && previous.transform == transform && previous.color == color && previous.stamp == stamp
@@ -188,8 +187,8 @@ internal fun prepareMeshIncrementally(mesh: StrokeMesh, transform: MeshLinearTra
     repeat(mesh.vertexCount) { vertex ->
         var different = !sameKey || old == null || old.attributeMask != mesh.attributeMask || vertex >= old.vertexCount
         if (!different) {
-            val start = vertex * StrokeMesh.VERTEX_STRIDE
-            for (offset in start until start + StrokeMesh.VERTEX_STRIDE) {
+            val start = vertex * RenderingMesh.VERTEX_STRIDE
+            for (offset in start until start + RenderingMesh.VERTEX_STRIDE) {
                 if (mesh.vertices[offset].toRawBits() != old!!.vertices[offset].toRawBits()) { different = true; break }
             }
         }

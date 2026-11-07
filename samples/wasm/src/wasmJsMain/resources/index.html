@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ByteInk · Wasm</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eeeae3; color: #292a2d; font: 16px system-ui, sans-serif; }
+    main { max-width: 1000px; margin: 36px auto; padding: 0 20px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    p { line-height: 1.5; }
+    nav { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 24px 0 16px; }
+    button, select { font: inherit; padding: 8px 12px; border: 1px solid #c8c4bc; border-radius: 6px; background: white; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .5; }
+    #ink-surface { position: relative; width: 100%; height: 500px; background: #fffefa; border: 1px solid #d2cdc3;
+      border-radius: 8px; touch-action: none; }
+    #ink-surface canvas { display: block; }
+    #status { font-size: 14px; min-height: 24px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ByteInk on WebAssembly</h1>
+    <p>Draw, erase or move ink. Save and reload replays the stored strokes and operations.</p>
+    <nav aria-label="Drawing tools">
+      <label>Tool <select id="tool"><option value="marker">Pen</option><option value="highlighter">Highlighter</option><option value="erase">Partial eraser</option><option value="object">Object eraser</option></select></label>
+      <button id="move" disabled>Move ink right</button>
+      <button id="undo" disabled>Undo operation</button>
+      <button id="reload" disabled>Save and reload</button>
+      <button id="clear" disabled>Clear page</button>
+    </nav>
+    <div id="ink-surface" aria-label="Ink drawing area"></div>
+    <p id="status" role="status">Loading engine…</p>
+  </main>
+  <script src="wasm.js"></script>
+</body>
+</html>

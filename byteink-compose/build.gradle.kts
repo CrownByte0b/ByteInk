@@ -1,8 +1,23 @@
+import com.vivenotes.byteink.build.composeDesktopRuntime
+
 // Compose Desktop/Skia rendering of finished and in-progress strokes, and live stroke authoring.
 
 plugins {
     id("byteink.library")
     id("byteink.compose")
+}
+
+// The same vertex preparation and fragment shader source is compiled for desktop and Wasm.
+sourceSets.main { kotlin.srcDir("src/shared/kotlin") }
+
+tasks.register<JavaExec>("exportWasmRenderingFixtures") {
+    group = "verification"
+    description = "Exports synthetic desktop brush/PNG controls for browser renderer acceptance."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass = "com.vivenotes.byteink.compose.WasmRenderingFixtureExporter"
+    args(layout.buildDirectory.file("fixtures/wasm-rendering.json").get().asFile.absolutePath)
+    systemProperty("java.awt.headless", "true")
 }
 
 dependencies {
@@ -12,7 +27,7 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.kotlinx.coroutines.core)
     testImplementation(project(":byteink-kit"))
-    testImplementation(compose.desktop.currentOs)
+    testImplementation(composeDesktopRuntime(libs.versions.composeMultiplatform.get()))
     testImplementation(libs.compose.ui.test)
 }
 

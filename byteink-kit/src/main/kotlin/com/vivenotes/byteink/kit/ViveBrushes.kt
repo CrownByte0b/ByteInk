@@ -57,7 +57,7 @@ public object ViveBrushes {
     private const val STABILIZATION_UPSAMPLING_HZ = 180
 
     /** The calligraphy family id for a pressure level, which is clamped to 0..[MAX_CALLIGRAPHY_PRESSURE]. */
-    public fun calligraphy(pressure: Int): String = CALLIGRAPHY_PREFIX + pressure.coerceIn(0, MAX_CALLIGRAPHY_PRESSURE)
+    public fun calligraphy(pressure: Int): String = InkBrushCatalog.calligraphy(pressure)
 
     /**
      * The family a pen draws with, chosen as the Android app chooses it: any line that is not solid
@@ -65,11 +65,8 @@ public object ViveBrushes {
      * other pen is calligraphy at its pressure level. The level is part of the id because it changes
      * the shape of every point.
      */
-    public fun penFamilyId(solidLine: Boolean, fountain: Boolean, pressure: Int): String = when {
-        !solidLine -> DASHED_LINE
-        fountain -> MARKER
-        else -> calligraphy(pressure)
-    }
+    public fun penFamilyId(solidLine: Boolean, fountain: Boolean, pressure: Int): String =
+        InkBrushCatalog.penFamilyId(solidLine, fountain, pressure)
 
     /**
      * How a stabilization level smooths the input: Ink's own stroke modeller, a sliding window over
@@ -81,13 +78,8 @@ public object ViveBrushes {
      * getting.
      */
     public fun inputModelFor(stabilization: Int): BrushFamily.InputModel =
-        when (stabilization.coerceIn(0, MAX_STABILIZATION)) {
-            0 -> BrushFamily.InputModel.PASSTHROUGH_MODEL
-            1 -> slidingWindow(20L)
-            2 -> slidingWindow(40L)
-            3 -> slidingWindow(60L)
-            4 -> slidingWindow(90L)
-            else -> slidingWindow(120L)
+        InkBrushCatalog.windowMillis(stabilization).let { window ->
+            if (window == 0) BrushFamily.InputModel.PASSTHROUGH_MODEL else slidingWindow(window.toLong())
         }
 
     private fun slidingWindow(windowMillis: Long): BrushFamily.InputModel =
@@ -147,9 +139,9 @@ public object ViveBrushes {
     }
 
     private fun createCalligraphyFamily(pressureLevel: Int): BrushFamily {
-        val response = pressureLevel.toFloat() / MAX_CALLIGRAPHY_PRESSURE
-        val minSize = lerp(1f, 0.45f, response)
-        val maxSize = lerp(1f, 1.6f, response)
+        val definition = InkBrushCatalog.describe(calligraphy(pressureLevel), 1)
+        val minSize = definition.minSize
+        val maxSize = definition.maxSize
         val behaviors = if (pressureLevel == 0) {
             emptyList()
         } else {
@@ -212,8 +204,6 @@ public object ViveBrushes {
         ),
         developerComment = comment,
     )
-
-    private fun lerp(start: Float, end: Float, amount: Float): Float = start + (end - start) * amount
 
     /**
      * A brush for drawing or rebuilding a stroke: the family by id at a stabilization level, a colour

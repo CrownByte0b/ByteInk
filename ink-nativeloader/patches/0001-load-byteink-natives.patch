@@ -61,8 +61,8 @@
 -            System.load(tempFile.toFile().canonicalPath)
 -            loaded = true
 -        }
-+        // byteink: the library bundled for Linux or Windows x86_64, from a per-user cache, or the one
-+        // -Dbyteink.ink.library names. InkNativeLibrary loads it once.
++        // byteink: the library bundled for Linux or Windows (x86_64, arm64), from a per-user cache, or
++        // the one -Dbyteink.ink.library names. InkNativeLibrary loads it once.
 +        InkNativeLibrary.load()
      }
  }
