@@ -15,10 +15,10 @@ androidx-annotation = "1.11.0"
 byteink-modules = "0.1.0-SNAPSHOT"
 byteink-nativeloader = "1.1.0-alpha06-byteink.4"
 asm = "9.11.1"
-sqlite-jdbc = "3.53.4.0"
+sqlite-jdbc = "3.54.1.0"
 # AndroidX Ink's own test suites (conformance/) run with the libraries AndroidX pinned for them at the
 # pinned release.
-guava = "33.7.2-android"
+guava = "33.8.0-android"
 junit = "4.13.2"
 kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.12.0"
