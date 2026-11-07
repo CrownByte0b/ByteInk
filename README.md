@@ -4,7 +4,6 @@
 [![Kotlin](https://img.shields.io/badge/kotlin-2.4.20-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose%20Multiplatform-1.12.1-4285F4.svg)](https://www.jetbrains.com/compose-multiplatform/)
 [![GitHub Packages](https://img.shields.io/badge/GitHub%20Packages-0.1.0--alpha.1-2ea44f.svg?logo=github)](https://github.com/orgs/CrownByte0b/packages)
-[![CI](https://github.com/CrownByte0b/ByteInk/actions/workflows/ci.yml/badge.svg)](https://github.com/CrownByte0b/ByteInk/actions/workflows/ci.yml)
 [![Wiki](https://img.shields.io/badge/docs-wiki-8A2BE2.svg)](https://crownbyte0b.github.io/ByteInk/)
 
 ByteInk is a reusable Kotlin/JVM library that brings the real **AndroidX Ink / `google/ink` stroke engine** to **Linux x86_64 and Windows x86_64**,
@@ -196,6 +195,14 @@ and in-progress strokes, affine transforms, viewport culling and bounded geometr
 ```bash
 ./gradlew :samples:viewer:run
 ```
+
+### Wasm build
+
+```bash
+./gradlew -PbyteinkWasm=true :samples:wasm:wasmJsBrowserProductionRun
+```
+
+Then open http://localhost:8080
 
 # Dev
 

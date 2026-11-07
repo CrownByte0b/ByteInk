@@ -14,7 +14,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -26,6 +25,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.ink.geometry.ImmutableAffineTransform
+import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.compose.InkPathRenderer
 import com.vivenotes.byteink.compose.InkDrawingSurface
 import com.vivenotes.byteink.compose.InkScene
@@ -43,13 +44,19 @@ import com.vivenotes.byteink.compose.rememberInkSceneRasterCache
 import com.vivenotes.byteink.compose.InkAuthoringController
 import com.vivenotes.byteink.testing.NotebookInkImages
 import com.vivenotes.byteink.testing.ViveNotebook
+import com.vivenotes.byteink.kit.InkEraseMode
+import com.vivenotes.byteink.kit.InkPageIndex
 import com.vivenotes.byteink.kit.PageStroke
+import com.vivenotes.byteink.kit.StoredInkErase
+import com.vivenotes.byteink.kit.ViveInkCodec
 import com.vivenotes.byteink.kit.ViveInkPage
 import com.vivenotes.byteink.kit.AUTOMATIC_DARK
 import com.vivenotes.byteink.kit.automaticColorOr
 import com.vivenotes.byteink.kit.AuthoredViveStroke
 import com.vivenotes.byteink.kit.ViveBrushes
 import com.vivenotes.byteink.kit.ViveInkTool
+import com.vivenotes.byteink.kit.eraseObjects
+import com.vivenotes.byteink.kit.subtract
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
@@ -121,12 +128,18 @@ internal fun NotebookViewer(file: File?, onOpen: () -> Unit) {
     var mode by remember(file) { mutableStateOf(if (file == null) "Pen" else "Pan") }
     var stabilization by remember { mutableStateOf(0) }
     var authoredCount by remember(file, pageIndex) { mutableStateOf(0) }
+    var eraseCount by remember(file, pageIndex) { mutableStateOf(0) }
     val tool = remember(mode, stabilization) { when (mode) {
         "Pen" -> ViveInkTool(stabilization = stabilization)
         "Calligraphy" -> ViveInkTool(ViveBrushes.calligraphy(3), stabilization, sizeDp = 8f)
         "Highlighter" -> ViveInkTool(ViveBrushes.HIGHLIGHTER, colorArgb = 0x80ffe000.toInt(), sizeDp = 18f)
         else -> null
     } }
+    val eraser = when (mode) {
+        "Partial eraser" -> InkEraseMode.Normal
+        "Object eraser" -> InkEraseMode.Object
+        else -> null
+    }
     Column(Modifier.fillMaxSize().background(Color(0xffeeeeee))) {
         Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Control("Open", action = onOpen)
@@ -138,22 +151,25 @@ internal fun NotebookViewer(file: File?, onOpen: () -> Unit) {
             BasicText("${if (pages.isEmpty()) 0 else pageIndex + 1}/${pages.size}   ${(zoom * 100).toInt()}%", style = textStyle)
         }
         Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            listOf("Pan", "Pen", "Calligraphy", "Highlighter").forEach { name ->
+            listOf("Pan", "Pen", "Calligraphy", "Highlighter", "Partial eraser", "Object eraser").forEach { name ->
                 Control(if (mode == name) "[$name]" else name) { mode = name }
             }
             Control("Smoothing: $stabilization", enabled = mode == "Pen" || mode == "Calligraphy") {
                 stabilization = (stabilization + 1) % 6
             }
-            if (authoredCount > 0) BasicText("$authoredCount unsaved strokes", style = textStyle)
         }
         BasicText(message, Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = textStyle)
         val page = pages.getOrNull(pageIndex)
         if (page != null || file == null) {
-            BasicText(if (page == null) "Draw on the blank page" else
-                "${page.strokes.size} ink projections · ${page.unreadable} unreadable rows", Modifier.padding(12.dp), style = textStyle)
+            val summary = if (page == null) "Draw on the blank page" else
+                "${page.strokes.size} ink projections · ${page.unreadable} unreadable rows"
+            // The counts go on this line because it has room: in the toolbar they wrap, pushing the page down.
+            BasicText(listOfNotNull(summary, unsaved(authoredCount, "stroke"), unsaved(eraseCount, "erase")).joinToString(" · "),
+                Modifier.padding(12.dp), style = textStyle)
             key(file, pageIndex) {
-                InkPreview(page?.strokes ?: emptyList(), zoom, Modifier.weight(1f).fillMaxSize(), tool,
-                    page?.id ?: "scratch") { authoredCount++ }
+                InkPreview(page?.strokes ?: emptyList(), zoom, Modifier.weight(1f).fillMaxSize().testTag("ink"), tool,
+                    page?.id ?: "scratch", eraser,
+                    onStrokeFinished = { authoredCount++ }, onEraseFinished = { eraseCount++ })
             }
         }
     }
@@ -167,20 +183,21 @@ internal fun InkPreview(
     modifier: Modifier = Modifier,
     tool: ViveInkTool? = null,
     pageId: String = "preview",
+    eraser: InkEraseMode? = null,
     onStrokeFinished: (AuthoredViveStroke) -> Unit = {},
+    onEraseFinished: (StoredInkErase) -> Unit = {},
 ) {
     val renderer = remember(strokes, pageId) { InkPathRenderer() }
     val controller = remember(strokes, pageId) { InkAuthoringController() }
     DisposableEffect(renderer, controller) {
         onDispose { controller.close(); renderer.clearCache() }
     }
-    val authored = remember(strokes, pageId) { mutableStateListOf<AuthoredViveStroke>() }
-    val scene = remember(strokes) { InkScene(strokes.map { projection ->
-        InkSceneStroke(projection.stroke, projection.strokeToPageTransform(),
-            automaticColorOr(projection.stroke.brush.colorIntArgb, projection.colorFollowsTheme, AUTOMATIC_DARK))
-    }) }
-    val authoredSnapshot = authored.toList()
-    val additions = remember(authoredSnapshot) { InkScene(authoredSnapshot.map { InkSceneStroke(it.stroke) }) }
+    // The ink as this session's erases left it. The view stays fitted to strokes, so erasing never moves the page.
+    var pageInk by remember(strokes, pageId) { mutableStateOf(strokes) }
+    var authoredInk by remember(strokes, pageId) { mutableStateOf(emptyList<PageStroke>()) }
+    var authoredRows by remember(strokes, pageId) { mutableStateOf(0) }
+    val scene = remember(pageInk) { inkScene(pageInk) }
+    val additions = remember(authoredInk) { inkScene(authoredInk) }
     val pageRaster = key(strokes, pageId) { rememberInkSceneRasterCache(4, InkSceneRasterCache.DEFAULT_PIXEL_BUDGET_BYTES) }
     val additionsRaster = key(strokes, pageId) { rememberInkSceneRasterCache(4, InkSceneRasterCache.DEFAULT_PIXEL_BUDGET_BYTES) }
     var pan by remember(strokes, zoom) { mutableStateOf(Offset.Zero) }
@@ -200,7 +217,8 @@ internal fun InkPreview(
     val scale = fit * zoom * scrollZoom
     val transform = ImmutableAffineTransform(scale, 0f, 16f + pan.x - scale * left,
         0f, scale, 16f + pan.y - scale * top)
-    val panModifier = if (tool == null) Modifier.pointerInput(strokes, zoom) {
+    val drawing = tool != null || eraser != null
+    val panModifier = if (!drawing) Modifier.pointerInput(strokes, zoom) {
         detectDragGestures { change, drag -> change.consume(); pan += drag }
     } else Modifier
     val canvasModifier = modifier.background(Color.White).onSizeChanged { canvasSize = it }.then(panModifier)
@@ -212,17 +230,52 @@ internal fun InkPreview(
             pan = anchor - (anchor - pan) * (next / scrollZoom)
             scrollZoom = next
         }
-    InkDrawingSurface(controller, tool?.brush ?: remember { ViveInkTool().brush }, canvasModifier,
-        strokeToView = transform, renderer = renderer, enabled = tool != null,
+    // On this thread to keep the sample short; an app should use a worker (docs/guides/operations.md).
+    fun erase(swath: Stroke, mode: InkEraseMode) {
+        // The swath only showed the gesture: what cuts is its inputs as a reload will rebuild them.
+        val mask = ViveInkCodec.reloadedEraseMask(swath.inputs, ERASER_SIZE_DP) ?: return
+        val pageTargets = InkPageIndex(pageInk).targetsFor(mask)
+        val authoredTargets = InkPageIndex(authoredInk).targetsFor(mask)
+        // Empty space cuts nothing, so it stores nothing.
+        if (pageTargets.isEmpty() && authoredTargets.isEmpty()) return
+        pageInk = pageInk.erased(mode, mask, pageTargets)
+        authoredInk = authoredInk.erased(mode, mask, authoredTargets)
+        onEraseFinished(ViveInkCodec.encodeErase(mask, UUID.randomUUID().toString(), pageId, mode,
+            System.currentTimeMillis(), pageTargets + authoredTargets))
+    }
+    InkDrawingSurface(controller, if (eraser != null) eraserSwath else tool?.brush ?: remember { ViveInkTool().brush }, canvasModifier,
+        strokeToView = transform, renderer = renderer, enabled = drawing,
         onStrokeFinished = { stroke ->
-            val completed = requireNotNull(tool).complete(stroke, UUID.randomUUID().toString(), pageId, authored.size, System.currentTimeMillis())
-            authored.add(completed)
-            onStrokeFinished(completed)
+            if (eraser != null) erase(stroke, eraser) else {
+                val completed = requireNotNull(tool).complete(stroke, UUID.randomUUID().toString(), pageId, authoredRows++, System.currentTimeMillis())
+                // Erasing needs the stored geometry, the one a reload would cut.
+                authoredInk = authoredInk + requireNotNull(ViveInkPage.decode(completed.row)) { "The authored row could not be decoded" }
+                onStrokeFinished(completed)
+            }
         }) {
         drawCachedInkScene(pageRaster, scene, renderer, transform)
         if (additions.strokes.isNotEmpty()) drawCachedInkScene(additionsRaster, additions, renderer, transform)
     }
 }
+
+private fun unsaved(count: Int, noun: String): String? =
+    if (count == 0) null else "$count unsaved $noun${if (count == 1) "" else "s"}"
+
+private fun inkScene(ink: List<PageStroke>) = InkScene(ink.map { projection ->
+    InkSceneStroke(projection.stroke, projection.strokeToPageTransform(),
+        automaticColorOr(projection.stroke.brush.colorIntArgb, projection.colorFollowsTheme, AUTOMATIC_DARK))
+})
+
+private fun List<PageStroke>.erased(mode: InkEraseMode, mask: Stroke, targets: List<String>) = when (mode) {
+    InkEraseMode.Normal -> subtract(mask, targets)
+    InkEraseMode.Object -> eraseObjects(mask, targets)
+}
+
+/** In page units, like every other tool's size, and the same as the Wasm sample's eraser. */
+private const val ERASER_SIZE_DP = 26f
+
+/** Stabilization 1 is the input model of the mask itself, so the swath shows what will be cut. */
+private val eraserSwath by lazy { ViveBrushes.brush(ViveBrushes.MARKER, 1, 0x88555555.toInt(), ERASER_SIZE_DP) }
 
 private val textStyle = TextStyle(color = Color(0xff202020), fontSize = 14.sp)
 
