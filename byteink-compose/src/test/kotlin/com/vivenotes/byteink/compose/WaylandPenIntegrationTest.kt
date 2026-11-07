@@ -315,7 +315,11 @@ class WaylandPenIntegrationTest {
             injector(window).use { input ->
                 send(window, input, 0)
                 await("tablet down") { window.panel.session.activePointerIds.size == 1 }
-                ui { repeat(32) { send(window, input, 1, 23.0 + it * 3, pressure = 49151, time = 1001 + it) } }
+                // A forecast retires once wall time since the down passes its horizon after the last sample,
+                // as it should when a device stops. This device clock is far ahead, so a slow runner can't
+                // retire the forecast checked below: only minutes of real time could.
+                val burst = 60_000
+                ui { repeat(32) { send(window, input, 1, 23.0 + it * 3, pressure = 49151, time = burst + it) } }
                 await("all native history reached Skia") { window.panel.session.liveStrokes.single().stroke.getRealInputCount() == 33 }
                 ui {
                     assertTrue(window.panel.lastInputToRenderNanos > 0)
@@ -323,7 +327,7 @@ class WaylandPenIntegrationTest {
                     assertTrue(window.panel.session.liveStrokes.single().stroke.getPredictedInputCount() > 0)
                 }
                 assertTrue(inkPixel(window) and 0xff < 200, "live mesh ink is visible through the actual Swing/Skia painter")
-                send(window, input, 2, 140.0, pressure = 32768, time = 1040)
+                send(window, input, 2, 140.0, pressure = 32768, time = burst + 40)
                 await("canonical stroke handoff") { window.finished.size == 1 && window.panel.session.liveStrokes.isEmpty() }
                 ui {
                     val inputs = window.finished.single().inputs

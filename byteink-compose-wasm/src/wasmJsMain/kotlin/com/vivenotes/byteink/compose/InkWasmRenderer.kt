@@ -16,8 +16,21 @@ import org.jetbrains.skia.RuntimeShaderBuilder
 import org.jetbrains.skia.Shader
 import org.jetbrains.skia.impl.use
 import org.jetbrains.skia.BlendMode as SkiaBlendMode
+import org.jetbrains.skiko.InternalSkikoApi
+import org.jetbrains.skiko.wasm.awaitSkiko
+import kotlinx.coroutines.await
+import kotlin.js.JsAny
 import kotlin.math.cos
 import kotlin.math.sin
+
+/**
+ * Suspends until Skiko's Wasm runtime has loaded, which a page does in the background. Any Skia object
+ * made before that fails with an error like "org_jetbrains_skia_Paint__1nMake is not a function", at a
+ * moment that depends on network and cache timing. `ComposeViewport` content always runs after it,
+ * so only code using Skia outside composition needs this, such as drawing to an `ImageBitmap` at startup.
+ */
+@OptIn(InternalSkikoApi::class)
+public suspend fun awaitInkRendering() { awaitSkiko.await<JsAny>() }
 
 /** Images are borrowed. Clear the renderer cache after replacing a client texture ID. */
 public fun interface InkTextureStore { public operator fun get(clientTextureId: String): Image? }
@@ -87,7 +100,9 @@ public class InkMeshRenderer private constructor(
     }
     private val entries = linkedMapOf<Any, Entry>()
     private val textures = linkedMapOf<InkRenderTexture, Shader>()
-    private val paint = Paint().apply { isAntiAlias = true }
+    // Not made until a draw, which has a canvas: a renderer can be made and closed before Skiko's runtime has loaded.
+    private val lazyPaint = lazy(LazyThreadSafetyMode.NONE) { Paint().apply { isAntiAlias = true } }
+    private val paint: Paint get() = lazyPaint.value
     private var effect: RuntimeEffect? = null
     private var pathEffect: RuntimeEffect? = null
     private var white: Shader? = null
@@ -275,7 +290,7 @@ public class InkMeshRenderer private constructor(
     }
     override fun close() {
         if (closed) return
-        clearCache(); paint.shader = null
+        clearCache(); if (lazyPaint.isInitialized()) paint.shader = null
         effect?.close(); pathEffect?.close(); white?.close()
         effect = null; pathEffect = null; white = null; closed = true
     }

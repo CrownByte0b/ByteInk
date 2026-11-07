@@ -7,11 +7,13 @@ import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.attribute.FileTime
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.Collections
 import java.util.concurrent.Callable
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
+import kotlin.concurrent.thread
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
 import kotlin.io.path.readBytes
@@ -238,22 +240,96 @@ class NativeLibraryLoaderTest {
 
     @Test
     fun concurrentFirstLoadsShareOneVerifiedFile() {
-        val root = folder("cache")
         val threads = 16
         val start = CyclicBarrier(threads)
         val pool = Executors.newFixedThreadPool(threads)
         try {
-            // Separate loaders, as separate processes have.
-            val paths = (1..threads)
-                .map { pool.submit(Callable { start.await(); loader(CacheLocation(root)).load().path }) }
-                .map { it.get() }
+            // Each round is a first load: on Windows, the races this finds need many chances to show.
+            repeat(25) { round ->
+                val root = folder("cache-$round")
+                // Separate loaders, as separate processes have.
+                val paths = (1..threads)
+                    .map { pool.submit(Callable { start.await(); loader(CacheLocation(root)).load().path }) }
+                    .map { it.get() }
 
-            assertEquals(setOf(root.resolve(sha256).resolve("libink.so")), paths.toSet())
-            assertContentEquals(library, paths.first().readBytes())
-            assertEquals(listOf("libink.so"), paths.first().parent.listDirectoryEntries().map { it.name })
+                assertEquals(setOf(root.resolve(sha256).resolve("libink.so")), paths.toSet())
+                assertContentEquals(library, paths.first().readBytes())
+                assertOnlyTheLibrary(paths.first().parent)
+            }
         } finally {
             pool.shutdownNow()
         }
+    }
+
+    @Test
+    fun aSlowerFirstLoadLeavesTheLibraryAnotherOneFinished() {
+        val root = folder("cache")
+        val finished = root.resolve(sha256).resolve("libink.so")
+        val finishedAt = FileTime.fromMillis(1_000_000_000_000L)
+        // Another process finishes while this one is extracting its own copy.
+        val racing = NativeBundle { name ->
+            if (name.endsWith(NativeBundle.MANIFEST)) {
+                manifest()
+            } else {
+                Files.createDirectories(finished.parent)
+                finished.writeBytes(library)
+                Files.setLastModifiedTime(finished, finishedAt)
+                library.inputStream()
+            }
+        }
+
+        val result = loader(CacheLocation(root), bundle = racing).load()
+
+        assertEquals(finished, result.path)
+        assertEquals(finishedAt, Files.getLastModifiedTime(finished), "replacing a library others may have open breaks them on Windows")
+        assertOnlyTheLibrary(finished.parent)
+    }
+
+    @Test
+    fun waitsOutSomethingBrieflyInTheLibrarysPlace() {
+        val root = folder("cache")
+        val target = root.resolve(sha256).resolve("libink.so")
+        Files.createDirectories(target) // A move can't replace a directory, as Windows can refuse any file.
+        val clearing = thread {
+            Thread.sleep(100)
+            repeat(100) {
+                if (runCatching { Files.deleteIfExists(target) }.isSuccess) return@thread
+                Thread.sleep(10)
+            }
+        }
+
+        val result = loader(CacheLocation(root), CacheLocation(folder("fallback"))).load()
+
+        clearing.join()
+        assertEquals(target, result.path)
+        assertContentEquals(library, target.readBytes())
+    }
+
+    @Test
+    fun movesOnWhenSomethingStaysInTheLibrarysPlace() {
+        val root = folder("cache")
+        Files.createDirectories(root.resolve(sha256).resolve("libink.so"))
+        val fallback = folder("fallback")
+
+        val result = loader(CacheLocation(root), CacheLocation(fallback)).load()
+
+        assertTrue(result.path.startsWith(fallback))
+        assertOnlyTheLibrary(root.resolve(sha256))
+    }
+
+    @Test
+    fun replacesALibraryThatRefusesToOpen() {
+        assumeTrue(posix() && System.getProperty("user.name") != "root")
+        val root = folder("cache")
+        val unreadable = root.resolve(sha256).resolve("libink.so")
+        Files.createDirectories(unreadable.parent)
+        unreadable.writeBytes(library)
+        Files.setPosixFilePermissions(unreadable, emptySet())
+
+        val result = loader(CacheLocation(root), CacheLocation(folder("fallback"))).load()
+
+        assertEquals(unreadable, result.path)
+        assertContentEquals(library, unreadable.readBytes())
     }
 
     @Test
@@ -341,6 +417,14 @@ class NativeLibraryLoaderTest {
     }
 
     private fun folder(name: String): Path = temporary.newFolder(name).toPath()
+
+    /** No partial file is left behind. On Windows, a deleted one can stay listed while a scanner still holds it. */
+    private fun assertOnlyTheLibrary(directory: Path) {
+        fun entries() = directory.listDirectoryEntries().map { it.name }
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (entries() != listOf("libink.so") && System.nanoTime() < deadline) Thread.sleep(10)
+        assertEquals(listOf("libink.so"), entries())
+    }
 
     private fun posix() = "posix" in FileSystems.getDefault().supportedFileAttributeViews()
 

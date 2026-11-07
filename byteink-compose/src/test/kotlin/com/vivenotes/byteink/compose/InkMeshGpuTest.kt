@@ -39,7 +39,8 @@ class InkMeshGpuTest {
                     val stroke = Stroke(brush, MutableStrokeInputBatch().apply {
                         repeat(33) { i -> add(InputToolType.STYLUS, 20f + i * 2.75f, 60f, i * 8L, pressure = i / 32f) }
                     })
-                    val info = ImageInfo(128, 128, ColorType.N32, ColorAlphaType.PREMUL, ColorSpace.sRGB)
+                    // Not N32 (BGRA): Skiko's Linux arm64 Skia is built for OpenGL ES, where BGRA is an optional extension.
+                    val info = ImageInfo(128, 128, ColorType.RGBA_8888, ColorAlphaType.PREMUL, ColorSpace.sRGB)
                     Surface.makeRenderTarget(context, false, info).use { gpu -> Surface.makeRaster(info).use { cpu ->
                         gpu.canvas.clear(0); cpu.canvas.clear(0)
                         renderer.draw(gpu.canvas.asComposeCanvas(), stroke)

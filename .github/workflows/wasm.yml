@@ -106,11 +106,13 @@ jobs:
         run: |
           python -m pip install playwright==1.63.0 pillow==12.3.0
           python -m playwright install --with-deps chromium firefox webkit
+          # Compose/Wasm paints with WebGL2, and without a display headless Firefox refuses to create it.
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0
           for engine in chromium firefox webkit; do
-            python native/wasm/browser-test.py --engine "$engine" --output "build/wasm-browser/$engine"
-            python native/wasm/gpu-browser-test.py --engine "$engine" --output "build/wasm-gpu-browser/$engine"
-            python native/wasm/consumer-browser-test.py --engine "$engine" --output "build/wasm-published-compose-browser/$engine"
-            python native/wasm/benchmark-browser.py --engine "$engine" --output "build/wasm-benchmark/$engine"
+            xvfb-run -a python native/wasm/browser-test.py --engine "$engine" --output "build/wasm-browser/$engine"
+            xvfb-run -a python native/wasm/gpu-browser-test.py --engine "$engine" --output "build/wasm-gpu-browser/$engine"
+            xvfb-run -a python native/wasm/consumer-browser-test.py --engine "$engine" --output "build/wasm-published-compose-browser/$engine"
+            xvfb-run -a python native/wasm/benchmark-browser.py --engine "$engine" --output "build/wasm-benchmark/$engine"
           done
       - name: Locate Linux native artifact for the storage exchange
         id: native

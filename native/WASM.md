@@ -111,20 +111,29 @@ bash native/wasm/test-math.sh
   :byteink-wasm:publishAllPublicationsToBuildRepository :samples:wasm:wasmJsBrowserDistribution
 python -m pip install playwright==1.63.0 pillow==12.3.0
 python -m playwright install --with-deps chromium firefox webkit
+sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0
 for engine in chromium firefox webkit; do
-  python native/wasm/browser-test.py --engine "$engine" --output "build/wasm-browser/$engine"
-  python native/wasm/gpu-browser-test.py --engine "$engine" --output "build/wasm-gpu-browser/$engine"
-  python native/wasm/benchmark-browser.py --engine "$engine" --output "build/wasm-benchmark/$engine"
+  xvfb-run -a python native/wasm/browser-test.py --engine "$engine" --output "build/wasm-browser/$engine"
+  xvfb-run -a python native/wasm/gpu-browser-test.py --engine "$engine" --output "build/wasm-gpu-browser/$engine"
+  xvfb-run -a python native/wasm/benchmark-browser.py --engine "$engine" --output "build/wasm-benchmark/$engine"
 done
 ```
+
+`xvfb-run` is what a machine without a display needs: there, headless Firefox reports
+`AllowWebgl2:false` and Compose cannot paint. A desktop session already has a display, which is why
+this does not show locally. The pixel probes read a separate software bitmap, so they pass regardless;
+only the sample's WebGL2 check (or a screenshot) shows a surface that never painted.
 
 Milestone 5 additionally stages `:byteink-compose-wasm:publishAllPublicationsToBuildRepository`.
 Its standalone browser consumer uses the engine ZIP and Kotlin artifacts solely from Maven:
 
 ```sh
 ./gradlew -p consumer-tests/wasm-compose-fixture wasmJsBrowserDistribution
-python native/wasm/consumer-browser-test.py
+xvfb-run -a python native/wasm/consumer-browser-test.py
 ```
+
+The test's last page load serves Skiko's runtime two seconds late, so the engine always loads first.
+Skia used before Skiko has loaded fails there every time, instead of in about 2-5% of ordinary loads.
 
 The committed 63-case synthetic control can be regenerated with
 `:byteink-compose:exportWasmRenderingFixtures` (desktop native required only for regeneration).

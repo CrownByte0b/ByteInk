@@ -6,6 +6,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
@@ -17,8 +18,9 @@ import java.security.MessageDigest
  * [bundle] carries for [platform], extracted into the first of [locations] that works.
  *
  * Extraction is keyed by the library's SHA-256, so versions sit side by side and a verified file is
- * reused rather than rewritten. A missing or damaged file is written beside its final name and then
- * moved over it in one step, so concurrent processes and interrupted runs never see half a library.
+ * reused rather than rewritten, even when this process finds it only after extracting its own copy.
+ * A missing or damaged file is written beside its final name and then moved there in one step, so
+ * concurrent processes and interrupted runs never see half a library.
  */
 internal class NativeLibraryLoader(
     private val platform: Platform?,
@@ -142,17 +144,49 @@ internal class NativeLibraryLoader(
                         "says: the byteink ink-nativeloader jar is damaged",
                 )
             }
-            try {
-                Files.move(partial, target, ATOMIC_MOVE)
-            } catch (failure: IOException) {
-                // Another process may have put the same library there first, and Windows keeps a
-                // loaded library locked.
-                if (!verified(target, library.sha256)) throw failure
-            }
+            publish(partial, target, library.sha256)
         } finally {
-            Files.deleteIfExists(partial)
+            // A leftover only wastes space: it must not fail a load whose library is in place.
+            try {
+                retrying { Files.deleteIfExists(partial) }
+            } catch (_: IOException) {
+                partial.toFile().deleteOnExit()
+            }
         }
         return target
+    }
+
+    /**
+     * Moves the finished [partial] to [target], unless another process has put the library there
+     * first. Its file stays: Windows keeps a loaded library locked, and a file replaced while another
+     * process has it open refuses to open at all until that process closes it. So only a damaged file
+     * is replaced, and there the move to a free name fails rather than overwrite a file that just appeared.
+     */
+    private fun publish(partial: Path, target: Path, sha256: String) = retrying {
+        if (verified(target, sha256)) return@retrying
+        if (Files.exists(target, NOFOLLOW_LINKS)) Files.move(partial, target, ATOMIC_MOVE) else Files.move(partial, target)
+    }
+
+    /**
+     * Runs [action], waiting out what lasts only moments on Windows: a file being replaced, or
+     * still held open by whatever scans new files. A lasting failure ends with its [IOException].
+     */
+    private inline fun retrying(action: () -> Unit) {
+        var attempt = 0
+        while (true) {
+            try {
+                action()
+                return
+            } catch (failure: IOException) {
+                if (++attempt == ATTEMPTS) throw failure
+                try {
+                    Thread.sleep(minOf(5L shl attempt, MAX_RETRY_DELAY_MILLIS))
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw failure
+                }
+            }
+        }
     }
 
     private fun open(library: NativeBundle.Library): InputStream = try {
@@ -161,10 +195,18 @@ internal class NativeLibraryLoader(
         throw UnsatisfiedLinkError(missing.message)
     }
 
-    private fun verified(file: Path, sha256: String): Boolean =
+    /** Whether [file] holds this library. One that refuses to open can't be trusted, or reused yet. */
+    private fun verified(file: Path, sha256: String): Boolean = try {
         Files.isRegularFile(file) && Files.newInputStream(file).use { sha256(it, null) } == sha256
+    } catch (_: IOException) {
+        false
+    }
 
     companion object {
+        /** About 1.6 s in all, before moving on to the next location. */
+        private const val ATTEMPTS = 10
+        private const val MAX_RETRY_DELAY_MILLIS = 320L
+
         /** The SHA-256 of what [input] holds, in lowercase hex, copying it to [output] on the way. */
         fun sha256(input: InputStream, output: OutputStream?): String {
             val digest = MessageDigest.getInstance("SHA-256")

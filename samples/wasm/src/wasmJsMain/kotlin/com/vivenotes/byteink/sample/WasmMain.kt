@@ -23,6 +23,7 @@ private fun now(): Double = js("performance.now()")
 private fun verify(): Boolean = js("new URL(location.href).searchParams.has('verify')")
 private fun gpuMatrix(): Boolean = js("new URL(location.href).searchParams.has('gpu')")
 private fun benchmark(): Boolean = js("new URL(location.href).searchParams.has('benchmark')")
+private fun webGl2(): Boolean = js("!!document.createElement('canvas').getContext('webgl2')")
 private fun ready(): Unit = js("{ for (const button of document.querySelectorAll('button')) button.disabled = false; globalThis.byteinkReady = true; }")
 private fun buttons(clear: () -> Unit, reload: () -> Unit, move: () -> Unit, undo: () -> Unit, dispose: () -> Unit): Unit = js("""{
     document.getElementById('clear').onclick = clear; document.getElementById('reload').onclick = reload;
@@ -39,12 +40,16 @@ private fun inputReport(count: Int, time: Double, samples: String): Unit = js(""
 fun main() {
     MainScope().launch {
         try {
+            // Its checks and probe bitmap use Skia outside composition.
+            awaitInkRendering()
             val start=TimeSource.Monotonic.markNow()
             val engine = WasmInkEngine.load(moduleUrl())
             if (benchmark()) {
                 runBrowserBenchmark(engine.wasm,start.elapsedNow().inWholeNanoseconds/1e6)
                 status("Benchmark complete");return@launch
             }
+            // Compose starts painting later, where a failure only reaches the console as a wrapped coroutine error.
+            check(webGl2()) { "this browser can't create the WebGL2 context Compose paints with" }
             if (gpuMatrix()) { showGpuMatrix(engine.wasm); return@launch }
             if (verify()) checkRendering(engine.wasm)
             val kit = InkKit(engine)

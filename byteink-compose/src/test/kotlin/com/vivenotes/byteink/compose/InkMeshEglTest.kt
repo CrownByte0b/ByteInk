@@ -78,7 +78,8 @@ class InkMeshEglTest {
         }
     }
 
-    private fun info(width: Int, height: Int) = ImageInfo(width, height, ColorType.N32, ColorAlphaType.PREMUL, ColorSpace.sRGB)
+    // Not N32 (BGRA): Skiko's Linux arm64 Skia is built for OpenGL ES, where BGRA is an optional extension.
+    private fun info(width: Int, height: Int) = ImageInfo(width, height, ColorType.RGBA_8888, ColorAlphaType.PREMUL, ColorSpace.sRGB)
     private fun raw(surface: Surface): ByteArray = Bitmap().use { bitmap ->
         assertTrue(bitmap.allocPixels(surface.imageInfo))
         assertTrue(surface.readPixels(bitmap, 0, 0), "Read actual render-target pixels")
@@ -126,7 +127,7 @@ class InkMeshEglTest {
         val name = label.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
         Files.writeString(directory.resolve("$name.json"), metrics)
         for ((kind, bytes) in listOf("actual" to frame.gpu, "reference" to frame.cpu)) {
-            Files.write(directory.resolve("$name-$kind.n32"), bytes)
+            Files.write(directory.resolve("$name-$kind.rgba"), bytes)
             Bitmap().use { bitmap ->
                 assertTrue(bitmap.installPixels(info(frame.width, frame.height), bytes, frame.width * 4))
                 Image.makeFromBitmap(bitmap).use { image ->

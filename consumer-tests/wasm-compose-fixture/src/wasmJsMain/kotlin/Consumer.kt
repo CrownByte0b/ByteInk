@@ -17,10 +17,14 @@ private fun disposed(): Unit = js("{ globalThis.publishedWasmComposeDisposed = t
 private fun cleanup(close: () -> Unit): Unit = js("{ globalThis.closePublishedWasmCompose = close; }")
 
 fun main() { MainScope().launch {
+    // Before Skiko's runtime can have loaded: a renderer has to allow being made, and closed unused.
+    InkMeshRenderer().close()
+    val renderer = InkMeshRenderer()
     val engine = InkWasm.load(engineUrl())
     val brush = InkBrush(InkStockBrush.HIGHLIGHTER, 0x80ff0000.toInt(), 16f)
     val stroke = engine.createStroke(brush, listOf(InkSample(20f, 60f, 0.0), InkSample(160f, 60f, 100.0)))
-    val renderer = InkMeshRenderer()
+    // Everything down to ComposeViewport uses Skia outside composition.
+    awaitInkRendering()
     val bitmap = ImageBitmap(200, 120)
     renderer.draw(androidx.compose.ui.graphics.Canvas(bitmap), stroke)
     val pixels = IntArray(1); bitmap.readPixels(pixels, 60, 60, 1, 1)

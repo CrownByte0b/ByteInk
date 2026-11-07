@@ -13,6 +13,7 @@ kotlin {
                 api(project(":byteink-portable"))
                 api(libs.compose.ui)
                 api(libs.compose.runtime)
+                implementation(libs.kotlinx.coroutines.core)
             }
         }
     }

@@ -225,6 +225,27 @@ canvas's pixel units; include density, zoom and scrolling in its canvas transfor
 culls against the canvas bounds. The direct `renderer.draw(canvas, stroke, transform, viewport)`
 overloads accept finished or live low-level strokes; `transform` is an `InkTransform`.
 
+Skia is available once Skiko's Wasm runtime has loaded, which a page does in the background.
+`ComposeViewport` content always runs after that, and an `InkMeshRenderer` can be made at any
+time. Other Skia use outside composition, such as drawing to an `ImageBitmap` at startup, must
+first call `awaitInkRendering()`. Without it, the first such object can fail with an error like
+`org_jetbrains_skia_Paint__1nMake is not a function`, depending on network and cache timing:
+
+```kotlin
+MainScope().launch {
+    val engine = InkWasm.load(engineUrl)
+    awaitInkRendering()
+    val thumbnail = ImageBitmap(200, 120)
+    // ...
+}
+```
+
+Compose paints with WebGL2. Without it the page stays blank, and the browser console reports
+`Exception while trying to handle coroutine exception`. Headless Firefox on a machine with no
+display refuses to create a WebGL2 context, so run browser tests there under a virtual display:
+`xvfb-run -a` with Mesa's `libgl1-mesa-dri` and `libglx-mesa0` on Debian or Ubuntu. Chromium and WebKit
+don't need one. A software renderer such as Mesa's `llvmpipe` is sufficient.
+
 `rememberInkMeshRenderer` closes owned resources on composition disposal. For a manually created
 renderer, call `close()`. Caches retain copied geometry and prepared shaders, bounded together
 for finished/live entries by `cacheCapacity` (2048) and `cacheByteBudget` (64 MiB). The byte estimate
