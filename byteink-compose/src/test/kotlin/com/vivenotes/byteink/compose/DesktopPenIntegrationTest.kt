@@ -28,12 +28,19 @@ class DesktopPenIntegrationTest {
         return task.get()
     }
     private fun await(message: String, details: (() -> String)? = null, check: () -> Boolean) {
-        val deadline = System.nanoTime() + 10_000_000_000L
-        while (System.nanoTime() < deadline) {
+        // Counts polls, not time. A poll can wait out a slow frame on the EDT and still run ahead of the
+        // input being delivered, so a clock expiring during that frame would report slow input as lost.
+        repeat(6_000) {
             if (ui(check)) return
             Thread.sleep(10)
         }
         fail(if (details == null) message else "$message (${details()})")
+    }
+    private fun state(window: Window, completed: List<Stroke>, injection: DesktopInputInjection): String {
+        val session = ui { "active=${window.panel.session.activePointerIds} live inputs=" +
+            "${window.panel.session.liveStrokes.map { it.stroke.getRealInputCount() }} completed=${completed.size} " +
+            "packets=${window.panel.processedPacketCount} frames=${window.panel.renderedFrameCount}" }
+        return "$session; ${injection.describeDesktop()}"
     }
     private class Source : InkInputSource {
         var listener: ((InkInputEvent) -> Unit)? = null
@@ -103,15 +110,16 @@ class DesktopPenIntegrationTest {
             DesktopInputInjection().use { injection ->
                 val origin = ui { window.panel.locationOnScreen }
                 val hwnd = ui { window.panel.nativeWindowHandle }
+                val state = { state(window, completed, injection) }
                 fun mouse(phase: Int, x: Int) {
                     injection.mouse(hwnd, phase, if (windows) x else origin.x + x, if (windows) 60 else origin.y + 60)
                 }
                 mouse(0, 20)
-                await("native primary down was not captured") { window.panel.session.activePointerIds.isNotEmpty() }
+                await("native primary down was not captured", state) { window.panel.session.activePointerIds.isNotEmpty() }
                 mouse(1, 80)
-                await("native motion did not reach the engine") { (window.panel.session.liveStrokes.singleOrNull()?.stroke?.getRealInputCount() ?: 0) >= 2 }
+                await("native motion did not reach the engine", state) { (window.panel.session.liveStrokes.singleOrNull()?.stroke?.getRealInputCount() ?: 0) >= 2 }
                 mouse(2, 140)
-                await("native release did not complete") { completed.size == 1 }
+                await("native release did not complete", state) { completed.size == 1 }
                 ui {
                     val stroke = completed.single()
                     assertEquals(InputToolType.MOUSE, stroke.inputs.getToolType())
@@ -125,7 +133,7 @@ class DesktopPenIntegrationTest {
                 ui { assertEquals(1, completed.size); assertTrue(window.panel.session.activePointerIds.isEmpty()) }
                 ui { window.panel.authoringEnabled = true }
                 mouse(0, 30); mouse(2, 100)
-                await("native source did not resubscribe") { completed.size == 2 }
+                await("native source did not resubscribe", state) { completed.size == 2 }
             }
         } finally { ui { window.close() } }
         if (!windows) assertFalse(Thread.getAllStackTraces().keys.any { it.isAlive && it.name == "byteink-xinput2" })
@@ -186,11 +194,7 @@ class DesktopPenIntegrationTest {
                 val scale = ui { window.panel.graphicsConfiguration.defaultTransform.scaleX }
                 fun pen(phase: Int, x: Int, pressure: Int) = injection.penAt(hwnd, phase,
                     (x * scale).toInt(), (60 * scale).toInt(), pressure, 45, 0)
-                val state = {
-                    val session = ui { "active=${window.panel.session.activePointerIds} live inputs=" +
-                        "${window.panel.session.liveStrokes.map { it.stroke.getRealInputCount() }} completed=${completed.size}" }
-                    "$session; ${injection.describeDesktop()}"
-                }
+                val state = { state(window, completed, injection) }
                 // A held pen repeats its frame, so look for the moved sample rather than counting inputs.
                 fun hasLiveSample(pressure: Float) = window.panel.session.liveStrokes.singleOrNull()?.stroke?.let { stroke ->
                     val input = StrokeInput()
