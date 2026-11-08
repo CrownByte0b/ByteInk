@@ -23,9 +23,9 @@ val desktopArch = when (System.getProperty("os.arch").lowercase()) {
 }
 
 dependencies {
-    implementation("com.vivenotes.byteink:byteink-compose:0.1.0-SNAPSHOT")
-    implementation("com.vivenotes.byteink:byteink-kit:0.1.0-SNAPSHOT")
-    implementation("com.vivenotes.byteink:byteink-testing:0.1.0-SNAPSHOT")
+    implementation("com.vivenotes.byteink:byteink-compose:0.2.0-SNAPSHOT")
+    implementation("com.vivenotes.byteink:byteink-kit:0.2.0-SNAPSHOT")
+    implementation("com.vivenotes.byteink:byteink-testing:0.2.0-SNAPSHOT")
     implementation("org.jetbrains.compose.desktop:desktop-jvm-$desktopOs-$desktopArch:1.12.1")
 }
 

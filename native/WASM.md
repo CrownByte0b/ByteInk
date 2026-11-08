@@ -3,7 +3,7 @@
 The 2026-11-05 request is to plan WebAssembly support and start implementing it. The engine
 milestone, shared API/storage, rendering/browser-authoring and final local acceptance are implemented. The browser preview is opt-in with
 `-PbyteinkWasm=true`; existing desktop build commands and publication coordinates stay intact.
-It is not part of the published 0.1.0-alpha.1 release.
+Release 0.2.0 is the first to publish it; 0.1.0-alpha.1 does not include it.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ typed arrays and owned C++ objects; it does not approximate or reimplement strok
   bridge-source and patch hashes and both output hashes. Gradle checks them before testing
   and packaging. Runtime loading also checks ABI 4, engine pin and `bionic-acosf-v1` math profile.
   Replace both assets when upgrading the preview.
-- Maven preview coordinates `com.vivenotes.byteink:byteink-wasm:0.1.0-SNAPSHOT`; engine static
+- Maven preview coordinates `com.vivenotes.byteink:byteink-wasm:0.2.0-SNAPSHOT`; engine static
   assets in the root publication's `engine@zip` classifier. No local npm dependency paths
   enter published metadata. Kotlin-only compilation needs no C++ toolchain.
 - Installed Node/npm are used for the opt-in build. Kotlin's Binaryen distribution is resolved

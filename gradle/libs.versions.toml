@@ -12,7 +12,7 @@ androidx-ink = "1.1.0-alpha06"
 androidx-annotation = "1.11.0"
 # byteink's own modules, and its fork of ink-nativeloader, which is versioned after the release it
 # forks: <androidx-ink>-byteink.<N>.
-byteink-modules = "0.1.0-SNAPSHOT"
+byteink-modules = "0.2.0-SNAPSHOT"
 byteink-nativeloader = "1.1.0-alpha06-byteink.4"
 asm = "9.11.1"
 sqlite-jdbc = "3.54.1.0"

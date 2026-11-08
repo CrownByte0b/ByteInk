@@ -1,6 +1,6 @@
 # Notebook utilities
 
-Add optional `com.vivenotes.byteink:byteink-testing:0.1.0-SNAPSHOT` for test/sample `.vive` archives and offscreen images. Your application repository remains responsible for normal import/export and synchronization.
+Add optional `com.vivenotes.byteink:byteink-testing:0.2.0-SNAPSHOT` for test/sample `.vive` archives and offscreen images. Your application repository remains responsible for normal import/export and synchronization.
 
 ```kotlin
 --8<-- "docs/examples/src/main/kotlin/wiki/Notebook.kt"

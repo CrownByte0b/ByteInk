@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/kotlin-2.4.20-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose%20Multiplatform-1.12.1-4285F4.svg)](https://www.jetbrains.com/compose-multiplatform/)
-[![GitHub Packages](https://img.shields.io/badge/GitHub%20Packages-0.1.0--alpha.1-2ea44f.svg?logo=github)](https://github.com/orgs/CrownByte0b/packages)
+[![GitHub Packages](https://img.shields.io/badge/GitHub%20Packages-0.2.0-2ea44f.svg?logo=github)](https://github.com/orgs/CrownByte0b/packages)
 [![Wiki](https://img.shields.io/badge/docs-wiki-8A2BE2.svg)](https://crownbyte0b.github.io/ByteInk/)
 
 ByteInk is a reusable Kotlin/JVM library that brings the real **AndroidX Ink / `google/ink` stroke engine** to **Linux x86_64 and Windows x86_64**,
@@ -23,6 +23,7 @@ behaviour and stored ink compatibility across platforms.
 
 | ByteInk         | AndroidX Ink    | Native engine (`google/ink`) |
 | --------------- | --------------- | ---------------------------- |
+| `0.2.0`         | `1.1.0-alpha06` | `96e50239e1c8`               |
 | `0.1.0-alpha.1` | `1.1.0-alpha06` | `96e50239e1c8`               |
 
 ### Why not just use AndroidX Ink's KMP artifacts?
@@ -104,9 +105,9 @@ kotlin { jvmToolchain(25) }
 
 dependencies {
     implementation(compose.desktop.currentOs)
-    implementation("com.vivenotes.byteink:byteink-compose:0.1.0-alpha.1")
-    implementation("com.vivenotes.byteink:byteink-kit:0.1.0-alpha.1")
-    testImplementation("com.vivenotes.byteink:byteink-testing:0.1.0-alpha.1") // optional test helpers
+    implementation("com.vivenotes.byteink:byteink-compose:0.2.0")
+    implementation("com.vivenotes.byteink:byteink-kit:0.2.0")
+    testImplementation("com.vivenotes.byteink:byteink-testing:0.2.0") // optional test helpers
 }
 
 compose.desktop {
@@ -123,8 +124,8 @@ In a Kotlin Multiplatform project, put the two ByteInk dependencies in `jvmMain`
 kotlin {
     jvm()
     sourceSets.jvmMain.dependencies {
-        implementation("com.vivenotes.byteink:byteink-compose:0.1.0-alpha.1")
-        implementation("com.vivenotes.byteink:byteink-kit:0.1.0-alpha.1")
+        implementation("com.vivenotes.byteink:byteink-compose:0.2.0")
+        implementation("com.vivenotes.byteink:byteink-kit:0.2.0")
     }
 }
 ```

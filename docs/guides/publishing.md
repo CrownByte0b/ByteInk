@@ -7,7 +7,8 @@ The source release configuration includes the desktop libraries, shared `byteink
 `byteink-portable`, `byteink-wasm` and `byteink-compose-wasm`, with sources and metadata. The
 Wasm engine has a separate `engine@zip` asset classifier; see the [Wasm setup](wasm.md).
 The native loader includes Linux/Windows x86_64 and arm64 binaries and separate Linux
-debug-symbol archives. These Wasm artifacts are absent from the existing `0.1.0-alpha.1` release.
+debug-symbol archives. `0.2.0` is the first release with these Wasm artifacts; `0.1.0-alpha.1`
+does not include them.
 
 To publish a version from a tag, push `v<major.minor.patch[-prerelease]>`:
 

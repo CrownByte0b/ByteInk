@@ -2,10 +2,11 @@
 
 `byteink-portable` supplies a common JVM/Wasm API for ViveNotes brushes, stored strokes, erase
 masks, move/resize operations and page replay. Its Wasm adapter calls `byteink-wasm`, which runs
-the pinned Google Ink C++ engine in a browser or Node. These experimental artifacts are
-**not included in `0.1.0-alpha.1`**. Use the source-checkout setup below until a subsequent
-release containing them is published. The opt-in
-`byteink-compose-wasm` artifact adds Compose rendering; browser input lives in `byteink-wasm`.
+the pinned Google Ink C++ engine in a browser or Node. These experimental artifacts are first
+published in `0.2.0`; `0.1.0-alpha.1` does not include them. To use the release, add the GitHub
+Packages repository from [Get started](../getting-started.md#2-add-the-repository) and use
+version `0.2.0` in the dependencies below; the setup below builds them from a checkout instead.
+The opt-in `byteink-compose-wasm` artifact adds Compose rendering; browser input lives in `byteink-wasm`.
 
 The existing JVM APIs and coordinates remain available. Portable settings and stored-row types
 retain their `com.vivenotes.byteink.kit` package and are re-exported from `byteink-model`.
@@ -38,17 +39,17 @@ Add the checkout's `build/repo` Maven repository to your consumer's settings, th
 kotlin {
     wasmJs { browser() }
     sourceSets.commonMain.dependencies {
-        implementation("com.vivenotes.byteink:byteink-portable:0.1.0-SNAPSHOT")
+        implementation("com.vivenotes.byteink:byteink-portable:0.2.0-SNAPSHOT")
     }
     sourceSets.wasmJsMain.dependencies {
-        implementation("com.vivenotes.byteink:byteink-compose-wasm:0.1.0-SNAPSHOT")
+        implementation("com.vivenotes.byteink:byteink-compose-wasm:0.2.0-SNAPSHOT")
     }
 }
 ```
 
 Kotlin 2.4.21 and Compose Multiplatform 1.12.2 are the tested versions. The client is a Kotlin library; the C++ engine is a separate
 static asset bundle. Its Maven classifier is `engine`, extension `zip`:
-`com.vivenotes.byteink:byteink-wasm:0.1.0-SNAPSHOT:engine@zip`.
+`com.vivenotes.byteink:byteink-wasm:0.2.0-SNAPSHOT:engine@zip`.
 The same ZIP is generated under `byteink-wasm/build/distributions/`.
 
 Extract the ZIP into an application static asset directory, for example `public/ink/`. Serve

@@ -8,7 +8,7 @@ plugins {
 }
 
 val byteinkGroup = providers.gradleProperty("byteinkGroup").getOrElse("com.vivenotes.byteink")
-val byteinkVersion = providers.gradleProperty("byteinkVersion").getOrElse("0.1.0-SNAPSHOT")
+val byteinkVersion = providers.gradleProperty("byteinkVersion").getOrElse("0.2.0-SNAPSHOT")
 val composeVersion = providers.gradleProperty("composeVersion").getOrElse("1.12.1")
 val composite = providers.gradleProperty("byteinkCompositePath").isPresent
 val portable = providers.gradleProperty("byteinkPortable").orNull == "true"
