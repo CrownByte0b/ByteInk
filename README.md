@@ -47,10 +47,11 @@ behaviour and stored ink compatibility across platforms.
 
 ## 🌍 Supported platforms
 
-| Platform | Architecture | Notes                                                       |
-| -------- | ------------ | ----------------------------------------------------------- |
-| Linux    | `x86_64`     | X11, XWayland, and native Wayland pen/touch input on JBR 25 |
-| Windows  | `x86_64`     | `WM_POINTER` pen input                                      |
+| Platform | Architecture    | Notes                                                       |
+| -------- | --------------- | ----------------------------------------------------------- |
+| Linux    | `x86_64`, `ARM` | X11, XWayland, and native Wayland pen/touch input on JBR 25 |
+| Windows  | `x86_64`, `ARM` | `WM_POINTER` pen input                                      |
+| Web      | `wasm`          | early development not for production                        |
 
 Requires **Java 25+**. Tested with Kotlin 2.4.20 and Compose Multiplatform 1.12.1. The native `libink.so` and `ink.dll` ship inside the
 dependency, so you don't build anything native.
@@ -211,6 +212,7 @@ Then open http://localhost:8080
 
 ```bash
 ./gradlew publishToMavenLocal
+./gradlew -PbyteinkWasm=true publishToMavenLocal
 ```
 
 # getting android-ink from google
