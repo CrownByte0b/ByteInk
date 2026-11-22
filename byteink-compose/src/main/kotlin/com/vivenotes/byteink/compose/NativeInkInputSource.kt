@@ -15,6 +15,8 @@ import javax.swing.SwingUtilities
 import kotlin.math.PI
 import kotlin.math.atan
 import kotlin.math.atan2
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.tan
 
@@ -36,6 +38,16 @@ public enum class InkNativeBackend { WINDOWS_POINTER, LINUX_XINPUT2, LINUX_WAYLA
  * Hide/show replaces the native surface; close and recreate the source (the built-in panel does this).
  * Wayland discovery and cleanup run asynchronously; [isReady] becomes true on EDT after discovery.
  * Contacts beginning before readiness are ignored, including the rest of those contacts.
+ *
+ * Binding tablet-v2 takes the pen away from the toolkit on native Wayland: the compositor no longer
+ * moves the mouse pointer for it and shows no cursor for it until the client sets one. A Wayland
+ * subscription therefore gives each tool over the window the AWT cursor of the component under it,
+ * the cursor a mouse would show there, using cursor-shape-v1 where the compositor offers it and a
+ * themed cursor surface (`XCURSOR_THEME`, `XCURSOR_SIZE`) otherwise; a custom AWT cursor named after
+ * a CSS cursor keyword gets that shape, and one named `none` hides the tool's cursor. Tools over a
+ * window that no source serves get the default arrow. `-Dbyteink.wayland.cursorShape=false` forces
+ * cursor surfaces. Report hover to the UI through [onHover], so the cursor and hover states follow
+ * the pen as they do on X11 and Windows, where the pen moves the system pointer.
  */
 public class NativeInkInputSource(
     private val component: Component,
@@ -55,6 +67,14 @@ public class NativeInkInputSource(
     /** EDT-owned capture readiness; false before discovery and immediately after close/failure. */
     public var isReady: Boolean = false
         private set
+    /**
+     * Receives tablet tools hovering over [component] on native Wayland, on the AWT event thread and
+     * in order with [subscribe]'s events, while a ready subscription is open. Hover never reaches
+     * [subscribe]'s listener. X11 and Windows move the system pointer with the pen, so AWT reports
+     * their hover as mouse motion and this is never called there. After the subscription closes,
+     * nothing more arrives: treat any hover as ended.
+     */
+    public var onHover: ((InkHoverEvent) -> Unit)? = null
     init {
         require(windowHandle != 0L) { "A live native drawing-area handle is required" }
         require(centimetersPerNativePixel == null || centimetersPerNativePixel.isFinite() && centimetersPerNativePixel > 0f)
@@ -113,6 +133,53 @@ public class NativeInkInputSource(
         }
         var attached = true
         var bridge: NativePenBridge? = null
+        // Hover and pen cursors exist only on native Wayland, where the bridge reports them.
+        val hovering = mutableSetOf<Long>()
+        var cursorX = 0.0
+        var cursorY = 0.0
+        var cursorQueued = false
+        var cursorRequests = 0L
+        fun resolveCursor(surface: WaylandRuntime.WindowSurface, request: Long) {
+            if (!attached || generation != subscribedGeneration) { cursorQueued = false; return }
+            val window = surface.window
+            val hit = SwingUtilities.getDeepestComponentAt(window, floor(cursorX).toInt(), floor(cursorY).toInt()) ?: window
+            val scale = ceil(window.graphicsConfiguration?.defaultTransform?.scaleX ?: 1.0).toInt().coerceIn(1, 16)
+            bridge?.cursor(PenCursors.shape(hit.cursor), scale)
+            // Hover that arrived meanwhile may have changed the cursor after this ran: look again.
+            if (cursorRequests != request) {
+                val next = cursorRequests
+                EventQueue.invokeLater { resolveCursor(surface, next) }
+            } else cursorQueued = false
+        }
+        fun requestCursor(surface: WaylandRuntime.WindowSurface, x: Double, y: Double) {
+            cursorX = x; cursorY = y; cursorRequests++
+            if (cursorQueued) return
+            cursorQueued = true
+            val request = cursorRequests
+            // A later EDT task: a host that answers hover with AWT events, as for mouse motion, has
+            // set the component's cursor for this position by the time this reads it.
+            EventQueue.invokeLater { resolveCursor(surface, request) }
+        }
+        fun hover(frame: NativePenBridge.Frame) {
+            val surface = wayland ?: return
+            val id = frame.pointerId()
+            val hoverListener = onHover
+            if (frame.phase() == NativePenBridge.HOVER_EXIT) {
+                if (hovering.remove(id)) hoverListener?.invoke(InkHoverEvent.Exit(id))
+                return
+            }
+            val point = frame.points().lastOrNull() ?: return
+            val units = surface.surfaceUnitsPerLocalUnit()
+            val windowX = point.x() / units
+            val windowY = point.y() / units
+            val hit = SwingUtilities.getDeepestComponentAt(surface.window, floor(windowX).toInt(), floor(windowY).toInt())
+            if (component.isShowing && hit != null && SwingUtilities.isDescendingFrom(hit, component)) {
+                val offset = SwingUtilities.convertPoint(component, 0, 0, surface.window)
+                hovering.add(id)
+                hoverListener?.invoke(InkHoverEvent.Move(normalizer.hover(frame.tool(), point, windowX - offset.x, windowY - offset.y), id))
+            } else if (hovering.remove(id)) hoverListener?.invoke(InkHoverEvent.Exit(id))
+            requestCursor(surface, windowX, windowY)
+        }
         lateinit var subscription: AutoCloseable
         lateinit var queue: NativeInkPacketQueue
         queue = NativeInkPacketQueue(consume = { packet ->
@@ -123,6 +190,8 @@ public class NativeInkInputSource(
                     normalizer.clear()
                     try { listener(listOf(InkInputEvent.Cancel), null) } finally { subscription.close() }
                     onFailure(packet)
+                } else if (packet is NativePenBridge.Frame && packet.phase() >= NativePenBridge.HOVER) {
+                    if (isReady) hover(packet)
                 } else if (packet is InkInputEvent || isReady) {
                     val collector = diagnostics()
                     val epoch = collector?.epoch
@@ -190,6 +259,7 @@ public class NativeInkInputSource(
                 hostWindow?.removeWindowListener(windowFocus)
                 normalizer.clear()
                 accepted.clear(); mouseDown = false
+                hovering.clear()
                 try { bridge?.close() } finally { subscribed = false }
             }
         }
@@ -256,11 +326,7 @@ internal class NativePenNormalizer(
         // Anchor at the newest observation, so the first historical packet remains in the past.
         clock.map(points.last().ticks(), now)
         val scale = pixelsPerLocalUnit().also { require(it.isFinite() && it > 0f) }
-        val tool = when (frame.tool()) {
-            NativePenBridge.PEN -> InputToolType.STYLUS
-            NativePenBridge.TOUCH -> InputToolType.TOUCH
-            else -> InputToolType.MOUSE
-        }
+        val tool = toolType(frame.tool())
         val samples = points.map { point ->
             val tilt = if (point.axes() and NativePenBridge.TILT != 0) penTilt(point.tiltX(), point.tiltY()) else null
             InkPointerSample((point.x() / scale).toFloat(), (point.y() / scale).toFloat(),
@@ -283,6 +349,19 @@ internal class NativePenNormalizer(
             } else emptyList()
             else -> emptyList()
         }
+    }
+
+    /** A hovering [point] at component-local ([x], [y]): its tool, time and tilt, never pressure. */
+    fun hover(tool: Int, point: NativePenBridge.Point, x: Double, y: Double, now: Long = NativeMonotonicClock.uptimeMillis()): InkPointerSample {
+        val tilt = if (point.axes() and NativePenBridge.TILT != 0) penTilt(point.tiltX(), point.tiltY()) else null
+        return InkPointerSample(x.toFloat(), y.toFloat(), clock.map(point.ticks(), now), toolType(tool), null,
+            tilt?.first, tilt?.second, centimetersPerPixel?.times(pixelsPerLocalUnit()))
+    }
+
+    private fun toolType(tool: Int): InputToolType = when (tool) {
+        NativePenBridge.PEN -> InputToolType.STYLUS
+        NativePenBridge.TOUCH -> InputToolType.TOUCH
+        else -> InputToolType.MOUSE
     }
 }
 

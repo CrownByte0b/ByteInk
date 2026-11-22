@@ -17,7 +17,9 @@ final class WaylandWire implements AutoCloseable {
     private final Map<String, MemorySegment> listeners = new HashMap<>();
     private final Consumer<Throwable> failure;
     private final MethodHandle getFd, prepareRead, dispatchPending, flush, poll, readEvents, cancelRead;
-    private final MethodHandle signalFd, closeFd;
+    private final MethodHandle signalFd, drainFd, closeFd;
+    /** libwayland-cursor, opened on first use; empty when the system lacks it. */
+    private Optional<SymbolLookup> cursorLibrary;
     private final int wakeDescriptor;
     private final MemorySegment wakeSignal;
     private final AtomicBoolean wakeClosed = new AtomicBoolean();
@@ -43,6 +45,7 @@ final class WaylandWire implements AutoCloseable {
             readEvents = link("wl_display_read_events", FunctionDescriptor.of(JAVA_INT, ADDRESS));
             cancelRead = link("wl_display_cancel_read", FunctionDescriptor.ofVoid(ADDRESS));
             signalFd = link("write", FunctionDescriptor.of(JAVA_LONG, JAVA_INT, ADDRESS, JAVA_LONG), Linker.Option.captureCallState("errno"));
+            drainFd = link("read", FunctionDescriptor.of(JAVA_LONG, JAVA_INT, ADDRESS, JAVA_LONG));
             closeFd = link("close", FunctionDescriptor.of(JAVA_INT, JAVA_INT));
             wakeSignal = arena.allocate(JAVA_LONG);
             wakeSignal.set(JAVA_LONG, 0, 1L);
@@ -66,7 +69,9 @@ final class WaylandWire implements AutoCloseable {
         MethodHandle handle = functions.computeIfAbsent(name, key -> {
             MemoryLayout[] types = Arrays.stream(arguments).map(a -> a instanceof Integer ? JAVA_INT
                     : a instanceof Long ? JAVA_LONG : ADDRESS).toArray(MemoryLayout[]::new);
-            MemorySegment symbol = library.find(key).or(() -> libc.find(key)).orElseThrow();
+            MemorySegment symbol = library.find(key).or(() -> libc.find(key))
+                    .or(() -> key.startsWith("wl_cursor_") ? cursorLibrary().flatMap(cursor -> cursor.find(key)) : Optional.empty())
+                    .orElseThrow();
             return Linker.nativeLinker().downcallHandle(symbol,
                     result == null ? FunctionDescriptor.ofVoid(types) : FunctionDescriptor.of(result, types));
         });
@@ -133,18 +138,66 @@ final class WaylandWire implements AutoCloseable {
         int version = integer("wl_proxy_get_version", proxy);
         int opcode = switch (type) {
             case "zwp_tablet_manager_v2", "zwp_tablet_tool_v2", "zwp_tablet_pad_v2",
-                 "zwp_tablet_pad_ring_v2", "zwp_tablet_pad_strip_v2", "zwp_tablet_pad_dial_v2" -> 1;
+                 "zwp_tablet_pad_ring_v2", "zwp_tablet_pad_strip_v2", "zwp_tablet_pad_dial_v2", "wl_shm" -> 1;
             case "wl_seat" -> 3;
             default -> 0;
         };
-        if (type.equals("wl_registry") || type.equals("wl_callback") || type.equals("wl_seat") && version < 5 || type.equals("wl_touch") && version < 3)
+        // wl_compositor has no destructor and wl_shm only gains release in version 2.
+        if (type.equals("wl_registry") || type.equals("wl_callback") || type.equals("wl_compositor") ||
+                type.equals("wl_seat") && version < 5 || type.equals("wl_touch") && version < 3 || type.equals("wl_shm") && version < 2)
             procedure("wl_proxy_destroy", proxy);
         else marshal(proxy, opcode, MemorySegment.NULL, version, 1);
     }
+
+    private Optional<SymbolLookup> cursorLibrary() {
+        if (cursorLibrary == null) {
+            try { cursorLibrary = Optional.of(SymbolLookup.libraryLookup("libwayland-cursor.so.0", arena)); }
+            catch (IllegalArgumentException missing) { cursorLibrary = Optional.empty(); }
+        }
+        return cursorLibrary;
+    }
+    /** One still image of a theme cursor; libwayland-cursor owns the buffer until the theme is destroyed. */
+    record CursorImage(MemorySegment buffer, int width, int height, int hotspotX, int hotspotY) {}
+    /** A theme loaded at {@code size} pixels through {@code shm}, or null when libwayland-cursor or the theme is missing. */
+    MemorySegment cursorTheme(String name, int size, MemorySegment shm) {
+        if (cursorLibrary().isEmpty()) return null;
+        try (Arena local = Arena.ofConfined()) {
+            MemorySegment theme = pointer("wl_cursor_theme_load", name == null ? MemorySegment.NULL : local.allocateFrom(name), size, shm);
+            return theme.address() == 0 ? null : theme;
+        }
+    }
+    /** The first image of the first of {@code names} that {@code theme} has, or null. */
+    CursorImage cursorImage(MemorySegment theme, List<String> names) {
+        for (String name : names) {
+            MemorySegment cursor;
+            try (Arena local = Arena.ofConfined()) { cursor = pointer("wl_cursor_theme_get_cursor", theme, local.allocateFrom(name)); }
+            if (cursor.address() == 0) continue;
+            // struct wl_cursor { unsigned int image_count; struct wl_cursor_image **images; char *name; }
+            MemorySegment fields = cursor.reinterpret(24);
+            if (fields.get(JAVA_INT, 0) == 0) continue;
+            // struct wl_cursor_image { uint32_t width, height, hotspot_x, hotspot_y, delay; }
+            MemorySegment image = fields.get(ADDRESS, 8).reinterpret(ADDRESS.byteSize()).get(ADDRESS, 0).reinterpret(20);
+            MemorySegment buffer = pointer("wl_cursor_image_get_buffer", image);
+            if (buffer.address() == 0) continue;
+            return new CursorImage(buffer, image.get(JAVA_INT, 0), image.get(JAVA_INT, 4), image.get(JAVA_INT, 8), image.get(JAVA_INT, 12));
+        }
+        return null;
+    }
+    void destroyCursorTheme(MemorySegment theme) { procedure("wl_cursor_theme_destroy", theme); }
+
     void readLoop(MemorySegment display, MemorySegment queue, java.util.function.BooleanSupplier running) {
+        readLoop(display, queue, running, null);
+    }
+    /**
+     * Reads and dispatches {@code queue} until {@code running} is false. {@link #wakeReader()} while it
+     * is still running runs {@code wake} on this thread, after dispatching what was already read;
+     * without {@code wake}, such a signal is an error.
+     */
+    void readLoop(MemorySegment display, MemorySegment queue, java.util.function.BooleanSupplier running, Runnable wake) {
         try (Arena local = Arena.ofConfined()) {
             MemorySegment pollfd = local.allocate(16, 4);
             MemorySegment state = local.allocate(CALL_STATE);
+            MemorySegment counter = local.allocate(JAVA_LONG);
             pollfd.set(JAVA_INT, 0, (int) getFd.invokeExact(display));
             pollfd.set(JAVA_INT, 8, wakeDescriptor);
             pollfd.set(JAVA_SHORT, 12, (short) 1);
@@ -153,7 +206,7 @@ final class WaylandWire implements AutoCloseable {
                     if ((int) dispatchPending.invokeExact(display, queue) < 0) throw new IllegalStateException("Wayland queue failed");
                     if (!running.getAsBoolean()) return;
                 }
-                boolean consumed = false;
+                boolean consumed = false, woken = false;
                 try {
                     if (!running.getAsBoolean()) return;
                     int flushed = (int) flush.invokeExact(state, display);
@@ -172,8 +225,10 @@ final class WaylandWire implements AutoCloseable {
                     short wakeReady = pollfd.get(JAVA_SHORT, 14);
                     if ((wakeReady & (8 | 16 | 32)) != 0)
                         throw new IllegalStateException("Wayland reader wakeup descriptor failed");
-                    if ((wakeReady & 1) != 0)
-                        throw new IllegalStateException("Wayland reader was signalled before shutdown");
+                    if ((wakeReady & 1) != 0) {
+                        if (wake == null) throw new IllegalStateException("Wayland reader was signalled before shutdown");
+                        woken = true;
+                    }
                     short ready = pollfd.get(JAVA_SHORT, 6);
                     if (result > 0 && (ready & (1 | 8 | 16 | 32)) != 0) {
                         consumed = true;
@@ -183,13 +238,22 @@ final class WaylandWire implements AutoCloseable {
                     if (!consumed) cancelRead.invokeExact(display);
                 }
                 if ((int) dispatchPending.invokeExact(display, queue) < 0) throw new IllegalStateException("Wayland queue failed");
+                if (woken) {
+                    // Reset the nonblocking counter first: a wake during wake.run() polls again.
+                    long drained = (long) drainFd.invokeExact(wakeDescriptor, counter, 8L);
+                    if (drained != 8L && drained != -1L) throw new IllegalStateException("Wayland reader wakeup read failed");
+                    wake.run();
+                }
             }
         } catch (Throwable error) {
             throw new IllegalStateException("Wayland input reader failed", error);
         }
     }
 
-    /** Called only after the owning bridge clears its running flag; never takes the call lock. */
+    /**
+     * Interrupts the reader's poll: to stop it once the owner cleared its running flag, or to run the
+     * loop's wake action while it keeps running. Any thread; never takes the call lock.
+     */
     void wakeReader() {
         if (wakeClosed.get()) return;
         try (Arena local = Arena.ofConfined()) {

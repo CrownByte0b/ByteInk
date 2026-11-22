@@ -64,6 +64,23 @@ class NativeInkPacketQueueTest {
         queue.close()
     }
 
+    @Test fun hoverKeepsOnlyEachToolsNewestPositionAndNeverMergesAcrossOtherPackets() = EventQueue.invokeAndWait {
+        val posted = ArrayDeque<() -> Unit>()
+        val delivered = ArrayList<NativePenBridge.Frame>()
+        val queue = NativeInkPacketQueue({ delivered.add(it as NativePenBridge.Frame) }, { posted.addLast(it) }, { 0L })
+        listOf(frame(1, NativePenBridge.HOVER), frame(2, NativePenBridge.HOVER), frame(3, NativePenBridge.HOVER),
+            frame(4, NativePenBridge.HOVER, id = 2), frame(5, NativePenBridge.HOVER, id = 2),
+            frame(6, NativePenBridge.BEGIN), frame(7, NativePenBridge.FINISH),
+            frame(8, NativePenBridge.HOVER), NativePenBridge.Frame(1L, NativePenBridge.HOVER_EXIT, NativePenBridge.PEN, emptyList()),
+            frame(9, NativePenBridge.HOVER)).forEach(queue::enqueue)
+        while (posted.isNotEmpty()) posted.removeFirst().invoke()
+        assertEquals(listOf(NativePenBridge.HOVER to 3L, NativePenBridge.HOVER to 5L, NativePenBridge.BEGIN to 6L,
+            NativePenBridge.FINISH to 7L, NativePenBridge.HOVER to 8L, NativePenBridge.HOVER_EXIT to -1L, NativePenBridge.HOVER to 9L),
+            delivered.map { it.phase() to (it.points().singleOrNull()?.ticks() ?: -1L) })
+        assertEquals(listOf(1L, 2L, 1L, 1L, 1L, 1L, 1L), delivered.map { it.pointerId() })
+        queue.close()
+    }
+
     @Test fun timeBudgetAndReentrantEnqueueKeepOneContinuationAndFifoOrder() = EventQueue.invokeAndWait {
         val posted = ArrayDeque<() -> Unit>()
         val delivered = ArrayList<Any>()

@@ -90,6 +90,21 @@ Tablet frames preserve measured pressure and projected tilt; barrel rotation sta
 shaft azimuth. Multiple tools and touch contacts have independent lifetimes. Pad buttons, rings
 and strips are accepted by the protocol binding but do not select brushes or author strokes.
 
+Binding tablet-v2 takes the pen from the toolkit for every surface of the connection: the
+compositor stops moving the mouse pointer for it, and shows no cursor for a tool over a client
+surface until that client sets one (Mutter draws none; KWin falls back to a crosshair). Each
+source therefore answers every `proximity_in` with the AWT cursor of the component under the tool,
+the cursor a mouse would show there, and updates it as hover reports new positions: cursor-shape-v1
+`get_tablet_tool_v2`/`set_shape` where the compositor offers it, otherwise `set_cursor` with a
+themed surface of the tool's own (libwayland-cursor, `XCURSOR_THEME`/`XCURSOR_SIZE`, the window's
+integer scale). AWT's predefined cursors map as JBR maps them for its pointer; a custom cursor named
+after a CSS cursor keyword takes that shape, `none` hides the tool's cursor, and anything else shows
+the arrow. Tools over a window that no source serves get the arrow. `-Dbyteink.wayland.cursorShape=false`
+forces cursor surfaces. Hover reaches `NativeInkInputSource.onHover` on EDT, never the authoring
+listener: `Move` carries position, tool, time and tilt without pressure; `Exit` follows proximity
+loss, leaving the component or removal. A contact ends hover without `Exit`. Hosts can forward hover
+to their UI as mouse motion, as X11 and Windows do for a pen, so cursors and hover states follow it.
+
 Wayland coordinates are surface-local units, mapped on EDT through the current JBR peer scale and
 the component's offset. Down outside the drawing component is ignored; an accepted stroke keeps
 its captured pointer when it moves outside. For a directly constructed `NativeInkInputSource`,
@@ -208,7 +223,11 @@ retrieval. The Wayland suite uses C-generated protocol metadata to send real tab
 events to JBR windows, verifies pressure, tilt, history, prediction removal, pad child bindings,
 simultaneous contacts, bounds filtering, device removal, hide/show, independent windows, repeated
 hotplug during detach, visible wet/dry pixels and immediate Skia handoff. Real `wl_pointer` mouse events are delivered
-through JBR and AWT. These tests do not replace a physical tablet and display-latency measurement.
+through JBR and AWT. The fixture records each tool's cursor requests: shapes and surfaces carry the
+current `proximity_in` serial, follow the AWT cursor under the tool (including a change with no tablet
+event after it), are sent again after each proximity, size the themed surface for the window's scale,
+and give a window no source serves the arrow; hover reaches `onHover` alone and ends on proximity loss.
+These tests do not replace a physical tablet and display-latency measurement.
 
 The separate presentation suite checks the actual SHM/Vulkan surface and buffer at both
 scales, finished handoff, resize, hide/show and disable/cleanup. Request Vulkan, force an
@@ -219,10 +238,10 @@ ICD files are needed to force a driver on hosts with multiple implementations;
 retain a separate strict promotion check (`BYTEINK_EGL_TEST_PROMOTION_CHECK=true`), which
 currently rejects a sparse CPU/GPU reference difference; a passing diagnostic is not promotion.
 
-The vendored tablet-v2 XML retains its MIT license and is pinned by SHA-256 in `WaylandProtocol`
-and `src/test/wayland/generate.py`. To update it, review upstream protocol changes, update both pins,
-run the generator and repeat the native suite. `generate.py --check` rejects stale Java metadata;
-the test server is generated independently by `wayland-scanner` from the same XML.
+The vendored tablet-v2 and cursor-shape-v1 XML retain their MIT licenses and are pinned by SHA-256
+in `WaylandProtocol` and `src/test/wayland/generate.py`. To update one, review upstream protocol changes,
+update both pins, run the generator and repeat the native suite. `generate.py --check` rejects stale
+Java metadata; the test server is generated independently by `wayland-scanner` from the same XML.
 
 Run the Windows suite in a logged-in desktop session. Windows denies OS pen injection from
 SSH/service session 0; use `--no-daemon` so the test worker inherits the interactive session.

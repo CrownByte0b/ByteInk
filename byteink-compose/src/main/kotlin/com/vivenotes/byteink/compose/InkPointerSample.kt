@@ -59,6 +59,20 @@ public sealed interface InkInputEvent {
 }
 
 /**
+ * A pen or tablet tool above the surface without touching it, for pointer feedback such as cursors
+ * and hover states. Hover never starts, extends or ends a stroke.
+ */
+public sealed interface InkHoverEvent {
+    /** The tool hovers at [sample], which carries tilt when the device reports it and never pressure. */
+    public data class Move(public val sample: InkPointerSample, public val pointerId: Long = 0L) : InkHoverEvent
+    /**
+     * The tool left proximity or the component, or was removed. A contact ends hover without Exit;
+     * Move resumes once the tool lifts.
+     */
+    public data class Exit(public val pointerId: Long = 0L) : InkHoverEvent
+}
+
+/**
  * Input adapter seam for native pen APIs such as Windows WM_POINTER or Linux tablet input.
  *
  * Deliver callbacks serially on the Compose UI thread. Timestamps, tool type and pressure must

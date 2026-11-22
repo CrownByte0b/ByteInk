@@ -151,7 +151,7 @@ def fixture_library(args, output):
         shutil.copy2(args.fixture_library.resolve(), target)
         return target, {"supplied_binary": str(args.fixture_library.resolve()), "sha256": sha(target)}
     execute(["python3", str(FIXTURE / "generate.py"), "--check"], directory / "generate-check.log")
-    for protocol, prefix in (("tablet-v2.xml", "tablet"), ("byteink-test.xml", "byteink-test")):
+    for protocol, prefix in (("tablet-v2.xml", "tablet"), ("cursor-shape-v1.xml", "cursor-shape"), ("byteink-test.xml", "byteink-test")):
         execute(["wayland-scanner", "server-header", str(FIXTURE / protocol), str(directory / f"{prefix}-server.h")], directory / f"{prefix}-header.log")
         execute(["wayland-scanner", "private-code", str(FIXTURE / protocol), str(directory / f"{prefix}-protocol.c")], directory / f"{prefix}-code.log")
     include = args.weston_include
@@ -175,7 +175,7 @@ def fixture_library(args, output):
     target = directory / "tablet-fixture.so"
     command = ["cc", "-shared", "-fPIC", "-Wall", "-Wextra", "-Wno-unused-parameter", "-Wl,-Bsymbolic", *weston_flags,
                f"-I{directory}", str(FIXTURE / "tablet-fixture.c"), str(directory / "tablet-protocol.c"),
-               str(directory / "byteink-test-protocol.c"), *deps, "-o", str(target)]
+               str(directory / "cursor-shape-protocol.c"), str(directory / "byteink-test-protocol.c"), *deps, "-o", str(target)]
     execute(command, directory / "compile.log")
     return target, {"command": command, "sha256": sha(target), "header_provenance": header_info}
 

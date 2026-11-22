@@ -3,6 +3,7 @@ package com.vivenotes.byteink.compose;
 import java.lang.foreign.MemorySegment;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -13,14 +14,29 @@ final class WaylandPenBridge implements NativePenBridge {
     // A terminal display cannot dispatch pending new-id closures. Retain their native metadata
     // until process shutdown rather than let the toolkit inspect dangling pointers on its display.
     private static final List<WaylandWire> FAILED_DISPLAYS = new ArrayList<>();
+    // Surfaces a live bridge serves, with how many bridges serve each. Binding tablet-v2 takes the
+    // pen from the toolkit for every surface of the connection, and a compositor shows no cursor for
+    // a tool over a client surface until the client sets one: a surface nobody serves gets the arrow.
+    private static final ConcurrentHashMap<Long, Integer> TARGETS = new ConcurrentHashMap<>();
+    // Interfaces without events take no listener.
+    private static final Set<String> SILENT = Set.of("wl_compositor", "wp_cursor_shape_manager_v1", "wp_cursor_shape_device_v1");
     private static final class Tool {
         final long id = IDS.getAndIncrement();
         long surface, tablet;
         double x, y;
         float pressure, tiltX, tiltY;
         int capabilities, axes, kind = PEN;
-        boolean active, changed, out;
+        // touching: the tool is down, including a contact ignored for beginning before readiness.
+        boolean active, changed, out, hovering, touching;
         final List<Integer> transitions = new ArrayList<>();
+        // The latest proximity_in serial, which every cursor request for this focus must carry.
+        int serial;
+        boolean proximity;
+        // The cursor shown since that proximity_in: -1 none yet, else a PenCursors shape at cursorScale.
+        int cursorShape = -1, cursorScale;
+        MemorySegment shapeDevice, cursorSurface;
+        long cursorBuffer;
+        int cursorBufferScale;
     }
     private static final class Contact {
         final long id = IDS.getAndIncrement();
@@ -44,8 +60,17 @@ final class WaylandPenBridge implements NativePenBridge {
     private final Map<Long, MemorySegment> tabletSeats = new HashMap<>(), seatTouches = new HashMap<>();
     private final Map<Long, Tool> tools = new HashMap<>();
     private final Map<Long, Touch> touches = new HashMap<>();
-    private MemorySegment manager;
+    private MemorySegment registry, manager;
     private int managerGlobal;
+    // Pen cursors: cursor-shape-v1 where the compositor has it, else themed cursor surfaces. The
+    // compositor and shm globals are bound only once a surface cursor is needed.
+    private final boolean cursorShapeAllowed = !"false".equalsIgnoreCase(System.getProperty("byteink.wayland.cursorShape"));
+    private MemorySegment shapeManager, compositor, shm;
+    private int shapeManagerGlobal, compositorGlobal, compositorVersion, shmGlobal;
+    private final Map<Integer, MemorySegment> cursorThemes = new HashMap<>();
+    private boolean cursorThemeMissing;
+    // Published by the EDT for tools over the target; applied on the reader.
+    private volatile int requestedShape = PenCursors.DEFAULT, requestedScale = 1;
     private volatile boolean running = true;
     private boolean initialized;
     private int discoveryBarriers;
@@ -56,6 +81,7 @@ final class WaylandPenBridge implements NativePenBridge {
     WaylandPenBridge(long borrowedDisplay, long surface, Consumer<Frame> frames, Runnable ready, Consumer<Throwable> failure) {
         this.display = MemorySegment.ofAddress(borrowedDisplay); this.target = surface;
         this.frames = frames; this.ready = ready; this.failure = failure;
+        TARGETS.merge(surface, 1, Integer::sum);
         reader = new Thread(this::read, "byteink-wayland-pen"); reader.setDaemon(true);
         reader.start();
     }
@@ -67,7 +93,7 @@ final class WaylandPenBridge implements NativePenBridge {
         displayWrapper = wire.pointer("wl_proxy_create_wrapper", display);
         if (displayWrapper.address() == 0) throw new IllegalStateException("Cannot wrap Wayland display");
         wire.procedure("wl_proxy_set_queue", displayWrapper, queue);
-        own(wire.child(displayWrapper, 1, "wl_registry", MemorySegment.NULL), "wl_registry", 0);
+        registry = own(wire.child(displayWrapper, 1, "wl_registry", MemorySegment.NULL), "wl_registry", 0);
         discoveryBarrier();
     }
     private void discoveryBarrier() {
@@ -88,12 +114,13 @@ final class WaylandPenBridge implements NativePenBridge {
             synchronized (lifecycle) { wire = acquired; }
             if (!running) return;
             discover();
-            wire.readLoop(display, queue, () -> running);
+            wire.readLoop(display, queue, () -> running, this::cursors);
         }
         catch (Throwable error) { failed(error); }
         finally {
             try { releaseResources(); }
             catch (Throwable error) { failed(error); }
+            TARGETS.computeIfPresent(target, (surface, count) -> count > 1 ? count - 1 : null);
             if (failureCause == null) stopped.complete(null);
             else stopped.completeExceptionally(failureCause);
         }
@@ -105,7 +132,8 @@ final class WaylandPenBridge implements NativePenBridge {
         proxies.put(pointer.address(), new Proxy(pointer, type, parent));
         if (type.equals("zwp_tablet_tool_v2")) tools.put(pointer.address(), new Tool());
         if (type.equals("wl_touch")) touches.put(pointer.address(), new Touch());
-        wire.listen(pointer, type, this::event);
+        if (!SILENT.contains(type)) wire.listen(pointer, type, this::event);
+        if (type.equals("zwp_tablet_tool_v2") && running) shapeDevice(pointer.address());
         return pointer;
     }
     private void tabletSeat(MemorySegment seat) {
@@ -113,6 +141,12 @@ final class WaylandPenBridge implements NativePenBridge {
             MemorySegment tabletSeat = wire.child(manager, 0, "zwp_tablet_seat_v2", MemorySegment.NULL, seat);
             tabletSeats.put(seat.address(), own(tabletSeat, "zwp_tablet_seat_v2", seat.address()));
         }
+    }
+    private void shapeDevice(long toolKey) {
+        Tool tool = tools.get(toolKey);
+        if (shapeManager == null || tool == null || tool.shapeDevice != null) return;
+        tool.shapeDevice = own(wire.child(shapeManager, 2, "wp_cursor_shape_device_v1", MemorySegment.NULL,
+            proxies.get(toolKey).pointer()), "wp_cursor_shape_device_v1", toolKey);
     }
     private static int number(Object[] args, int i) { return (Integer) args[4 + i]; }
     private static MemorySegment pointer(Object[] args, int i) { return (MemorySegment) args[4 + i]; }
@@ -158,6 +192,15 @@ final class WaylandPenBridge implements NativePenBridge {
                     } else if (type.equals("wl_seat")) {
                         MemorySegment seat = own(wire.bind(self, name, type, Math.min(5, version)), type, 0);
                         seats.put(name, seat); tabletSeat(seat);
+                    } else if (type.equals("wp_cursor_shape_manager_v1") && shapeManager == null && cursorShapeAllowed) {
+                        // Version 1 holds every shape an AWT cursor maps to.
+                        shapeManagerGlobal = name;
+                        shapeManager = own(wire.bind(self, name, type, 1), type, 0);
+                        List.copyOf(tools.keySet()).forEach(this::shapeDevice);
+                    } else if (type.equals("wl_compositor") && compositorGlobal == 0) {
+                        compositorGlobal = name; compositorVersion = version;
+                    } else if (type.equals("wl_shm") && shmGlobal == 0) {
+                        shmGlobal = name;
                     }
                 } else if (event.equals("global_remove")) {
                     int name = number(args, 0);
@@ -167,6 +210,14 @@ final class WaylandPenBridge implements NativePenBridge {
                         for (MemorySegment child : List.copyOf(tabletSeats.values())) release(child.address());
                         release(manager.address()); manager = null;
                     }
+                    if (shapeManager != null && name == shapeManagerGlobal) {
+                        for (Tool tool : tools.values()) if (tool.shapeDevice != null) {
+                            release(tool.shapeDevice.address()); tool.shapeDevice = null; tool.cursorShape = -1;
+                        }
+                        release(shapeManager.address()); shapeManager = null;
+                    }
+                    if (name == compositorGlobal) compositorGlobal = 0;
+                    if (name == shmGlobal) shmGlobal = 0;
                 }
             }
             case "wl_seat" -> {
@@ -193,7 +244,7 @@ final class WaylandPenBridge implements NativePenBridge {
                 if (event.equals("removed")) {
                     if (proxy.type().equals("zwp_tablet_v2")) {
                         tools.values().stream().filter(t -> t.tablet == self.address()).forEach(t -> {
-                            cancel(t); t.surface = 0; t.tablet = 0;
+                            cancel(t); endHover(t); t.surface = 0; t.tablet = 0; t.proximity = false;
                         });
                     }
                     release(self.address());
@@ -207,19 +258,24 @@ final class WaylandPenBridge implements NativePenBridge {
             case "type" -> tool.kind = switch (number(args, 0)) { case 0x146, 0x147 -> MOUSE; case 0x145 -> TOUCH; default -> PEN; };
             case "capability" -> { if (number(args, 0) == 1) tool.capabilities |= TILT; if (number(args, 0) == 2) tool.capabilities |= PRESSURE; }
             case "proximity_in" -> {
-                cancel(tool); tool.tablet = pointer(args, 1).address(); tool.surface = pointer(args, 2).address();
-                tool.axes = 0; tool.out = false;
+                cancel(tool); endHover(tool);
+                tool.tablet = pointer(args, 1).address(); tool.surface = pointer(args, 2).address();
+                tool.axes = 0; tool.out = false; tool.touching = false;
+                // The compositor forgets a tool's cursor when focus changes; answer each proximity_in.
+                tool.serial = number(args, 0); tool.proximity = true; tool.cursorShape = -1;
+                cursor(key, tool);
             }
             case "proximity_out" -> tool.out = true;
             // A sync reply can arrive between down and frame; gate the actual begin event,
             // not only the frame that later publishes its accumulated observations.
-            case "down" -> { if (initialized) tool.transitions.add(BEGIN); }
-            case "up" -> tool.transitions.add(FINISH);
+            case "down" -> { tool.touching = true; if (initialized) tool.transitions.add(BEGIN); }
+            case "up" -> { tool.touching = false; tool.transitions.add(FINISH); }
             case "motion" -> { tool.x = fixed(args, 0); tool.y = fixed(args, 1); tool.changed = true; }
             case "pressure" -> { tool.pressure = Math.min(65535L, Integer.toUnsignedLong(number(args, 0))) / 65535f; tool.axes |= tool.capabilities & PRESSURE; tool.changed = true; }
             case "tilt" -> { tool.tiltX = (float) fixed(args, 0); tool.tiltY = (float) fixed(args, 1); tool.axes |= tool.capabilities & TILT; tool.changed = true; }
             case "frame" -> {
-                if (initialized && tool.surface == target && (tool.active || !tool.transitions.isEmpty())) {
+                boolean mine = initialized && tool.surface == target;
+                if (mine && (tool.active || !tool.transitions.isEmpty())) {
                     Point point = new Point(tool.x, tool.y, Integer.toUnsignedLong(number(args, 0)), tool.pressure, tool.tiltX, tool.tiltY, tool.kind == PEN ? tool.axes : 0);
                     boolean transitioned = !tool.transitions.isEmpty();
                     for (int phase : List.copyOf(tool.transitions)) {
@@ -229,9 +285,17 @@ final class WaylandPenBridge implements NativePenBridge {
                     }
                     if (!transitioned && tool.active && tool.changed) frames.accept(new Frame(tool.id, MOVE, tool.kind, List.of(point)));
                     if (tool.out) cancel(tool);
+                    // Contact ends hover without HOVER_EXIT; motion after the lift hovers again.
+                    tool.hovering = false;
+                } else if (mine && tool.proximity && !tool.out && !tool.touching && tool.changed && tool.kind != TOUCH) {
+                    // Hover reports where the tool is, not a contact: no pressure, tilt when reported.
+                    frames.accept(new Frame(tool.id, HOVER, tool.kind, List.of(new Point(tool.x, tool.y,
+                        Integer.toUnsignedLong(number(args, 0)), 0f, tool.tiltX, tool.tiltY, tool.kind == PEN ? tool.axes & TILT : 0))));
+                    tool.hovering = true;
                 }
+                if (tool.out) endHover(tool);
                 tool.transitions.clear(); tool.changed = false;
-                if (tool.out) { tool.surface = 0; tool.axes = 0; }
+                if (tool.out) { tool.surface = 0; tool.axes = 0; tool.proximity = false; tool.touching = false; tool.cursorShape = -1; }
             }
             case "removed" -> release(key);
             default -> { /* Descriptive axes, buttons and barrel rotation are not shaft orientation. */ }
@@ -268,6 +332,11 @@ final class WaylandPenBridge implements NativePenBridge {
         if (tool.active) frames.accept(new Frame(tool.id, CANCEL, tool.kind, List.of()));
         tool.active = false; tool.transitions.clear(); tool.changed = false;
     }
+    private void endHover(Tool tool) {
+        if (!tool.hovering) return;
+        tool.hovering = false;
+        frames.accept(new Frame(tool.id, HOVER_EXIT, tool.kind, List.of()));
+    }
     private void cancel(Touch touch) {
         Set<Long> ids = new HashSet<>();
         touch.contacts.values().forEach(c -> ids.add(c.id));
@@ -275,9 +344,100 @@ final class WaylandPenBridge implements NativePenBridge {
         ids.forEach(id -> frames.accept(new Frame(id, CANCEL, TOUCH, List.of())));
         touch.contacts.clear(); touch.pending.clear();
     }
+
+    @Override public void cursor(int shape, int scale) {
+        if (shape == requestedShape && scale == requestedScale) return;
+        requestedScale = scale; requestedShape = shape;
+        synchronized (lifecycle) {
+            // Before discovery there is no reader to wake; proximity_in applies the request.
+            // A wakeup that fails leaves the cursor as it is; the reader reports its own failures.
+            if (running && wire != null) try { wire.wakeReader(); } catch (IllegalStateException ignored) { }
+        }
+    }
+    // Reader thread, woken by cursor(): every tool over the target shows the requested cursor.
+    private void cursors() {
+        for (Map.Entry<Long, Tool> entry : List.copyOf(tools.entrySet())) {
+            if (entry.getValue().surface == target) cursor(entry.getKey(), entry.getValue());
+        }
+    }
+    // Reader thread: shows the cursor a tool in proximity should have, unless it already does.
+    private void cursor(long key, Tool tool) {
+        if (!running || !tool.proximity || tool.surface == 0) return;
+        int shape;
+        if (tool.surface == target) shape = requestedShape;
+        else if (!TARGETS.containsKey(tool.surface)) shape = PenCursors.DEFAULT;
+        else return; // That surface's own bridge chooses its cursor.
+        int scale = requestedScale;
+        if (tool.cursorShape == shape && (tool.shapeDevice != null || shape == PenCursors.HIDDEN || tool.cursorScale == scale)) return;
+        MemorySegment proxy = proxies.get(key).pointer();
+        int version = wire.integer("wl_proxy_get_version", proxy);
+        if (shape == PenCursors.HIDDEN) {
+            wire.marshal(proxy, 0, MemorySegment.NULL, version, 0, tool.serial, MemorySegment.NULL, 0, 0);
+        } else if (tool.shapeDevice != null) {
+            wire.marshal(tool.shapeDevice, 1, MemorySegment.NULL, wire.integer("wl_proxy_get_version", tool.shapeDevice), 0, tool.serial, shape);
+        } else if (!surfaceCursor(key, proxy, version, tool, shape, scale)) {
+            return;
+        }
+        tool.cursorShape = shape; tool.cursorScale = scale;
+    }
+    // Without cursor-shape-v1: the theme's image on a surface of the tool's own, as for wl_pointer.
+    private boolean surfaceCursor(long key, MemorySegment proxy, int version, Tool tool, int shape, int scale) {
+        if (compositor == null) {
+            if (compositorGlobal == 0) return false;
+            compositor = own(wire.bind(registry, compositorGlobal, "wl_compositor", Math.min(4, compositorVersion)), "wl_compositor", 0);
+        }
+        int surfaceVersion = wire.integer("wl_proxy_get_version", compositor);
+        int bufferScale = surfaceVersion >= 3 ? scale : 1;
+        WaylandWire.CursorImage image = cursorImage(shape, bufferScale);
+        if (image != null && (image.width() % bufferScale != 0 || image.height() % bufferScale != 0)) {
+            // A buffer must be a whole multiple of its scale: use the theme's unscaled image instead.
+            bufferScale = 1;
+            image = cursorImage(shape, 1);
+        }
+        if (image == null) return false;
+        // A surface may only ever be the cursor of one tool.
+        if (tool.cursorSurface == null) tool.cursorSurface = own(wire.child(compositor, 0, "wl_surface", MemorySegment.NULL), "wl_surface", key);
+        MemorySegment surface = tool.cursorSurface;
+        wire.marshal(proxy, 0, MemorySegment.NULL, version, 0, tool.serial, surface,
+            image.hotspotX() / bufferScale, image.hotspotY() / bufferScale);
+        if (tool.cursorBuffer != image.buffer().address() || tool.cursorBufferScale != bufferScale) {
+            wire.marshal(surface, 1, MemorySegment.NULL, surfaceVersion, 0, image.buffer(), 0, 0);
+            if (surfaceVersion >= 3) wire.marshal(surface, 8, MemorySegment.NULL, surfaceVersion, 0, bufferScale);
+            if (surfaceVersion >= 4) wire.marshal(surface, 9, MemorySegment.NULL, surfaceVersion, 0, 0, 0, image.width(), image.height());
+            else wire.marshal(surface, 2, MemorySegment.NULL, surfaceVersion, 0, 0, 0, image.width() / bufferScale, image.height() / bufferScale);
+            wire.marshal(surface, 6, MemorySegment.NULL, surfaceVersion, 0);
+            tool.cursorBuffer = image.buffer().address(); tool.cursorBufferScale = bufferScale;
+        }
+        return true;
+    }
+    private WaylandWire.CursorImage cursorImage(int shape, int scale) {
+        MemorySegment theme = cursorTheme(scale);
+        return theme == null ? null : wire.cursorImage(theme, PenCursors.themeNames(shape));
+    }
+    // The user's cursor theme as Xcursor clients find it, loaded once per scale.
+    private MemorySegment cursorTheme(int scale) {
+        MemorySegment theme = cursorThemes.get(scale);
+        if (theme != null || cursorThemeMissing) return theme;
+        if (shm == null) {
+            if (shmGlobal == 0) { cursorThemeMissing = true; return null; }
+            shm = own(wire.bind(registry, shmGlobal, "wl_shm", 1), "wl_shm", 0);
+        }
+        String name = System.getenv("XCURSOR_THEME");
+        theme = wire.cursorTheme(name == null || name.isBlank() ? null : name, cursorSize() * scale, shm);
+        if (theme == null) { cursorThemeMissing = true; return null; }
+        cursorThemes.put(scale, theme);
+        return theme;
+    }
+    private static int cursorSize() {
+        try {
+            int size = Integer.parseInt(Objects.requireNonNullElse(System.getenv("XCURSOR_SIZE"), "").trim());
+            return size > 0 && size <= 256 ? size : 24;
+        } catch (NumberFormatException unset) { return 24; }
+    }
+
     private void release(long key) {
         for (Proxy child : List.copyOf(proxies.values())) if (child.parent() == key) release(child.pointer().address());
-        Tool tool = tools.remove(key); if (tool != null) cancel(tool);
+        Tool tool = tools.remove(key); if (tool != null) { cancel(tool); endHover(tool); }
         Touch touch = touches.remove(key); if (touch != null) cancel(touch);
         tabletSeats.values().removeIf(p -> p.address() == key);
         seatTouches.values().removeIf(p -> p.address() == key);
@@ -302,6 +462,9 @@ final class WaylandPenBridge implements NativePenBridge {
                 if (wire.integer("wl_display_dispatch_queue_pending", display, queue) < 0) break;
             }
             healthy = prepared && wire.integer("wl_display_get_error", display) == 0;
+            // Themes own their shm pool and buffers; release them before their wl_shm.
+            for (MemorySegment theme : cursorThemes.values()) wire.destroyCursorTheme(theme);
+            cursorThemes.clear();
             for (long key : List.copyOf(proxies.keySet())) release(key);
             if (displayWrapper.address() != 0) wire.procedure("wl_proxy_wrapper_destroy", displayWrapper);
             wire.integer("wl_display_flush", display);

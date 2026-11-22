@@ -79,7 +79,7 @@ The built-in panel retires live renderer caches on completion/cancellation and r
 | --- | --- |
 | Windows (x86_64, arm64) / `WINDOWS_POINTER` | Java 25+, `WM_POINTER` pen/history, touch and primary mouse |
 | Linux X11 or XWayland / `LINUX_XINPUT2` | Java 25+, `libX11.so.6`, `libXi.so.6`, `libc.so.6` |
-| Linux native Wayland / `LINUX_WAYLAND_TABLET` | Tested JBR 25 with WLToolkit, `libwayland-client.so.0`, `libc.so.6`, a live compositor; tablet-v2 for pen axes, `wl_touch` for touch |
+| Linux native Wayland / `LINUX_WAYLAND_TABLET` | Tested JBR 25 with WLToolkit, `libwayland-client.so.0`, `libc.so.6`, a live compositor; tablet-v2 for pen axes, `wl_touch` for touch; `libwayland-cursor.so.0` for pen cursors where the compositor lacks cursor-shape-v1 |
 
 All native capture requires `--enable-native-access=ALL-UNNAMED`. For native Wayland, launch **JBR 25** with these additional arguments before AWT initializes:
 
@@ -111,6 +111,17 @@ Keep the normal ancestor Swing buffering for immediate Wayland paints: its buffe
 The [Step 3 investigation report](https://github.com/CrownByte0b/ByteInk/blob/master/PERFORMANCE_WAYLAND_GPU.md) records the pinned source audit, lifecycle/fidelity checks and client paint/submission request measurements. JBR can coalesce several requests into a later buffer submission; deferred completion, compositor scanout and physical pen-to-photon latency are outside those timings.
 
 `NativeInkInputSource` is the lower-level adapter for custom hosts. Subscribe and close on the EDT, use a displayable component and its matching live native handle, and allow one subscription per source. Windows/X11 use the drawing component's HWND/XID; Wayland requires its visible, configured top-level `wl_surface`. Recreate custom Wayland sources after hiding/showing the window, since the native surface changes. The built-in panel handles that lifecycle and waits for configuration. Native acquisition failures are explicit; runtime failures cancel gestures, close capture and invoke `onFailure`.
+
+### Pen cursor and hover on native Wayland
+
+Binding tablet-v2 takes the pen away from the toolkit: the compositor stops moving the mouse pointer for it and shows no cursor for it over the application until the application sets one. Mutter then draws nothing at all. Each Wayland source therefore gives every tool over its window the AWT cursor of the component under the tool, the cursor a mouse would show there:
+
+- With [cursor-shape-v1](https://wayland.app/protocols/cursor-shape-v1) (GNOME 48+, Plasma 6, wlroots 0.17+), a `wp_cursor_shape_device_v1` per tool and `set_shape` with the latest `proximity_in` serial.
+- Otherwise, `zwp_tablet_tool_v2.set_cursor` with a themed surface of the tool's own, from libwayland-cursor (`XCURSOR_THEME`, `XCURSOR_SIZE`) at the window's integer scale. `-Dbyteink.wayland.cursorShape=false` forces this path.
+
+AWT's predefined cursors map as JBR maps them for its own pointer. A custom AWT cursor named after a CSS cursor keyword (`grabbing`, `nwse-resize`, …) takes that shape, one named `none` hides the tool's cursor, and any other shows the arrow. Set the component's cursor to choose the pen's cursor, as for the mouse. A tool over a window that no source serves gets the arrow.
+
+Set `source.onHover` to receive the tool's hover on EDT, in order with the subscription's events. `InkHoverEvent.Move` carries the position in component units, tool, time and tilt, never pressure; `InkHoverEvent.Exit` follows proximity loss, leaving the component or tool removal. A contact ends hover without `Exit`, and `Move` resumes after the lift. Hover never reaches the authoring listener. X11 and Windows move the system pointer with the pen and report its hover as mouse motion, so `onHover` is only called on native Wayland. A Compose host can forward hover to its UI as AWT mouse motion so that `pointerHoverIcon`, hover states and tooltips follow the pen; the source reads the resulting cursor after that host's events.
 
 Native Wayland discovery runs on the reader thread. `subscribe` returns while setup is pending;
 read `source.isReady` on EDT, or `panel.isInputReady` when using the built-in panel. Registry and

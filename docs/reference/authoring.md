@@ -121,6 +121,41 @@ public data object Cancel : InkInputEvent
 
 [Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPointerSample.kt#L58)
 
+### `InkHoverEvent`
+
+A tablet tool above the surface without contact, for cursors and hover states. Exit follows when the tool leaves proximity or the component, or is removed; a contact ends hover without Exit and Move resumes after the lift. Hover never starts, extends or ends a stroke.
+
+```kotlin
+public sealed interface InkHoverEvent
+```
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPointerSample.kt#L65)
+
+### `InkHoverEvent.Move`
+
+```kotlin
+public data class Move(public val sample: InkPointerSample, public val pointerId: Long = 0L) : InkHoverEvent
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `sample` | `InkPointerSample` | `Required` | Hover position in component-local units with tool, time and reported tilt; pressure is always null. |
+| `pointerId` | `Long` | `0L` | Stable pointer identifier within the event stream; default 0 preserves single-pointer callers. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPointerSample.kt#L67)
+
+### `InkHoverEvent.Exit`
+
+```kotlin
+public data class Exit(public val pointerId: Long = 0L) : InkHoverEvent
+```
+
+| Parameter | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `pointerId` | `Long` | `0L` | Stable pointer identifier within the event stream; default 0 preserves single-pointer callers. |
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPointerSample.kt#L72)
+
 ### `InkInputSource`
 
 subscribe returns an AutoCloseable subscription. Deliver original device observations serially on the UI thread; native subscriptions and closing run on the AWT EDT.
@@ -129,7 +164,7 @@ subscribe returns an AutoCloseable subscription. Deliver original device observa
 public interface InkInputSource
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPointerSample.kt#L68)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPointerSample.kt#L82)
 
 ### `InkInputSource.subscribe`
 
@@ -141,7 +176,7 @@ public fun subscribe(listener: (InkInputEvent) -> Unit): AutoCloseable
 | --- | --- | --- | --- |
 | `listener` | `(InkInputEvent) -> Unit` | `Required` | Serial UI-thread event callback; closing the subscription stops callbacks. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPointerSample.kt#L69)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/InkPointerSample.kt#L83)
 
 ## InkInputPredictor
 
@@ -608,11 +643,11 @@ Values: WINDOWS_POINTER (WM_POINTER), LINUX_XINPUT2 (X11/XWayland), LINUX_WAYLAN
 public enum class InkNativeBackend
 ```
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L22)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L24)
 
 ### `NativeInkInputSource`
 
-Java 25+ native pen/history adapter for Windows and Linux on x86_64 or arm64. Native Wayland requires JBR 25 WLToolkit, native access, and opening java.desktop/sun.awt.wl. Uses the matching configured top-level surface; no raw reads from JBR's borrowed display socket.
+Java 25+ native pen/history adapter for Windows and Linux on x86_64 or arm64. Native Wayland requires JBR 25 WLToolkit, native access, and opening java.desktop/sun.awt.wl. Uses the matching configured top-level surface; no raw reads from JBR's borrowed display socket. On native Wayland each tool over the window shows the AWT cursor of the component under it: cursor-shape-v1 when offered, else a themed cursor surface (XCURSOR_THEME/XCURSOR_SIZE); -Dbyteink.wayland.cursorShape=false forces surfaces.
 
 ```kotlin
 public class NativeInkInputSource( private val component: Component, private val windowHandle: Long, private val pixelsPerLocalUnit: () -> Float = { 1f }, private val centimetersPerNativePixel: Float? = null, private val onFailure: (Throwable) -> Unit = { throw IllegalStateException("Native ink capture failed", it) }, ) : InkInputSource
@@ -626,7 +661,7 @@ public class NativeInkInputSource( private val component: Component, private val
 | `centimetersPerNativePixel` | `Float?` | `null` | Optional calibrated finite positive centimeters per native pixel; logical display DPI is not physical calibration. |
 | `onFailure` | `(Throwable) -> Unit` | `{ throw IllegalStateException("Native ink capture failed", it) }` | EDT callback after delivery is stopped and gestures cancelled, including asynchronous Wayland setup failures; native cleanup can finish on its reader. The default throws an IllegalStateException. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L40)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L52)
 
 ### `NativeInkInputSource.backend`
 
@@ -636,7 +671,7 @@ public val backend: InkNativeBackend
 
 Native capture backend selected from the operating system and actual AWT toolkit.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L47)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L59)
 
 ### `NativeInkInputSource.isReady`
 
@@ -646,7 +681,17 @@ public var isReady: Boolean
 
 Read on EDT. True after the current subscription initializes; false before subscription and immediately after close/failure. Native Wayland publishes readiness asynchronously after registry/device discovery. Does not imply tablet hardware/protocol availability. Private setter.
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L56)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L68)
+
+### `NativeInkInputSource.onHover`
+
+```kotlin
+public var onHover: ((InkHoverEvent) -> Unit)?
+```
+
+Writable EDT callback for native Wayland tablet hover over the component, ordered with subscribe's events while a ready subscription is open; never called on X11/Windows, where the pen moves the system pointer. Nothing arrives after close.
+
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L77)
 
 ### `NativeInkInputSource.subscribe`
 
@@ -660,7 +705,7 @@ override public fun subscribe(listener: (InkInputEvent) -> Unit): AutoCloseable
 | --- | --- | --- | --- |
 | `listener` | `(InkInputEvent) -> Unit` | `Required` | Serial UI-thread event callback; closing the subscription stops callbacks. |
 
-[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L66)
+[Source](https://github.com/CrownByte0b/ByteInk/blob/master/byteink-compose/src/main/kotlin/com/vivenotes/byteink/compose/NativeInkInputSource.kt#L86)
 
 ## InkLowLatencyPanel
 

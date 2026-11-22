@@ -190,6 +190,7 @@ NOTES = {
     "SpatialIndex": "Factory construction only. Queries include touching bounds, preserve list order and require exact hit tests afterward.",
     "InkPointerSample": "Coordinates must be finite and uptime nonnegative. Optional axes must satisfy their documented ranges; availability/tool type is frozen at begin and later missing axes hold their last measured values.",
     "InkInputEvent": "Pointer-addressed variants: Begin, Move, Batch, Predict, Finish and CancelPointer; Cancel discards all pointers. Batch preserves real history and optionally replaces predictions. Default pointerId is 0L where declared.",
+    "InkHoverEvent": "A tablet tool above the surface without contact, for cursors and hover states. Exit follows when the tool leaves proximity or the component, or is removed; a contact ends hover without Exit and Move resumes after the lift. Hover never starts, extends or ends a stroke.",
     "InkInputSource": "subscribe returns an AutoCloseable subscription. Deliver original device observations serially on the UI thread; native subscriptions and closing run on the AWT EDT.",
     "InkInputPredictor": "Records real observations and returns replaceable predictions on the same input clock. Use one predictor per gesture; predictions never become saved inputs.",
     "InkLinearPredictor": "Bounded linear position prediction from recent real observations; retains measured optional axes. Reversals, stationary input, tool changes and long gaps reset motion prediction.",
@@ -203,7 +204,7 @@ NOTES = {
     "InkAuthoringSession.needsAnimationTick": "Check alongside isUpdateNeeded when scheduling; includes forecast expiry even when current geometry needs no update.",
     "InkDrawingSurface": "Single-controller Compose frame loop; keeps the first active pointer and forwards explicit predictions without generating or expiring them automatically. Captures brush/transform/callback at Begin. Disabling/removal cancels; the owner closes the controller and renderer.",
     "InkNativeBackend": "Values: WINDOWS_POINTER (WM_POINTER), LINUX_XINPUT2 (X11/XWayland), LINUX_WAYLAND_TABLET (JBR WLToolkit). Selection follows the actual AWT toolkit, not only session environment variables.",
-    "NativeInkInputSource": "Java 25+ native pen/history adapter for Windows and Linux on x86_64 or arm64. Native Wayland requires JBR 25 WLToolkit, native access, and opening java.desktop/sun.awt.wl. Uses the matching configured top-level surface; no raw reads from JBR's borrowed display socket.",
+    "NativeInkInputSource": "Java 25+ native pen/history adapter for Windows and Linux on x86_64 or arm64. Native Wayland requires JBR 25 WLToolkit, native access, and opening java.desktop/sun.awt.wl. Uses the matching configured top-level surface; no raw reads from JBR's borrowed display socket. On native Wayland each tool over the window shows the AWT cursor of the component under it: cursor-shape-v1 when offered, else a themed cursor surface (XCURSOR_THEME/XCURSOR_SIZE); -Dbyteink.wayland.cursorShape=false forces surfaces.",
     "NativeInkInputSource.subscribe": "EDT-only; component must be displayable, with one subscription per source. Recreate after a Wayland hide/show. Wayland setup returns asynchronously, publishes isReady on EDT after both discovery sync replies, and ignores contacts beginning earlier. Close clears readiness/delivery immediately and signals off-EDT cleanup. Generation checks discard old packets after resubscription. Wayland setup/runtime errors deliver Cancel, close capture, then invoke onFailure on EDT. Windows/X11 acquisition stays synchronous. Listener exceptions close capture and are rethrown.",
     "InkLowLatencyPanel": "EDT-owned direct Skia authoring panel; native input and simultaneous-pointer prediction bypass Compose's frame clock. Uses AWT local logical coordinates. Default renderer is an owned InkMeshRenderer; supplied renderers are borrowed. Native Wayland retains finished/composed physical rasters with dirty wet redraw and software Swing presentation. The panel owns its session's engine mutation and updated-region reset.",
     "InkLowLatencyPanel.requestInkRender": "Invalidates retained finished content and coalesces an EDT render request. Scene, view, erasure/exclusion, texture and animation changes outside completion must request this redraw, even with the same drawContent callback.",
@@ -280,6 +281,7 @@ PROPERTIES = {
     "liveStrokes": "Snapshot list of borrowed active engines and captured transforms; engines may be recycled after retirement.",
     "predictionMillis": "Configured session forecast horizon; default 12 milliseconds, within 0–100.",
     "backend": "Native capture backend selected from the operating system and actual AWT toolkit.",
+    "onHover": "Writable EDT callback for native Wayland tablet hover over the component, ordered with subscribe's events while a ready subscription is open; never called on X11/Windows, where the pen moves the system pointer. Nothing arrives after close.",
     "isReady": "Read on EDT. True after the current subscription initializes; false before subscription and immediately after close/failure. Native Wayland publishes readiness asynchronously after registry/device discovery. Does not imply tablet hardware/protocol availability.",
     "isInputReady": "Read on EDT. True when the panel has a ready subscription. Native Wayland waits for asynchronous discovery; supplied custom sources are assumed ready after subscribe returns. False on detach, disable, close or native failure.",
     "session": "Panel-owned simultaneous-pointer session; mutate/read only on the AWT EDT.",
@@ -516,6 +518,8 @@ def meaning(name: str, param: str) -> str:
         }
         if param in native_surface_parameters:
             return native_surface_parameters[param]
+    if name == "InkHoverEvent.Move" and param == "sample":
+        return "Hover position in component-local units with tool, time and reported tilt; pressure is always null."
     if name == "InkAuthoringSession.handle" and param == "onStrokeFinished":
         return "Captured at Begin; synchronously receives pointerId and a canonical real-input Stroke on completion."
     if name in ("InkInputEvent.Batch", "InkInputEvent.Predict", "InkAuthoringController.setPredictedInputs") and param == "samples":

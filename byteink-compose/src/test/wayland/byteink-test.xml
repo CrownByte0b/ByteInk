@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <protocol name="byteink_test">
-  <interface name="byteink_test" version="1">
+  <interface name="byteink_test" version="2">
     <request name="send">
       <arg name="surface" type="object" interface="wl_surface"/>
       <arg name="tool" type="uint"/>
@@ -11,5 +11,21 @@
       <arg name="time" type="uint"/>
     </request>
     <request name="destroy" type="destructor"/>
+    <!-- One cursor event per tablet tool of this client that has made cursor requests. -->
+    <request name="cursors" since="2"/>
+    <event name="cursor" since="2">
+      <arg name="seat" type="uint" summary="the tablet seat's creation order, from 1"/>
+      <arg name="tool" type="uint"/>
+      <arg name="shapes" type="uint" summary="wp_cursor_shape_device_v1.set_shape requests"/>
+      <arg name="shape" type="uint" summary="the last requested shape"/>
+      <arg name="shape_serial" type="uint" summary="1 when that request carried the current proximity_in serial"/>
+      <arg name="surfaces" type="uint" summary="set_cursor requests with a surface"/>
+      <arg name="surface_serial" type="uint" summary="1 when the last set_cursor carried the current proximity_in serial"/>
+      <arg name="hidden" type="uint" summary="set_cursor requests without a surface"/>
+      <arg name="hotspot_x" type="int"/><arg name="hotspot_y" type="int"/>
+      <arg name="width" type="int" summary="the cursor surface's committed size, after its buffer scale"/>
+      <arg name="height" type="int"/>
+      <arg name="scale" type="int" summary="the cursor surface's committed buffer scale"/>
+    </event>
   </interface>
 </protocol>

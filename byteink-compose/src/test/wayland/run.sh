@@ -27,6 +27,8 @@ rm -f "$result_xml"
 python3 "$fixture/generate.py" --check
 wayland-scanner server-header "$fixture/tablet-v2.xml" "$output/tablet-server.h"
 wayland-scanner private-code "$fixture/tablet-v2.xml" "$output/tablet-protocol.c"
+wayland-scanner server-header "$fixture/cursor-shape-v1.xml" "$output/cursor-shape-server.h"
+wayland-scanner private-code "$fixture/cursor-shape-v1.xml" "$output/cursor-shape-protocol.c"
 wayland-scanner server-header "$fixture/byteink-test.xml" "$output/byteink-test-server.h"
 wayland-scanner private-code "$fixture/byteink-test.xml" "$output/byteink-test-protocol.c"
 if [[ -n ${BYTEINK_WESTON_INCLUDE:-} ]]; then
@@ -39,7 +41,7 @@ fi
 read -r -a dependency_flags <<< "$(pkg-config --cflags --libs wayland-server pixman-1 xkbcommon)"
 cc -shared -fPIC -Wall -Wextra -Wno-unused-parameter -Wl,-Bsymbolic \
     "${weston_flags[@]}" -I"$output" "$fixture/tablet-fixture.c" \
-    "$output/tablet-protocol.c" "$output/byteink-test-protocol.c" "${dependency_flags[@]}" \
+    "$output/tablet-protocol.c" "$output/cursor-shape-protocol.c" "$output/byteink-test-protocol.c" "${dependency_flags[@]}" \
     -o "$output/tablet-fixture.so"
 # Keep the socket path short even when the evidence directory has a long name.
 # Unix-domain socket addresses (including Wayland's) have a 108-byte limit.
@@ -87,11 +89,15 @@ required = ({
     'immediateCloseBeforeDiscoveryCanBeRepeatedWithoutReaderOrDescriptorLeaks',
     'nativeSubscriptionReadinessResetsAndDropsContactsBeginningBeforeDiscovery',
     'syntheticTabletDiagnosticsMeasureQueueRasterAndPaintReturnWithoutChangingOutput',
+    'hoveringToolsReachOnHoverOnlyAndEndWhenTheyLeaveTheComponentOrProximity',
+    'penCursorFollowsTheAwtCursorUnderTheToolAndIsSetAgainForEachProximity',
+    'withoutCursorShapeEachToolShowsAThemedCursorSurfaceForItsProximity',
+    'eachServedWindowSetsItsOwnCursorAndAWindowNoSourceServesShowsTheArrow',
 } if suite == 'pen' else {
     'realNativeDestinationPresentsWetAlphaAndFinishedHandoff',
     'nativeHideResizeReconfigureAndDisabledFallbackPreserveFinishedPixels',
 })
-if (int(root.get('tests', 0)) < (17 if suite == 'pen' else 2) or
+if (int(root.get('tests', 0)) < (21 if suite == 'pen' else 2) or
         not required.issubset({case.get('name') for case in root.findall('testcase')}) or
         any(int(root.get(key, 0)) for key in ['skipped', 'failures', 'errors'])):
     raise SystemExit('All selected native Wayland cases must finish without errors or skips (toolkit termination is not a pass).')

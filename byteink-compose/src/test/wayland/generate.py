@@ -1,41 +1,53 @@
 #!/usr/bin/env python3
-"""Regenerate only tablet ABI metadata; the pinned XML is shared with the independent C server."""
+"""Regenerate only Wayland ABI metadata; the pinned XML is shared with the independent C server."""
 import hashlib
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
 
 fixture = Path(__file__).resolve().parent
-xml = fixture / "tablet-v2.xml"
-expected = "ac1128b26c779cf90b9ed71182ba5e34a7262826789adae206d825a4d45908b4"
-if hashlib.sha256(xml.read_bytes()).hexdigest() != expected:
-    raise SystemExit("tablet-v2.xml changed: review the protocol and update its pin before generating")
+# Pinned XML, its SHA-256 and the generated Java array. Review upstream changes before a new pin.
+protocols = [
+    ("tablet-v2.xml", "ac1128b26c779cf90b9ed71182ba5e34a7262826789adae206d825a4d45908b4", "TABLET"),
+    ("cursor-shape-v1.xml", "bb57d91e53a79dadab7c612dab87c233393cee73673feefa7442cfbfdd9aed2f", "CURSOR_SHAPE"),
+]
 java = fixture.parents[2] / "src/main/java/com/vivenotes/byteink/compose/WaylandProtocol.java"
 letters = {"int": "i", "uint": "u", "fixed": "f", "string": "s", "object": "o", "new_id": "n", "array": "a", "fd": "h"}
-lines = ["    static final Interface[] TABLET = {"]
-for interface in ET.parse(xml).getroot().findall("interface"):
-    lines.append(f'        new Interface("{interface.get("name")}", {interface.get("version")}, new Message[]{{')
-    for kind in ["request", "event"]:
-        if kind == "event":
-            lines.append("        }, new Message[]{")
-        for message in interface.findall(kind):
-            args = message.findall("arg")
-            since = message.get("since", "1")
-            signature = (since if since != "1" else "") + "".join(
-                ("?" if arg.get("allow-null") == "true" else "") + letters[arg.get("type")] for arg in args)
-            types = [f'"{arg.get("interface")}"' if arg.get("interface") else "null" for arg in args]
-            if types == ["null"]:
-                types = ["(String) null"]
-            suffix = ", " + ", ".join(types) if types else ""
-            lines.append(f'            new Message("{message.get("name")}", "{signature}"{suffix}),')
-    lines.append("        }),")
-lines.append("    };")
+
+
+def metadata(xml, array):
+    lines = [f"    static final Interface[] {array} = {{"]
+    for interface in ET.parse(xml).getroot().findall("interface"):
+        lines.append(f'        new Interface("{interface.get("name")}", {interface.get("version")}, new Message[]{{')
+        for kind in ["request", "event"]:
+            if kind == "event":
+                lines.append("        }, new Message[]{")
+            for message in interface.findall(kind):
+                args = message.findall("arg")
+                since = message.get("since", "1")
+                signature = (since if since != "1" else "") + "".join(
+                    ("?" if arg.get("allow-null") == "true" else "") + letters[arg.get("type")] for arg in args)
+                types = [f'"{arg.get("interface")}"' if arg.get("interface") else "null" for arg in args]
+                if types == ["null"]:
+                    types = ["(String) null"]
+                suffix = ", " + ", ".join(types) if types else ""
+                lines.append(f'            new Message("{message.get("name")}", "{signature}"{suffix}),')
+        lines.append("        }),")
+    lines.append("    };")
+    return "\n".join(lines)
+
+
 source = java.read_text()
-start = source.index("    static final Interface[] TABLET = {")
-end = source.index("    };", start) + len("    };")
-updated = source[:start] + "\n".join(lines) + source[end:]
+updated = source
+for name, expected, array in protocols:
+    xml = fixture / name
+    if hashlib.sha256(xml.read_bytes()).hexdigest() != expected:
+        raise SystemExit(f"{name} changed: review the protocol and update its pin before generating")
+    start = updated.index(f"    static final Interface[] {array} = {{")
+    end = updated.index("    };", start) + len("    };")
+    updated = updated[:start] + metadata(xml, array) + updated[end:]
 if "--check" in sys.argv:
     if source != updated:
-        raise SystemExit("Tablet metadata is stale: run src/test/wayland/generate.py")
+        raise SystemExit("Wayland metadata is stale: run src/test/wayland/generate.py")
 else:
     java.write_text(updated)

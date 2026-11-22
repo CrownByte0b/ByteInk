@@ -6,6 +6,7 @@ import androidx.ink.strokes.Stroke
 import com.vivenotes.byteink.kit.PageStroke
 import com.vivenotes.byteink.kit.ViveBrushes
 import com.vivenotes.byteink.kit.subtract
+import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.EventQueue
 import java.awt.event.MouseEvent
@@ -30,6 +31,8 @@ import javax.swing.JFrame
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.test.*
 
 class WaylandPenIntegrationTest {
@@ -751,5 +754,147 @@ class WaylandPenIntegrationTest {
             }
         }
         assertEquals(before, eventDescriptors(), "all owned wake descriptors were released")
+    }
+
+    @Test fun hoveringToolsReachOnHoverOnlyAndEndWhenTheyLeaveTheComponentOrProximity() {
+        awaitReadersStopped()
+        val window = window()
+        val hovers = mutableListOf<InkHoverEvent>()
+        val events = mutableListOf<InkInputEvent>()
+        lateinit var source: NativeInkInputSource
+        var subscription: AutoCloseable? = null
+        try {
+            ui {
+                window.panel.authoringEnabled = false
+                val component = window.panel.components.single()
+                source = NativeInkInputSource(component, window.panel.nativeWindowHandle)
+                source.onHover = { assertTrue(EventQueue.isDispatchThread()); hovers.add(it) }
+                subscription = source.subscribe { events.add(it) }
+            }
+            await("direct native subscription is ready") { source.isReady }
+            injector(window).use { input ->
+                send(window, input, 1, 30.0, time = 1000)
+                send(window, input, 1, 40.0, time = 1010)
+                await("hover moves") { hovers.any { it is InkHoverEvent.Move && abs(it.sample.x - 40f) < .02f } }
+                // Over the host panel's border: still the window, no longer the component.
+                send(window, input, 1, -8.0, time = 1020)
+                await("leaving the component ends hover") { hovers.lastOrNull() is InkHoverEvent.Exit }
+                send(window, input, 1, 50.0, time = 1030)
+                await("hover resumes over the component") { hovers.lastOrNull() is InkHoverEvent.Move }
+                send(window, input, 3, 50.0, time = 1040)
+                await("proximity out ends hover") { hovers.lastOrNull() is InkHoverEvent.Exit }
+                // A contact interrupts hover without Exit, and hover resumes after the lift.
+                send(window, input, 1, 60.0, time = 1050)
+                send(window, input, 0, 60.0, time = 1060)
+                send(window, input, 2, 70.0, time = 1070)
+                send(window, input, 1, 80.0, time = 1080)
+                await("hover after a stroke") {
+                    hovers.lastOrNull().let { it is InkHoverEvent.Move && abs(it.sample.x - 80f) < .02f }
+                }
+            }
+            ui {
+                val moves = hovers.filterIsInstance<InkHoverEvent.Move>()
+                val ids = hovers.map { if (it is InkHoverEvent.Move) it.pointerId else (it as InkHoverEvent.Exit).pointerId }
+                assertEquals(1, ids.distinct().size, "one tool hovered throughout")
+                assertTrue(moves.all { it.sample.toolType == InputToolType.STYLUS && it.sample.pressure == null }, "hover carries no pressure")
+                assertTrue(moves.all { abs(it.sample.y - 60f) < .02f }, "component-local coordinates")
+                assertEquals((PI / 4).toFloat(), assertNotNull(moves.first().sample.tiltRadians), .000001f)
+                assertEquals(2, hovers.count { it is InkHoverEvent.Exit })
+                assertEquals(listOf("Begin", "Finish"), events.filter { it is InkInputEvent.Begin || it is InkInputEvent.Finish }
+                    .map { it::class.simpleName }, "the stroke reached subscribe's listener; hover never did")
+            }
+        } finally { ui { subscription?.close(); window.close() } }
+    }
+
+    @Test fun penCursorFollowsTheAwtCursorUnderTheToolAndIsSetAgainForEachProximity() {
+        awaitReadersStopped()
+        val window = window()
+        try {
+            injector(window).use { input ->
+                val packets = ui { window.panel.processedPacketCount }
+                send(window, input, 1, 30.0)
+                await("the default arrow answers proximity_in") {
+                    input.cursors().singleOrNull()?.let { it.shape == 1 && it.shapeSerial } == true
+                }
+                ui { window.panel.cursor = Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR) }
+                // One hover and no tablet event after it: the reader is woken for the EDT's request.
+                send(window, input, 1, 31.0, time = 1010)
+                await("the panel's crosshair") { input.cursors().single().let { it.shape == 8 && it.shapeSerial } }
+                val shapes = input.cursors().single().shapes
+                send(window, input, 1, 32.0, time = 1020)
+                Thread.sleep(150)
+                assertEquals(shapes, input.cursors().single().shapes, "an unchanged cursor is not requested again")
+                // A custom AWT cursor named after CSS's none hides the tool's cursor.
+                ui { window.panel.cursor = object : Cursor("none") {} }
+                send(window, input, 1, 33.0, time = 1030)
+                await("the cursor is hidden") { input.cursors().single().hidden == 1 }
+                ui { window.panel.cursor = Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR) }
+                send(window, input, 3, 33.0, time = 1040)
+                send(window, input, 1, 40.0, time = 1050)
+                await("set again for the next proximity_in") { input.cursors().single().let { it.shape == 9 && it.shapeSerial } }
+                assertEquals(0, input.cursors().single().surfaces, "cursor-shape-v1 needs no cursor surface")
+                ui {
+                    assertEquals(packets, window.panel.processedPacketCount, "hover never reaches authoring")
+                    assertTrue(window.finished.isEmpty())
+                }
+            }
+        } finally { ui { window.close() } }
+    }
+
+    @Test fun withoutCursorShapeEachToolShowsAThemedCursorSurfaceForItsProximity() {
+        awaitReadersStopped()
+        System.setProperty("byteink.wayland.cursorShape", "false")
+        val window = try { window() } finally { System.clearProperty("byteink.wayland.cursorShape") }
+        try {
+            val scale = ui { ceil(window.frame.graphicsConfiguration.defaultTransform.scaleX).toInt() }
+            injector(window).use { input ->
+                send(window, input, 1, 30.0)
+                await("a themed arrow on a surface of the tool's own, at the window's scale") {
+                    input.cursors().singleOrNull()?.let { it.surfaces > 0 && it.surfaceSerial && it.width > 0 && it.scale == scale } == true
+                }
+                val arrow = input.cursors().single()
+                assertEquals(0, arrow.shapes, "no cursor-shape device when it is disabled")
+                assertTrue(arrow.hotspotX in 0 until arrow.width && arrow.hotspotY in 0 until arrow.height, "$arrow")
+                ui { window.panel.cursor = Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR) }
+                send(window, input, 1, 31.0, time = 1010)
+                await("the text cursor's image") { input.cursors().single().surfaces > arrow.surfaces }
+                val text = input.cursors().single().surfaces
+                send(window, input, 3, 31.0, time = 1020)
+                send(window, input, 1, 40.0, time = 1030)
+                await("set again with the next proximity_in serial") {
+                    input.cursors().single().let { it.surfaces > text && it.surfaceSerial && it.width > 0 }
+                }
+            }
+        } finally { ui { window.close() } }
+    }
+
+    @Test fun eachServedWindowSetsItsOwnCursorAndAWindowNoSourceServesShowsTheArrow() {
+        awaitReadersStopped()
+        val first = window(); val second = window()
+        var plain: JFrame? = null
+        try {
+            ui {
+                first.panel.cursor = Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR)
+                second.panel.cursor = Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR)
+            }
+            injector(first).use { input ->
+                send(first, input, 1, 30.0, time = 1000)
+                await("only the first window's source sets its crosshair") {
+                    input.cursors().let { all -> all.size == 1 && all.single().let { it.shape == 8 && it.shapeSerial } }
+                }
+                send(second, input, 1, 30.0, time = 1010)
+                await("the second window's source sets its text cursor") {
+                    input.cursors().count { it.shape == 9 && it.shapeSerial } == 1
+                }
+                ui { plain = JFrame("Unserved window").also { it.isUndecorated = true; it.setSize(80, 60); it.isVisible = true } }
+                await("the unserved window's surface") { WaylandRuntime.findWindowSurface(plain!!) != null }
+                val surface = ui { WaylandRuntime.windowSurface(plain!!).surface }
+                input.send(surface, 0, 1, 10.0, 10.0, 16384, 0.0, 0.0, 1020)
+                await("every source gives a tool over a window none serves the arrow") {
+                    input.cursors().let { all -> all.size == 2 && all.all { it.shape == 1 && it.shapeSerial } }
+                }
+            }
+        } finally { ui { first.close(); second.close(); plain?.dispose() } }
+        awaitReadersStopped()
     }
 }

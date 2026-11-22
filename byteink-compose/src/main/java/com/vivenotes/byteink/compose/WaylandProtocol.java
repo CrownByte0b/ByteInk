@@ -22,13 +22,37 @@
     ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
     CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
+
+    cursor-shape-v1:
+    Copyright 2018 The Chromium Authors
+    Copyright 2023 Simon Ser
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+    The above copyright notice and this permission notice (including the next
+    paragraph) shall be included in all copies or substantial portions of the
+    Software.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
   */
 package com.vivenotes.byteink.compose;
 
 import java.lang.foreign.*;
 import java.util.*;
 
-/** ABI metadata from Wayland tablet-v2; pinned XML SHA256 ac1128b26c779cf90b9ed71182ba5e34a7262826789adae206d825a4d45908b4. */
+/**
+ * ABI metadata from Wayland tablet-v2 (pinned XML SHA256 ac1128b26c779cf90b9ed71182ba5e34a7262826789adae206d825a4d45908b4)
+ * and cursor-shape-v1 (pinned XML SHA256 bb57d91e53a79dadab7c612dab87c233393cee73673feefa7442cfbfdd9aed2f).
+ */
 final class WaylandProtocol {
     record Message(String name, String signature, String... types) {}
     record Interface(String name, int version, Message[] requests, Message[] events) {}
@@ -129,14 +153,33 @@ final class WaylandProtocol {
             new Message("frame", "u", (String) null),
         }),
     };
+    static final Interface[] CURSOR_SHAPE = {
+        new Interface("wp_cursor_shape_manager_v1", 2, new Message[]{
+            new Message("destroy", ""),
+            new Message("get_pointer", "no", "wp_cursor_shape_device_v1", "wl_pointer"),
+            new Message("get_tablet_tool_v2", "no", "wp_cursor_shape_device_v1", "zwp_tablet_tool_v2"),
+        }, new Message[]{
+        }),
+        new Interface("wp_cursor_shape_device_v1", 2, new Message[]{
+            new Message("destroy", ""),
+            new Message("set_shape", "uu", null, null),
+        }, new Message[]{
+        }),
+    };
+    /** Every pinned interface; their message types may refer to one another. */
+    private static final List<Interface> PINNED = new ArrayList<>();
+    static {
+        PINNED.addAll(List.of(TABLET));
+        PINNED.addAll(List.of(CURSOR_SHAPE));
+    }
 
     private final Map<String, MemorySegment> interfaces = new HashMap<>();
     private final Arena arena;
     private final SymbolLookup library;
     WaylandProtocol(Arena arena, SymbolLookup library) {
         this.arena = arena; this.library = library;
-        for (Interface type : TABLET) interfaces.put(type.name(), arena.allocate(40, 8));
-        for (Interface type : TABLET) define(type);
+        for (Interface type : PINNED) interfaces.put(type.name(), arena.allocate(40, 8));
+        for (Interface type : PINNED) define(type);
     }
     void define(Interface type) {
         interfaces.computeIfAbsent(type.name(), key -> arena.allocate(40, 8));
@@ -153,7 +196,7 @@ final class WaylandProtocol {
         return value != null ? value : library.find(name + "_interface").orElseThrow();
     }
     Message[] events(String name) {
-        for (Interface type : TABLET) if (type.name().equals(name)) return type.events();
+        for (Interface type : PINNED) if (type.name().equals(name)) return type.events();
         MemorySegment info = type(name).reinterpret(40);
         int count = info.get(ValueLayout.JAVA_INT, 24);
         MemorySegment data = info.get(ValueLayout.ADDRESS, 32).reinterpret(count * 24L);

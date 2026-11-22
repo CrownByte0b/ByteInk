@@ -49,6 +49,21 @@ class NativePenNormalizationTest {
         assertIs<InkInputEvent.Finish>(input.events(frame(NativePenBridge.FINISH, listOf(point(40.0, 10)), 2)).single())
     }
 
+    @Test fun hoverSamplesKeepTheirToolTimeAndTiltButNeverPressure() {
+        val input = NativePenNormalizer({ 2f }, .01f)
+        input.events(frame(NativePenBridge.BEGIN, listOf(point(20.0, 1000))), 100_000)
+        val pen = input.hover(NativePenBridge.PEN, point(0.0, 1040), 30.5, 12.25, 100_100)
+        assertEquals(30.5f, pen.x); assertEquals(12.25f, pen.y)
+        assertEquals(100_040L, pen.uptimeMillis, "hover shares the contact samples' clock")
+        assertEquals(InputToolType.STYLUS, pen.toolType)
+        assertNull(pen.pressure, "a hovering tool reports no contact pressure")
+        assertEquals((PI / 4).toFloat(), assertNotNull(pen.tiltRadians), .000001f)
+        assertEquals(.02f, pen.strokeUnitLengthCm)
+        val puck = input.hover(NativePenBridge.MOUSE, point(0.0, 1050, axes = 0), 1.0, 2.0, 100_110)
+        assertEquals(InputToolType.MOUSE, puck.toolType)
+        assertNull(puck.tiltRadians); assertNull(puck.pressure)
+    }
+
     @Test fun ordinaryMouseAndTouchDoNotAcquireSyntheticPressureOrTilt() {
         for (tool in listOf(NativePenBridge.MOUSE, NativePenBridge.TOUCH)) {
             val input = NativePenNormalizer({ 1f }, null)

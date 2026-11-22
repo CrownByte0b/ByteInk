@@ -66,6 +66,20 @@ internal class NativeInkPacketQueue(
         val queued = packets.removeFirst()
         val first = value(queued)
         var arrival = (queued as? TimedPacket)?.arrival
+        if (first is NativePenBridge.Frame && first.phase() == NativePenBridge.HOVER) {
+            // Hover is a position, not history: consecutive hovers of one tool keep only the newest.
+            var latest: NativePenBridge.Frame = first
+            while (packets.isNotEmpty()) {
+                val nextQueued = packets.first()
+                if (!compatible(arrival, nextQueued)) break
+                val next = value(nextQueued) as? NativePenBridge.Frame ?: break
+                if (next.phase() != NativePenBridge.HOVER || next.pointerId() != first.pointerId()) break
+                latest = next
+                arrival = mergeTiming(arrival, nextQueued)
+                packets.removeFirst()
+            }
+            return timed(latest, arrival)
+        }
         if (first is NativePenBridge.Frame && first.phase() == NativePenBridge.MOVE) {
             var points: MutableList<NativePenBridge.Point>? = null
             var count = first.points().size
