@@ -10,9 +10,8 @@ composeMultiplatform = "1.12.2"
 androidx-ink = "1.1.0-alpha06"
 # What Google's ink-nativeloader-jvm declares at run time, kept by byteink's fork of it.
 androidx-annotation = "1.11.0"
-# byteink's own modules, and its fork of ink-nativeloader, which is versioned after the release it
-# forks: <androidx-ink>-byteink.<N>.
-byteink-modules = "0.2.0-SNAPSHOT"
+# byteink's fork of ink-nativeloader, versioned after the release it forks: <androidx-ink>-byteink.<N>.
+# byteink's own modules take their version from byteinkReleaseVersion in gradle.properties.
 byteink-nativeloader = "1.1.0-alpha06-byteink.4"
 asm = "9.11.1"
 sqlite-jdbc = "3.54.1.0"

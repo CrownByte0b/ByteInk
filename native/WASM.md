@@ -25,7 +25,7 @@ typed arrays and owned C++ objects; it does not approximate or reimplement strok
   bridge-source and patch hashes and both output hashes. Gradle checks them before testing
   and packaging. Runtime loading also checks ABI 4, engine pin and `bionic-acosf-v1` math profile.
   Replace both assets when upgrading the preview.
-- Maven preview coordinates `com.vivenotes.byteink:byteink-wasm:0.2.0-SNAPSHOT`; engine static
+- Maven preview coordinates `com.vivenotes.byteink:byteink-wasm:<byteinkReleaseVersion>-SNAPSHOT`; engine static
   assets in the root publication's `engine@zip` classifier. No local npm dependency paths
   enter published metadata. Kotlin-only compilation needs no C++ toolchain.
 - Installed Node/npm are used for the opt-in build. Kotlin's Binaryen distribution is resolved

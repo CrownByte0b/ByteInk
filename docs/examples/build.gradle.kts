@@ -22,10 +22,16 @@ val desktopArch = when (System.getProperty("os.arch").lowercase()) {
     else -> error("The examples require x86_64 or arm64")
 }
 
+// The included checkout's version. An application using a published release names that release.
+val byteinkVersion = providers.fileContents(layout.projectDirectory.file("../../gradle.properties")).asText.map {
+    val release = Regex("""(?m)^byteinkReleaseVersion\s*[=:]\s*(\S+)""").find(it)?.groupValues?.get(1)
+    "${release ?: error("../../gradle.properties has no byteinkReleaseVersion")}-SNAPSHOT"
+}.get()
+
 dependencies {
-    implementation("com.vivenotes.byteink:byteink-compose:0.2.0-SNAPSHOT")
-    implementation("com.vivenotes.byteink:byteink-kit:0.2.0-SNAPSHOT")
-    implementation("com.vivenotes.byteink:byteink-testing:0.2.0-SNAPSHOT")
+    implementation("com.vivenotes.byteink:byteink-compose:$byteinkVersion")
+    implementation("com.vivenotes.byteink:byteink-kit:$byteinkVersion")
+    implementation("com.vivenotes.byteink:byteink-testing:$byteinkVersion")
     implementation("org.jetbrains.compose.desktop:desktop-jvm-$desktopOs-$desktopArch:1.12.1")
 }
 

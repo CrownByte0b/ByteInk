@@ -20,3 +20,4 @@ build/
 .idea/
 *.iml
 local.properties
+__pycache__/

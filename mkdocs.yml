@@ -32,6 +32,9 @@ theme:
 plugins:
   - search:
       lang: en
+# Fills {{ byteink_version }} / {{ byteink_snapshot }} from gradle.properties.
+hooks:
+  - docs/tools/versions.py
 markdown_extensions:
   - admonition
   - attr_list

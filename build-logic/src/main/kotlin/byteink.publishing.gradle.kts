@@ -7,9 +7,10 @@ plugins {
 }
 
 group = providers.gradleProperty("byteinkGroup").getOrElse("com.vivenotes.byteink")
-version = providers.gradleProperty("byteinkVersion").getOrElse(
-    extensions.getByType<VersionCatalogsExtension>().named("libs").findVersion("byteink-modules").get().requiredVersion
-)
+// A release passes its exact version as byteinkVersion; a checkout builds a SNAPSHOT of the next one.
+version = providers.gradleProperty("byteinkVersion").orNull
+    ?: providers.gradleProperty("byteinkReleaseVersion").orNull?.let { "$it-SNAPSHOT" }
+    ?: error("gradle.properties must set byteinkReleaseVersion")
 
 val githubRepository = providers.gradleProperty("byteinkGitHubRepository")
     .orElse(providers.environmentVariable("GITHUB_REPOSITORY"))

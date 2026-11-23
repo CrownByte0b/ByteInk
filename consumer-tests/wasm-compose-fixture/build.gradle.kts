@@ -8,7 +8,13 @@ plugins.withType<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsPlugi
     extensions.configure<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsEnvSpec> { download = false }
 }
 val engineAssets by configurations.creating
-val byteinkVersion=providers.gradleProperty("byteinkVersion").orElse("0.2.0-SNAPSHOT").get()
+// A release run passes byteinkVersion; otherwise this is the checkout's version.
+val byteinkVersion = providers.gradleProperty("byteinkVersion").orElse(
+    providers.fileContents(layout.projectDirectory.file("../../gradle.properties")).asText.map {
+        val release = Regex("""(?m)^byteinkReleaseVersion\s*[=:]\s*(\S+)""").find(it)?.groupValues?.get(1)
+        "${release ?: error("../../gradle.properties has no byteinkReleaseVersion")}-SNAPSHOT"
+    }
+).get()
 dependencies { engineAssets("com.vivenotes.byteink:byteink-wasm:$byteinkVersion:engine@zip") }
 val unpackEngine by tasks.registering(Sync::class) {
     from(engineAssets.map { zipTree(it) }); into(layout.buildDirectory.dir("engine-assets"))

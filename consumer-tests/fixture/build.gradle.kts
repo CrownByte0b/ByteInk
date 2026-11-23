@@ -8,7 +8,13 @@ plugins {
 }
 
 val byteinkGroup = providers.gradleProperty("byteinkGroup").getOrElse("com.vivenotes.byteink")
-val byteinkVersion = providers.gradleProperty("byteinkVersion").getOrElse("0.2.0-SNAPSHOT")
+// The test passes byteinkVersion; run in place, the fixture uses the checkout's version.
+val byteinkVersion = providers.gradleProperty("byteinkVersion").orElse(
+    providers.fileContents(layout.projectDirectory.file("../../gradle.properties")).asText.map {
+        val release = Regex("""(?m)^byteinkReleaseVersion\s*[=:]\s*(\S+)""").find(it)?.groupValues?.get(1)
+        "${release ?: error("../../gradle.properties has no byteinkReleaseVersion")}-SNAPSHOT"
+    }
+).get()
 val composeVersion = providers.gradleProperty("composeVersion").getOrElse("1.12.1")
 val composite = providers.gradleProperty("byteinkCompositePath").isPresent
 val portable = providers.gradleProperty("byteinkPortable").orNull == "true"

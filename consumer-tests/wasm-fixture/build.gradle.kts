@@ -1,6 +1,12 @@
 plugins { kotlin("multiplatform") version "2.4.21" }
 
-val byteinkVersion=providers.gradleProperty("byteinkVersion").orElse("0.2.0-SNAPSHOT").get()
+// A release run passes byteinkVersion; otherwise this is the checkout's version.
+val byteinkVersion = providers.gradleProperty("byteinkVersion").orElse(
+    providers.fileContents(layout.projectDirectory.file("../../gradle.properties")).asText.map {
+        val release = Regex("""(?m)^byteinkReleaseVersion\s*[=:]\s*(\S+)""").find(it)?.groupValues?.get(1)
+        "${release ?: error("../../gradle.properties has no byteinkReleaseVersion")}-SNAPSHOT"
+    }
+).get()
 
 plugins.withType<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsPlugin> {
     extensions.configure<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsEnvSpec> { download = false }

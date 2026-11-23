@@ -6,6 +6,8 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'gradle.properties'
+      - 'README.md'
       - '.github/workflows/docs.yml'
       - 'byteink-core/src/**'
       - 'byteink-compose/src/**'
@@ -17,6 +19,8 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'gradle.properties'
+      - 'README.md'
       - '.github/workflows/docs.yml'
       - 'byteink-core/src/**'
       - 'byteink-compose/src/**'
