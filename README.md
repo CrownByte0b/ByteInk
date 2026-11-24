@@ -215,6 +215,12 @@ Then open http://localhost:8080
 ./gradlew -PbyteinkWasm=true publishToMavenLocal
 ```
 
+Snapshot
+
+```bash
+./gradlew publishToMavenLocal -PbyteinkVersion=0.2.1 -PbyteinkWasm=true
+```
+
 # getting android-ink from google
 
 AndroidX Ink's `ink/` sources at the pinned release, 1.1.0-alpha06: `frameworks/support` commit
